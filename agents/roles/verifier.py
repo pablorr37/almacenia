@@ -18,6 +18,7 @@ def run_tests(test_file_path: str) -> VerificationResult:
         capture_output=True,
         text=True,
         cwd=".",
+        shell=True,
     )
     output = result.stdout + result.stderr
     return VerificationResult(passed=result.returncode == 0, output=output)

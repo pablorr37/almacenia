@@ -30,6 +30,11 @@ def guardar_tareas(data: dict) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _parece_error_de_sintaxis(resultado_output: str) -> bool:
+    marcadores = ("PARSE_ERROR", "Transform failed", "Unexpected token")
+    return any(m in resultado_output for m in marcadores)
+
+
 def procesar_tarea(tarea: dict, rag: RAGManager) -> None:
     modulo = tarea["modulo"]
     objetivo = tarea["objetivo"]
@@ -54,6 +59,11 @@ def procesar_tarea(tarea: dict, rag: RAGManager) -> None:
     # Fase 3 + 4: Code -> Verificación, con reintentos
     resultado_anterior = None
     for intento in range(1, MAX_INTENTOS + 1):
+        if resultado_anterior and _parece_error_de_sintaxis(resultado_anterior):
+            print("[2/4] Los tests tienen un error de sintaxis, regenerando...")
+            tests = test_writer.write_tests(modulo, spec)
+            tests_path.write_text(tests, encoding="utf-8")
+
         codigo = developer.write_code(modulo, spec, tests, resultado_anterior)
         code_path = Path(__file__).parent.parent / "src" / "generated" / f"{modulo}.ts"
         code_path.write_text(codigo, encoding="utf-8")

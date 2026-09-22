@@ -35,5 +35,6 @@ def write_spec(modulo: str, objetivo: str, contexto_previo: list[dict]) -> str:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
+        options={"num_ctx": 16384},
     )
     return response["message"]["content"]

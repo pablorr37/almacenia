@@ -15,3 +15,11 @@ es Coolify (4vCPU/8GB RAM), stack liviano y sin dependencias de servicios cloud 
 
 **Cómo aplicar:** toda spec nueva de un módulo de la app debe asumir este stack salvo
 decisión explícita en contrario documentada acá.
+
+**Confirmado de nuevo (2026-09-22):** se evaluó migrar a monorepo separado
+`/backend` (FastAPI) + `/frontend` (React/Vite) y se descartó — ya había un scaffold
+Next.js funcionando y rehacerlo no aportaba valor. Se tomaron sí las prácticas buenas
+de esa propuesta: config sensible solo por variables de entorno (`.env.example` en la
+raíz, nunca `.env` commiteado), endpoint `/api/health` (`src/app/api/health/route.ts`)
+para el health check de Coolify, y `Dockerfile` propio con `next.config.ts` en modo
+`output: "standalone"`.

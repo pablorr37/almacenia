@@ -5,6 +5,8 @@ import os
 
 import ollama
 
+from text_utils import strip_code_fences
+
 MODEL = os.environ.get("OLLAMA_MODEL_ARCHITECT", "deepseek-r1:8b")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
@@ -24,5 +26,6 @@ def write_tests(modulo: str, spec: str) -> str:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
+        options={"num_ctx": 16384},
     )
-    return response["message"]["content"]
+    return strip_code_fences(response["message"]["content"])

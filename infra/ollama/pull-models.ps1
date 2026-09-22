@@ -1,5 +1,5 @@
-# Descarga los modelos usados por el orquestador SDD+TDD dentro del contenedor Ollama.
-# Ejecutar despues de `docker compose -f infra/docker-compose.yml up -d`.
+# Descarga (si falta) los modelos usados por el orquestador SDD+TDD en el Ollama
+# nativo de Windows (no en Docker). Requiere que Ollama este corriendo.
 
 $models = @(
     "deepseek-r1:8b",
@@ -9,8 +9,8 @@ $models = @(
 
 foreach ($model in $models) {
     Write-Host "Descargando $model..."
-    docker exec almacenia_ollama ollama pull $model
+    ollama pull $model
 }
 
 Write-Host "Modelos instalados:"
-docker exec almacenia_ollama ollama list
+ollama list

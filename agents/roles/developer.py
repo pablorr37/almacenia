@@ -5,14 +5,23 @@ import os
 
 import ollama
 
+from text_utils import ensure_exports, strip_code_fences
+
 MODEL = os.environ.get("OLLAMA_MODEL_DEVELOPER", "qwen2.5-coder:7b")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
 SYSTEM_PROMPT = """Sos el agente desarrollador de Almacenia. Recibís una spec técnica, \
 el archivo de tests (Vitest/TypeScript) que debe pasar, y opcionalmente el resultado \
 de un intento anterior fallido. Escribís el código de implementación en TypeScript \
-que satisface la spec y hace pasar todos los tests. Devolvé únicamente el código \
-del archivo de implementación, sin explicaciones ni bloques de markdown."""
+que satisface la spec y hace pasar todos los tests.
+
+Reglas estrictas:
+- Toda función o clase que el archivo de tests importe debe declararse con `export` \
+  (p. ej. `export function nombre(...) { ... }`), usando exactamente los mismos \
+  nombres que aparecen en los `import { ... } from './modulo'` del archivo de tests.
+- No uses `export default`.
+- Devolvé únicamente el código del archivo de implementación, sin explicaciones ni \
+  bloques de markdown (nada de ```typescript ni ```)."""
 
 
 def write_code(modulo: str, spec: str, tests: str, intento_anterior: str | None = None) -> str:
@@ -27,6 +36,7 @@ def write_code(modulo: str, spec: str, tests: str, intento_anterior: str | None 
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
+        options={"num_ctx": 16384},
     )
-    content = response["message"]["content"]
-    return content.replace("\xa0", " ")
+    content = response["message"]["content"].replace("\xa0", " ")
+    return ensure_exports(strip_code_fences(content))

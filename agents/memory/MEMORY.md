@@ -6,6 +6,7 @@
 
 - [Stack de la app](decisiones/stack-app.md) — Next.js + TypeScript + PostgreSQL/PostGIS.
 - [Flujo de agentes](decisiones/flujo-agentes.md) — Spec → Test → Code → Verificación, máx. 3 reintentos.
+- [Ollama nativo, no Docker](decisiones/ollama-nativo.md) — la infra local usa Ollama de Windows, solo Qdrant va en Docker.
 
 ## Convenciones de código
 

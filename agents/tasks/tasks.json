@@ -4,8 +4,8 @@
       "id": 1,
       "modulo": "tiendas-distancia",
       "objetivo": "Función que calcule la distancia en km entre dos coordenadas (lat/lon) usando la fórmula de Haversine, para ordenar tiendas por cercanía en el mapa del comprador.",
-      "status": "pendiente",
-      "intentos": 0
+      "status": "bloqueada",
+      "intentos": 3
     }
   ]
 }

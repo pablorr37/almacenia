@@ -9,22 +9,8 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: almacenia_ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
 volumes:
   qdrant_data:
-  ollama_data:
+
+# Ollama corre nativo en Windows (no en Docker), reusando la instalación y los modelos
+# ya existentes con acceso directo a la GPU. Ver README.md de esta carpeta.
