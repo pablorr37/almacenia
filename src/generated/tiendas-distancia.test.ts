@@ -17,7 +17,7 @@ describe('calcularDistanciaKm', () => {
     try {
       calcularDistanciaKm('0' as any, 0, 0, 0);
     } catch (error) {
-      expect(error.message).toBe('Parámetros inválidos');
+      expect((error as Error).message).toBe('Parámetros inválidos');
     }
   });
 
@@ -26,7 +26,7 @@ describe('calcularDistanciaKm', () => {
     try {
       calcularDistanciaKm(91, 0, 0, 0);
     } catch (error) {
-      expect(error.message).toBe('Latitud fuera de rango');
+      expect((error as Error).message).toBe('Latitud fuera de rango');
     }
   });
 
@@ -35,7 +35,7 @@ describe('calcularDistanciaKm', () => {
     try {
       calcularDistanciaKm(0, 181, 0, 0);
     } catch (error) {
-      expect(error.message).toBe('Longitud fuera de rango');
+      expect((error as Error).message).toBe('Longitud fuera de rango');
     }
   });
 });
@@ -71,9 +71,9 @@ describe('ordenarTiendasPorDistancia', () => {
   it('lanza error si hay propiedades faltantes en algún objeto de tienda', () => {
     expect.assertions(1);
     try {
-      ordenarTiendasPorDistancia([{ lat: 0 }], 0, 0);
+      ordenarTiendasPorDistancia([{ lat: 0 } as any], 0, 0);
     } catch (error) {
-      expect(error.message).toBe('Propiedades faltantes en tiendas');
+      expect((error as Error).message).toBe('Propiedades faltantes en tiendas');
     }
   });
 
@@ -82,7 +82,7 @@ describe('ordenarTiendasPorDistancia', () => {
     try {
       ordenarTiendasPorDistancia([{ lat: 0, lon: 0 }], 91, 0);
     } catch (error) {
-      expect(error.message).toBe('Latitud fuera de rango');
+      expect((error as Error).message).toBe('Latitud fuera de rango');
     }
   });
 
@@ -91,7 +91,7 @@ describe('ordenarTiendasPorDistancia', () => {
     try {
       ordenarTiendasPorDistancia([{ lat: 0, lon: 0 }], 0, 181);
     } catch (error) {
-      expect(error.message).toBe('Longitud fuera de rango');
+      expect((error as Error).message).toBe('Longitud fuera de rango');
     }
   });
 
