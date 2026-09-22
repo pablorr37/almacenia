@@ -2,6 +2,13 @@
 
 Índice de decisiones y convenciones que los agentes (y el desarrollador) deben conocer entre sesiones.
 
+## SDD del proyecto
+
+- [`specs/sdd/00-overview.md`](../../specs/sdd/00-overview.md) — fuente de verdad del
+  modelo de datos, endpoints y convenciones del MVP (auth, tiendas, productos,
+  pedidos, ventas). Toda tarea nueva que toque uno de estos módulos debe alinearse
+  con su spec en `specs/sdd/`, no reinventar el modelo de datos.
+
 ## Decisiones de arquitectura
 
 - [Stack de la app](decisiones/stack-app.md) — Next.js + TypeScript + PostgreSQL/PostGIS.
