@@ -47,7 +47,7 @@ CREATE INDEX productos_tienda_id_idx ON productos (tienda_id);
 
 ### `POST /api/tiendas/:tiendaId/productos`
 
-Rol requerido: `vendedor`, dueño de `tiendaId`.
+Requiere ser el dueño de la tienda (`tiendaId`).
 
 Request:
 
@@ -67,7 +67,7 @@ Response `200`: `{ data: Producto[]; page; pageSize; total }`.
 
 ### `PATCH /api/productos/:id`
 
-Rol requerido: `vendedor`, dueño de la tienda del producto.
+Requiere ser el dueño de la tienda del producto.
 
 Request (todos opcionales): `{ nombre?; descripcion?; precio?; stock?; disponible? }`.
 
@@ -75,7 +75,7 @@ Response `200`: `{ data: Producto }`.
 
 ### `DELETE /api/productos/:id`
 
-Rol requerido: `vendedor`, dueño de la tienda del producto. Ver regla de borrado
+Requiere ser el dueño de la tienda del producto. Ver regla de borrado
 lógico arriba. Response `200`: `{ data: Producto }` (con `disponible: false, stock: 0`).
 
 ## Firmas de funciones/clases TypeScript

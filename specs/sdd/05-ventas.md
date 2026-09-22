@@ -81,7 +81,7 @@ CREATE INDEX items_venta_venta_id_idx ON items_venta (venta_id);
 
 ### `POST /api/tiendas/:tiendaId/ventas`
 
-Rol requerido: `vendedor`, dueño de `tiendaId`. Crea una venta **presencial**.
+Requiere ser el dueño de `tiendaId`. Crea una venta **presencial**.
 
 Request:
 
@@ -103,14 +103,14 @@ actualizado, no la `Venta` (la venta se puede consultar aparte con
 
 ### `GET /api/ventas/:id`
 
-Rol requerido: `vendedor` dueño de la tienda de la venta, o `comprador` si
-`comprador_id` coincide con el usuario autenticado.
+Requiere ser el dueño de la tienda de la venta, o que `comprador_id` coincida con el
+usuario autenticado.
 
 Response `200`: `{ data: Venta }`.
 
 ### `GET /api/tiendas/:tiendaId/ventas`
 
-Rol requerido: `vendedor`, dueño de `tiendaId`. Listado paginado (ver
+Requiere ser el dueño de `tiendaId`. Listado paginado (ver
 `00-overview.md`), es el historial de ventas de la tienda — base de datos para el
 futuro módulo de balance (fuera de este MVP, ver `00-overview.md`).
 
@@ -184,4 +184,4 @@ async function listarVentas(
 | `ITEMS_VACIOS`                | `items` es un array vacío al crear una venta presencial.             |
 | `VENTA_NO_ENCONTRADA`         | `:id` no existe.                                                     |
 | `NO_AUTORIZADO_VENTA`         | El usuario no es ni el vendedor dueño ni el comprador de esa venta.  |
-| `COMPRADOR_INVALIDO`          | `compradorId` (si se pasa) no existe o no tiene `rol = 'comprador'`. |
+| `COMPRADOR_INVALIDO`          | `compradorId` (si se pasa) no corresponde a ningún usuario existente. |

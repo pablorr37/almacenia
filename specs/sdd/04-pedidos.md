@@ -81,7 +81,7 @@ pendiente ──confirmar──> confirmado ──marcarListo──> listo_para_
 
 ### `POST /api/pedidos`
 
-Rol requerido: `comprador`.
+Requiere sesión válida (`esComprador` es `true` para todo usuario, ver `01-auth.md`).
 
 Request:
 
@@ -97,19 +97,20 @@ Response `201`: `{ data: Pedido }` (incluye `items` con `precioUnitario` copiado
 
 ### `GET /api/pedidos/:id`
 
-Rol requerido: `comprador` dueño del pedido, o `vendedor` dueño de la tienda del pedido.
+Requiere ser el comprador dueño del pedido, o el vendedor dueño de la tienda del pedido.
 
 Response `200`: `{ data: Pedido }`.
 
 ### `GET /api/pedidos?tiendaId=` / `GET /api/pedidos?compradorId=`
 
-Listado paginado (ver `00-overview.md`), filtrado por rol: un vendedor solo puede
-pedir por `tiendaId` (la suya), un comprador solo puede pedir por `compradorId` (el
-propio, implícito en la sesión — no puede pasar el de otro usuario).
+Listado paginado (ver `00-overview.md`): `?tiendaId=` requiere ser el dueño de esa
+tienda; `?compradorId=` solo admite el propio id del usuario autenticado (implícito
+en la sesión — no se puede pasar el de otro usuario).
 
 ### `POST /api/pedidos/:id/transicion`
 
-Rol requerido: según la transición (ver máquina de estados).
+Requiere ser el comprador o el vendedor dueño de la tienda, según la transición (ver
+máquina de estados).
 
 Request: `{ accion: 'confirmar' | 'rechazar' | 'marcarListo' | 'entregar' | 'cancelar' }`
 

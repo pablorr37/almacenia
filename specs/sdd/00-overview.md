@@ -19,8 +19,8 @@ comprador, chat in-app.
 ## Diagrama de entidades (MVP)
 
 ```
-Usuario (rol: vendedor | comprador)
-  └─< Tienda (1 vendedor -> 1 tienda, MVP simple)
+Usuario (esComprador, esVendedor — independientes, ver 01-auth.md)
+  └─< Tienda (1 vendedor -> 1 tienda, MVP simple; crearla activa esVendedor=true)
         └─< Producto (stock, precio)
         └─< Pedido >── Usuario (comprador)
               └─< ItemPedido >── Producto
@@ -28,9 +28,10 @@ Usuario (rol: vendedor | comprador)
               └─< ItemVenta >── Producto
 ```
 
-Relación 1 vendedor : 1 tienda para simplificar el MVP (un `Usuario` con rol `vendedor`
-gestiona una única `Tienda`). Pasar a N tiendas por vendedor no rompe este modelo: solo
-cambia la cardinalidad de `Tienda.vendedor_id`, no hace falta anticiparlo ahora.
+Relación 1 vendedor : 1 tienda para simplificar el MVP (un `Usuario` con `esVendedor =
+true` gestiona una única `Tienda`). Pasar a N tiendas por vendedor no rompe este
+modelo: solo cambia la cardinalidad de `Tienda.vendedor_id`, no hace falta anticiparlo
+ahora.
 
 ## Stack técnico (ver `agents/memory/decisiones/stack-app.md`)
 
@@ -70,9 +71,11 @@ autenticado), `403` (autenticado pero sin permiso sobre el recurso), `404` (no e
 ### Autenticación
 
 Toda ruta bajo `/api/**` salvo las explícitamente marcadas como públicas en cada spec
-de módulo requiere sesión válida (NextAuth). El rol del usuario autenticado (`vendedor`
-o `comprador`) determina qué operaciones puede hacer — cada spec de módulo indica el rol
-requerido por endpoint. Las funciones de servicio (capa `lib/`) reciben el usuario
+de módulo requiere sesión válida (NextAuth). Los flags `esComprador`/`esVendedor` del
+usuario autenticado (ver `01-auth.md`) determinan qué operaciones puede hacer — no son
+excluyentes, un mismo usuario puede cumplir ambos. Cada spec de módulo indica qué flag
+requiere cada endpoint (y, cuando aplica, que además sea el dueño del recurso, ej. el
+vendedor de la tienda). Las funciones de servicio (capa `lib/`) reciben el usuario
 autenticado como parámetro explícito, nunca lo leen de un contexto global implícito,
 para que sean testeables de forma aislada.
 

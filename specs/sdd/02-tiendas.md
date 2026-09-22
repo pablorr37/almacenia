@@ -31,8 +31,12 @@ CREATE INDEX tiendas_ubicacion_gist_idx ON tiendas USING GIST (ubicacion);
 
 ## Reglas de negocio
 
-- Solo un usuario con `rol = 'vendedor'` puede crear una tienda, y solo puede tener
-  una (constraint `UNIQUE` en `vendedor_id`).
+- **Cualquier usuario autenticado** puede crear una tienda (no hace falta tener ya
+  `esVendedor = true`: crear la tienda es justamente lo que lo activa, ver
+  `01-auth.md`), y solo puede tener una (constraint `UNIQUE` en `vendedor_id`).
+- `crearTienda` es transaccional con `activarVendedor` (`01-auth.md`): crear la fila en
+  `tiendas` y poner `usuarios.es_vendedor = true` ocurre en una única operación — no
+  puede quedar una tienda creada con el usuario todavía en `es_vendedor = false`.
 - `ubicacion` es obligatoria al crear la tienda — no existe una tienda "sin ubicar" en
   el mapa. Latitud debe estar en `[-90, 90]`, longitud en `[-180, 180]`.
 - Solo el `vendedor_id` dueño de la tienda puede editarla o desactivarla.
@@ -44,7 +48,8 @@ CREATE INDEX tiendas_ubicacion_gist_idx ON tiendas USING GIST (ubicacion);
 
 ### `POST /api/tiendas`
 
-Rol requerido: `vendedor`, sin tienda propia todavía.
+Requiere sesión válida, sin tienda propia todavía (no requiere `esVendedor = true`
+de antemano — este endpoint es lo que lo activa).
 
 Request:
 
@@ -72,7 +77,7 @@ Público. Response `200`: `{ data: Tienda }`. `404 TIENDA_NO_ENCONTRADA` si no e
 
 ### `PATCH /api/tiendas/:id`
 
-Rol requerido: `vendedor`, dueño de la tienda (`vendedor_id === usuario.id`).
+Requiere ser el dueño de la tienda (`vendedor_id === usuario.id`).
 
 Request (todos los campos opcionales): igual forma que `POST`, más `activa?: boolean`.
 
@@ -102,7 +107,9 @@ interface CrearTiendaInput {
   lon: number;
 }
 
-async function crearTienda(vendedor: Usuario, input: CrearTiendaInput): Promise<Tienda>;
+// Crea la tienda y activa esVendedor=true en el usuario, en una única transacción
+// (llama internamente a activarVendedor de 01-auth.md).
+async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Promise<Tienda>;
 
 interface BuscarTiendasCercanasInput {
   lat: number;
@@ -136,8 +143,7 @@ async function actualizarTienda(
 
 | Código                      | Cuándo                                                        |
 | ---------------------------- | ---------------------------------------------------------------|
-| `USUARIO_YA_TIENE_TIENDA`    | El vendedor ya tiene una tienda creada (`POST /api/tiendas`). |
-| `ROL_INVALIDO`                | Un `comprador` intenta crear/editar una tienda.                |
+| `USUARIO_YA_TIENE_TIENDA`    | El usuario ya tiene una tienda creada (`POST /api/tiendas`). |
 | `UBICACION_INVALIDA`         | `lat`/`lon` fuera de rango o faltantes al crear.               |
 | `TIENDA_NO_ENCONTRADA`       | `:id` no existe.                                                |
 | `NO_ES_DUENO_DE_TIENDA`      | El usuario autenticado intenta editar una tienda que no es la suya. |
