@@ -19,6 +19,7 @@
 - [Flujo de agentes](decisiones/flujo-agentes.md) — Spec → Test → Code → Verificación, máx. 3 reintentos.
 - [Ollama nativo, no Docker](decisiones/ollama-nativo.md) — la infra local usa Ollama de Windows, solo Qdrant va en Docker.
 - [ORM: Prisma](decisiones/orm-prisma.md) — las tareas con acceso a DB del SDD esperan Prisma; no se cargan a `tasks.json` hasta tener `prisma/schema.prisma` commiteado. Mientras tanto se priorizan tareas de lógica pura.
+- [Bot de Telegram](decisiones/telegram-bot.md) — `agents/telegram_bot.py` opera el orquestador a distancia (setup en `infra/telegram/README.md`).
 
 ## Convenciones de código
 
