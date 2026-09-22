@@ -18,3 +18,15 @@ funcionara. Se prioriza rigor y trabajo sostenido por sobre velocidad.
 **Cómo aplicar:** cualquier tarea nueva se agrega a `tasks.json` con status `pendiente`;
 no se edita código generado a mano dentro de `src/generated/` sin también actualizar
 la spec correspondiente en `specs/`, para no perder la trazabilidad spec→código.
+
+**Referencia al SDD — campo `sdd` (no RAG genérico):** cada tarea que documenta una
+función/feature de un módulo del SDD debe traer `"sdd": "<archivo>.md"` (el archivo de
+`specs/sdd/` correspondiente). `orchestrator.py` lo lee directo de disco y se lo pasa a
+`architect.write_spec` como contexto separado y explícito. **No** se usa búsqueda
+semántica (`rag.search`) para traer el SDD — se probó (tarea `productos-es-comprable`,
+bloqueada la primera vez) que con documentos largos y de vocabulario superpuesto entre
+módulos (ej. "stock"/"disponible" aparecen tanto en `03-productos.md` como en
+`04-pedidos.md`), el modelo local de 8B puede recuperar el documento equivocado y
+copiarlo entero en vez de escribir la spec puntual pedida. El `rag.search` sobre
+`almacenia_specs` queda restringido a `tipo == "spec"` (specs de tareas previas ya
+resueltas, no los documentos completos del SDD), justamente para evitar esa mezcla.

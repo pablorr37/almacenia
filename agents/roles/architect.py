@@ -18,17 +18,40 @@ técnicas claras en español, en formato markdown, con estas secciones obligator
 ## Casos de error a contemplar
 ## Casos de prueba esperados (para el agente de tests)
 
-No escribas código de implementación, solo la spec."""
+No escribas código de implementación, solo la spec.
+
+Cuando recibas un "documento de referencia del módulo", es contexto de fondo — el
+alcance real de tu spec lo define ÚNICAMENTE el "objetivo de esta tarea". Si el
+objetivo pide una sola función, tu spec documenta esa función sola, no el resto de
+las funciones/endpoints que aparezcan en el documento de referencia."""
 
 
-def write_spec(modulo: str, objetivo: str, contexto_previo: list[dict]) -> str:
+def write_spec(
+    modulo: str,
+    objetivo: str,
+    contexto_previo: list[dict],
+    sdd_referencia: str | None = None,
+) -> str:
     client = ollama.Client(host=OLLAMA_URL)
     contexto = "\n\n".join(c.get("content", "") for c in contexto_previo)
-    user_prompt = (
-        f"Módulo: {modulo}\nObjetivo: {objetivo}\n\n"
-        f"Specs/decisiones relacionadas previas:\n{contexto or '(sin contexto previo)'}\n\n"
-        "Escribí la spec técnica de este módulo."
+    partes = []
+    if sdd_referencia:
+        partes.append(
+            "Documento de referencia del módulo (spec completa del SDD del proyecto, "
+            "SOLO para contexto de modelo de datos/convenciones — tu tarea es escribir "
+            "la spec de la función o feature PUNTUAL pedida en el objetivo de abajo, "
+            "NO redocumentar el módulo entero ni copiar sus endpoints/otras funciones):\n"
+            f"{sdd_referencia}"
+        )
+    partes.append(
+        "Tareas previas relacionadas (para mantener consistencia de nombres/tipos, "
+        f"no son parte del objetivo actual):\n{contexto or '(sin tareas previas relacionadas)'}"
     )
+    partes.append(
+        f"Objetivo de ESTA tarea — esto es lo único que tenés que especificar:\n"
+        f"Módulo: {modulo}\n{objetivo}"
+    )
+    user_prompt = "\n\n---\n\n".join(partes) + "\n\nEscribí la spec técnica de este objetivo puntual."
     response = client.chat(
         model=MODEL,
         messages=[

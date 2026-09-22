@@ -1,5 +1,12 @@
-"""Indexa specs/sdd/*.md en Qdrant para que el agente arquitecto los tenga como
-contexto real (via RAGManager.search) al escribir la spec de una tarea nueva.
+"""Indexa specs/sdd/*.md en Qdrant, colección `almacenia_specs`, payload tipo='sdd'.
+
+NO forma parte del pipeline activo: orchestrator.py ya no usa RAG para dar contexto
+del SDD al arquitecto (usa el campo "sdd" de cada tarea en tasks.json, que lee el
+archivo directo de disco — ver agents/memory/decisiones/flujo-agentes.md para la
+causa raíz del bug que llevó a este cambio). El rag.search de specs queda filtrado a
+tipo='spec', así que estos puntos indexados no se recuperan desde ahí. Se deja este
+script por si en el futuro hace falta indexado difuso del SDD para otro propósito
+(ej. detectar inconsistencias entre módulos), no para dar contexto de una tarea puntual.
 
 Uso: python agents/index_sdd.py
 Requiere infra/docker-compose.yml levantado (Qdrant) y Ollama nativo corriendo.

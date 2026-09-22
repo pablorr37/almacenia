@@ -8,10 +8,12 @@
   modelo de datos, endpoints y convenciones del MVP (auth, tiendas, productos,
   pedidos, ventas). Toda tarea nueva que toque uno de estos módulos debe alinearse
   con su spec en `specs/sdd/`, no reinventar el modelo de datos.
-- Los 6 archivos de `specs/sdd/` están indexados en la colección Qdrant
-  `almacenia_specs` (`python agents/index_sdd.py`) — el agente arquitecto los recibe
-  como contexto RAG al escribir la spec de una tarea nueva. Si se edita un archivo de
-  `specs/sdd/`, volver a correr `index_sdd.py` para no dejar el contexto desactualizado.
+- Cada tarea de `agents/tasks/tasks.json` que documenta un módulo del SDD trae un
+  campo `"sdd": "<archivo>.md"` — `orchestrator.py` lo lee directo de `specs/sdd/` y
+  se lo pasa al agente arquitecto como contexto explícito. **No** se usa búsqueda
+  semántica (RAG) para esto (ver [Flujo de agentes](decisiones/flujo-agentes.md) para
+  la causa raíz del bug que llevó a este cambio). `agents/index_sdd.py` quedó sin uso
+  activo en el pipeline — no volver a depender de él para dar contexto del SDD.
 
 ## Decisiones de arquitectura
 

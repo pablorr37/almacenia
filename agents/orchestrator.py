@@ -14,6 +14,7 @@ from roles import architect, developer, test_writer, verifier
 
 TASKS_FILE = Path(__file__).parent / "tasks" / "tasks.json"
 OUTPUT_DIR = Path(__file__).parent.parent / "src" / "generated"
+SDD_DIR = Path(__file__).parent.parent / "specs" / "sdd"
 MAX_INTENTOS = 3
 
 COLLECTION_SPECS = os.environ.get("QDRANT_COLLECTION_SPECS", "almacenia_specs")
@@ -41,8 +42,13 @@ def procesar_tarea(tarea: dict, rag: RAGManager) -> None:
     print(f"\n=== Tarea {tarea['id']}: {modulo} ===")
 
     # Fase 1: Spec
-    contexto = rag.search(COLLECTION_SPECS, objetivo, limit=3)
-    spec = architect.write_spec(modulo, objetivo, contexto)
+    contexto = rag.search(
+        COLLECTION_SPECS, objetivo, limit=3, filtro_payload={"tipo": "spec"}
+    )
+    sdd_referencia = None
+    if tarea.get("sdd"):
+        sdd_referencia = (SDD_DIR / tarea["sdd"]).read_text(encoding="utf-8")
+    spec = architect.write_spec(modulo, objetivo, contexto, sdd_referencia)
     rag.index(COLLECTION_SPECS, spec, {"modulo": modulo, "tipo": "spec"})
     spec_path = Path(__file__).parent.parent / "specs" / f"{modulo}_spec.md"
     spec_path.parent.mkdir(parents=True, exist_ok=True)

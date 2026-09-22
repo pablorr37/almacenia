@@ -43,10 +43,24 @@ class RAGManager:
         )
         self.client.upsert(collection_name=collection, points=[point])
 
-    def search(self, collection: str, query: str, limit: int = 5) -> list[dict]:
+    def search(
+        self,
+        collection: str,
+        query: str,
+        limit: int = 5,
+        filtro_payload: dict | None = None,
+    ) -> list[dict]:
         self._ensure_collection(collection)
         vector = self._embed(query)
+        query_filter = None
+        if filtro_payload:
+            query_filter = qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(key=key, match=qmodels.MatchValue(value=value))
+                    for key, value in filtro_payload.items()
+                ]
+            )
         results = self.client.query_points(
-            collection_name=collection, query=vector, limit=limit
+            collection_name=collection, query=vector, limit=limit, query_filter=query_filter
         )
         return [point.payload for point in results.points]
