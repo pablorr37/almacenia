@@ -6,6 +6,10 @@ import { AppError } from "@/lib/errors";
 const STATUS_POR_CODIGO: Record<string, number> = {
   EMAIL_YA_REGISTRADO: 409,
   CREDENCIALES_INVALIDAS: 401,
+  NO_AUTENTICADO: 401,
+  NO_ES_DUENO_DE_TIENDA: 403,
+  USUARIO_YA_TIENE_TIENDA: 409,
+  TIENDA_NO_ENCONTRADA: 404,
 };
 
 export function respuestaExitosa<T>(data: T, status = 200) {
