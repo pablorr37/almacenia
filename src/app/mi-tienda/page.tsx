@@ -58,8 +58,6 @@ const ETIQUETA_ACCION: Record<AccionPedido, string> = {
 const formatoARS = (n: number) =>
   "$" + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const LOCAL_STORAGE_KEY = "almacenia:tiendaId";
-
 export default function MiTiendaPage() {
   const { status } = useSession();
   const [tab, setTab] = useState<"tienda" | "productos" | "pedidos">("pedidos");
@@ -74,14 +72,13 @@ export default function MiTiendaPage() {
       setCargandoTienda(false);
       return;
     }
-    const tiendaId = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!tiendaId) {
-      setCargandoTienda(false);
-      return;
-    }
-    apiGet<Tienda>(`/api/tiendas/${tiendaId}`)
+    apiGet<Tienda>("/api/tiendas/mia")
       .then(setTienda)
-      .catch(() => localStorage.removeItem(LOCAL_STORAGE_KEY))
+      .catch((err) => {
+        if (!(err instanceof ApiError) || err.code !== "TIENDA_NO_ENCONTRADA") {
+          setError(err instanceof ApiError ? err.message : "Error al cargar tu tienda.");
+        }
+      })
       .finally(() => setCargandoTienda(false));
   }, [status]);
 
@@ -106,7 +103,6 @@ export default function MiTiendaPage() {
         lat: posicion.coords.latitude,
         lon: posicion.coords.longitude,
       });
-      localStorage.setItem(LOCAL_STORAGE_KEY, nueva.id);
       setTienda(nueva);
     } catch (err) {
       setError(

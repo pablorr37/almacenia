@@ -75,6 +75,16 @@ Response `200`:
 
 Público. Response `200`: `{ data: Tienda }`. `404 TIENDA_NO_ENCONTRADA` si no existe.
 
+### `GET /api/tiendas/mia`
+
+Requiere sesión válida. Devuelve la tienda del usuario autenticado (relación 1:1
+vendedor–tienda del MVP, ver arriba) — es la forma en la que el panel del vendedor
+resuelve su propia tienda sin conocer de antemano el `id`, en vez de guardarlo por su
+cuenta (ej. `localStorage`) en el cliente.
+
+Response `200`: `{ data: Tienda }`. `404 TIENDA_NO_ENCONTRADA` si el usuario todavía
+no creó su tienda.
+
 ### `PATCH /api/tiendas/:id`
 
 Requiere ser el dueño de la tienda (`vendedor_id === usuario.id`).
@@ -122,6 +132,8 @@ async function buscarTiendasCercanas(
 ): Promise<Array<Tienda & { distanciaKm: number }>>;
 
 async function obtenerTienda(id: string): Promise<Tienda | null>;
+
+async function obtenerTiendaPorVendedor(vendedorId: string): Promise<Tienda | null>;
 
 interface ActualizarTiendaInput {
   nombre?: string;

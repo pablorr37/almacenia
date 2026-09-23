@@ -143,6 +143,13 @@ export async function obtenerTienda(id: string): Promise<Tienda | null> {
   return filas[0] ? aTienda(filas[0]) : null;
 }
 
+export async function obtenerTiendaPorVendedor(vendedorId: string): Promise<Tienda | null> {
+  const filas = await prisma.$queryRaw<FilaTienda[]>`
+    ${SELECT_TIENDA} WHERE vendedor_id = ${vendedorId}
+  `;
+  return filas[0] ? aTienda(filas[0]) : null;
+}
+
 export interface ActualizarTiendaInput {
   nombre?: string;
   descripcion?: string;

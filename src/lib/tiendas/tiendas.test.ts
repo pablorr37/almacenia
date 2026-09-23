@@ -5,6 +5,7 @@ import {
   crearTienda,
   buscarTiendasCercanas,
   obtenerTienda,
+  obtenerTiendaPorVendedor,
   actualizarTienda,
 } from "./tiendas";
 
@@ -195,6 +196,36 @@ describe("obtenerTienda", () => {
 
   it("devuelve null si no existe", async () => {
     const encontrada = await obtenerTienda("00000000-0000-0000-0000-000000000000");
+
+    expect(encontrada).toBeNull();
+  });
+});
+
+describe("obtenerTiendaPorVendedor", () => {
+  let usuario: Usuario;
+
+  beforeEach(async () => {
+    usuario = await crearUsuarioDePrueba();
+  });
+
+  afterEach(() => limpiar([usuario.id]));
+
+  it("devuelve la tienda del vendedor dado", async () => {
+    const creada = await crearTienda(usuario, {
+      nombre: "Mi tienda",
+      direccion: "Dirección",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+    });
+
+    const encontrada = await obtenerTiendaPorVendedor(usuario.id);
+
+    expect(encontrada?.id).toBe(creada.id);
+    expect(encontrada?.vendedorId).toBe(usuario.id);
+  });
+
+  it("devuelve null si el usuario no tiene tienda", async () => {
+    const encontrada = await obtenerTiendaPorVendedor(usuario.id);
 
     expect(encontrada).toBeNull();
   });
