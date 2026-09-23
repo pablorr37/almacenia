@@ -5,6 +5,11 @@ metadata:
   type: project
 ---
 
+> **Pipeline pausado (ver [[claude-code-primario]]).** Este documento describe el
+> pipeline local (Ollama + Qdrant), que quedó pausado tras confirmarse que ninguna de
+> las 6 tareas cargadas logró completarse. Se conserva como referencia histórica, no
+> se borra ni se reescribe. Claude Code es ahora el camino primario de desarrollo.
+
 El orquestador (`agents/orchestrator.py`) procesa cada tarea de `agents/tasks/tasks.json`
 en 4 fases: arquitecto (spec) → test_writer (tests Vitest) → developer (código) →
 verifier (corre los tests). Si fallan los tests, developer reintenta hasta 3 veces

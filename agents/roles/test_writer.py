@@ -33,7 +33,14 @@ ni bloques de markdown."""
 
 def write_tests(modulo: str, spec: str) -> str:
     client = ollama.Client(host=OLLAMA_URL)
-    user_prompt = f"Spec del módulo `{modulo}`:\n\n{spec}\n\nEscribí el archivo de tests."
+    user_prompt = (
+        f"Spec del módulo `{modulo}`:\n\n{spec}\n\n"
+        f"El archivo de implementación se va a llamar exactamente `{modulo}.ts` y va a "
+        f"estar en la misma carpeta que este test. Tu import tiene que ser exactamente "
+        f"`import {{ ... }} from './{modulo}';` (con los nombres de función/clase que "
+        f"correspondan de la spec) — no inventes ni acortes ese nombre de archivo.\n\n"
+        "Escribí el archivo de tests."
+    )
     response = client.chat(
         model=MODEL,
         messages=[

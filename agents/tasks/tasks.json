@@ -12,40 +12,40 @@
       "modulo": "productos-es-comprable",
       "objetivo": "Módulo productos de Almacenia (ver specs/sdd/03-productos.md). Implementar la función pura esComprable(producto: Producto): boolean, donde Producto = { id: string; tiendaId: string; nombre: string; descripcion: string | null; precio: number; stock: number; disponible: boolean }. Regla exacta de la spec: un producto es comprable solo si disponible === true Y stock > 0. No accede a base de datos, es una función pura sobre el objeto recibido.",
       "sdd": "03-productos.md",
-      "status": "pendiente",
-      "intentos": 0
+      "status": "bloqueada",
+      "intentos": 3
     },
     {
       "id": 3,
       "modulo": "pedidos-transicion-permitida",
       "objetivo": "Módulo pedidos de Almacenia (ver specs/sdd/04-pedidos.md). Implementar la función pura transicionPermitida(estadoActual: EstadoPedido, accion: AccionPedido): boolean, donde EstadoPedido = 'pendiente' | 'confirmado' | 'listo_para_retirar' | 'entregado' | 'rechazado' | 'cancelado' y AccionPedido = 'confirmar' | 'rechazar' | 'marcarListo' | 'entregar' | 'cancelar'. Máquina de estados exacta de la spec: desde 'pendiente' se permite 'confirmar' (-> 'confirmado'), 'rechazar' (-> 'rechazado') y 'cancelar' (-> 'cancelado'); desde 'confirmado' se permite 'marcarListo' (-> 'listo_para_retirar'); desde 'listo_para_retirar' se permite 'entregar' (-> 'entregado'). Ninguna otra combinación de estado+acción es válida (incluye 'cancelar' que SOLO es válida desde 'pendiente', no desde otros estados). No accede a base de datos, es una función pura de tabla de transiciones.",
       "sdd": "04-pedidos.md",
-      "status": "pendiente",
-      "intentos": 0
+      "status": "bloqueada",
+      "intentos": 3
     },
     {
       "id": 4,
       "modulo": "ventas-calcular-total",
       "objetivo": "Módulo ventas de Almacenia (ver specs/sdd/05-ventas.md). Implementar la función pura calcularTotalItems(items: Array<{ cantidad: number; precioUnitario: number }>): number, que devuelve la suma de cantidad * precioUnitario de todos los items. Regla exacta de la spec: el total de una venta debe ser igual a la suma de cantidad*precioUnitario de sus items (invariante que valida la creación de una venta, no se recibe el total como input directo). Debe lanzar un error si algún item tiene cantidad <= 0. No accede a base de datos, es una función pura sobre el array recibido.",
       "sdd": "05-ventas.md",
-      "status": "pendiente",
-      "intentos": 0
+      "status": "bloqueada",
+      "intentos": 3
     },
     {
       "id": 5,
       "modulo": "tiendas-validar-ubicacion",
       "objetivo": "Módulo tiendas de Almacenia (ver specs/sdd/02-tiendas.md). Implementar la función pura validarUbicacion(lat: number, lon: number): void, que no devuelve nada si la ubicación es válida y lanza un Error si es inválida. Regla exacta de la spec: latitud debe estar en el rango [-90, 90] y longitud en el rango [-180, 180] (ambos límites inclusive). También debe lanzar error si lat o lon no son de tipo number (ej. NaN). No accede a base de datos, es una función pura de validación.",
       "sdd": "02-tiendas.md",
-      "status": "pendiente",
-      "intentos": 0
+      "status": "bloqueada",
+      "intentos": 3
     },
     {
       "id": 6,
       "modulo": "overview-normalizar-paginacion",
       "objetivo": "Convenciones comunes de Almacenia (ver specs/sdd/00-overview.md, sección Paginación). Implementar la función pura normalizarPaginacion(page?: number, pageSize?: number): { page: number; pageSize: number }, usada por todos los listados paginados de la API. Reglas exactas de la spec: si page no se pasa o es inválido (menor a 1, no numérico), default page=1. Si pageSize no se pasa o es inválido (menor a 1, no numérico), default pageSize=20. Si pageSize supera 100, se recorta (clamp) a 100 como máximo. No accede a base de datos, es una función pura de normalización de parámetros de query.",
       "sdd": "00-overview.md",
-      "status": "pendiente",
-      "intentos": 0
+      "status": "bloqueada",
+      "intentos": 3
     }
   ]
 }
