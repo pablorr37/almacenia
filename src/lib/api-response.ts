@@ -10,10 +10,15 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   NO_ES_DUENO_DE_TIENDA: 403,
   USUARIO_YA_TIENE_TIENDA: 409,
   TIENDA_NO_ENCONTRADA: 404,
+  PRODUCTO_NO_ENCONTRADO: 404,
 };
 
-export function respuestaExitosa<T>(data: T, status = 200) {
-  return NextResponse.json({ data }, { status });
+export function respuestaExitosa<T>(
+  data: T,
+  status = 200,
+  meta?: { page: number; pageSize: number; total: number }
+) {
+  return NextResponse.json({ data, ...meta }, { status });
 }
 
 export function respuestaError(error: unknown) {
