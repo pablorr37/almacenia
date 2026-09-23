@@ -1,0 +1,181 @@
+// Derivado 1:1 de specs/sdd/*.md (fuente de verdad del modelo de datos). Cualquier
+// cambio de modelo se hace primero en la spec correspondiente, no directo acá.
+// Ver specs/sdd/00-overview.md para las convenciones generales.
+//
+// Los CHECK constraints documentados en cada spec (precio_no_negativo,
+// stock_no_negativo, cantidad_positiva, total_no_negativo,
+// pedido_id_solo_si_origen_pedido) y el índice GIST de Tienda.ubicacion no se pueden
+// declarar en este DSL de forma estable en esta versión de Prisma — se agregan a
+// mano en la migración SQL generada (ver prisma/migrations/, comentario ahí).
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated-prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [postgis]
+}
+
+// ---------------------------------------------------------------------------
+// 01-auth.md
+// ---------------------------------------------------------------------------
+
+model Usuario {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  nombre       String
+  esComprador  Boolean  @default(true) @map("es_comprador")
+  esVendedor   Boolean  @default(false) @map("es_vendedor")
+  creadoEn     DateTime @default(now()) @map("creado_en")
+
+  tienda  Tienda?
+  pedidos Pedido[]
+  ventas  Venta[]
+
+  @@map("usuarios")
+}
+
+// ---------------------------------------------------------------------------
+// 02-tiendas.md
+// ---------------------------------------------------------------------------
+
+model Tienda {
+  id            String   @id @default(uuid())
+  vendedorId    String   @unique @map("vendedor_id")
+  nombre        String
+  descripcion   String?
+  direccion     String
+  // PostGIS no tiene tipo nativo en Prisma: se declara Unsupported y se accede vía
+  // $queryRaw para operaciones espaciales (ST_DWithin, ST_Distance, etc.). El índice
+  // GIST se agrega a mano en la migración generada (Prisma no lo declara solo).
+  ubicacion     Unsupported("geography(Point, 4326)")
+  activa        Boolean  @default(true)
+  creadaEn      DateTime @default(now()) @map("creada_en")
+  actualizadaEn DateTime @default(now()) @updatedAt @map("actualizada_en")
+
+  vendedor  Usuario    @relation(fields: [vendedorId], references: [id])
+  productos Producto[]
+  pedidos   Pedido[]
+  ventas    Venta[]
+
+  @@map("tiendas")
+}
+
+// ---------------------------------------------------------------------------
+// 03-productos.md
+// ---------------------------------------------------------------------------
+
+model Producto {
+  id            String   @id @default(uuid())
+  tiendaId      String   @map("tienda_id")
+  nombre        String
+  descripcion   String?
+  precio        Decimal  @db.Decimal(12, 2)
+  stock         Int      @default(0)
+  disponible    Boolean  @default(true)
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
+
+  tienda      Tienda        @relation(fields: [tiendaId], references: [id])
+  itemsPedido ItemPedido[]
+  itemsVenta  ItemVenta[]
+
+  @@index([tiendaId])
+  @@map("productos")
+}
+
+// ---------------------------------------------------------------------------
+// 04-pedidos.md
+// ---------------------------------------------------------------------------
+
+enum EstadoPedido {
+  pendiente
+  confirmado
+  listo_para_retirar
+  entregado
+  rechazado
+  cancelado
+
+  @@map("estado_pedido")
+}
+
+model Pedido {
+  id            String       @id @default(uuid())
+  tiendaId      String       @map("tienda_id")
+  compradorId   String       @map("comprador_id")
+  estado        EstadoPedido @default(pendiente)
+  nota          String?
+  creadoEn      DateTime     @default(now()) @map("creado_en")
+  actualizadoEn DateTime     @default(now()) @updatedAt @map("actualizado_en")
+
+  tienda    Tienda       @relation(fields: [tiendaId], references: [id])
+  comprador Usuario      @relation(fields: [compradorId], references: [id])
+  items     ItemPedido[]
+  venta     Venta?
+
+  @@index([tiendaId])
+  @@index([compradorId])
+  @@map("pedidos")
+}
+
+model ItemPedido {
+  id             String  @id @default(uuid())
+  pedidoId       String  @map("pedido_id")
+  productoId     String  @map("producto_id")
+  cantidad       Int
+  precioUnitario Decimal @map("precio_unitario") @db.Decimal(12, 2)
+
+  pedido   Pedido   @relation(fields: [pedidoId], references: [id])
+  producto Producto @relation(fields: [productoId], references: [id])
+
+  @@index([pedidoId])
+  @@map("items_pedido")
+}
+
+// ---------------------------------------------------------------------------
+// 05-ventas.md
+// ---------------------------------------------------------------------------
+
+enum OrigenVenta {
+  presencial
+  pedido
+
+  @@map("origen_venta")
+}
+
+model Venta {
+  id          String      @id @default(uuid())
+  tiendaId    String      @map("tienda_id")
+  compradorId String?     @map("comprador_id")
+  pedidoId    String?     @unique @map("pedido_id")
+  origen      OrigenVenta
+  total       Decimal     @db.Decimal(12, 2)
+  creadaEn    DateTime    @default(now()) @map("creada_en")
+
+  tienda    Tienda      @relation(fields: [tiendaId], references: [id])
+  comprador Usuario?    @relation(fields: [compradorId], references: [id])
+  pedido    Pedido?     @relation(fields: [pedidoId], references: [id])
+  items     ItemVenta[]
+
+  @@index([tiendaId])
+  @@index([creadaEn])
+  @@map("ventas")
+}
+
+model ItemVenta {
+  id             String  @id @default(uuid())
+  ventaId        String  @map("venta_id")
+  productoId     String  @map("producto_id")
+  cantidad       Int
+  precioUnitario Decimal @map("precio_unitario") @db.Decimal(12, 2)
+
+  venta    Venta    @relation(fields: [ventaId], references: [id])
+  producto Producto @relation(fields: [productoId], references: [id])
+
+  @@index([ventaId])
+  @@map("items_venta")
+}

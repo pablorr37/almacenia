@@ -9,8 +9,26 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: almacenia_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: almacenia
+      POSTGRES_PASSWORD: almacenia
+      POSTGRES_DB: almacenia
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
 volumes:
   qdrant_data:
+  postgres_data:
 
 # Ollama corre nativo en Windows (no en Docker), reusando la instalación y los modelos
 # ya existentes con acceso directo a la GPU. Ver README.md de esta carpeta.
+#
+# El pipeline local (Ollama + Qdrant + agents/orchestrator.py) esta pausado (ver
+# agents/memory/decisiones/claude-code-primario.md) — Qdrant queda arriba por si se
+# retoma, pero el desarrollo activo del schema usa el servicio postgres de aca abajo.

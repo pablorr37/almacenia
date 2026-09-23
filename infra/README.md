@@ -1,16 +1,38 @@
-# Infra local — Qdrant + Ollama
+# Infra local — Postgres + Qdrant + Ollama
 
-Infraestructura para los agentes IA (SDD+TDD) que desarrollan Almacenia. Corre 100% local (i9 / 32GB RAM / RTX 6GB).
+## Postgres (activo — base de datos de la app)
+
+Servicio `postgres` (imagen `postgis/postgis`, incluye la extensión PostGIS que usa
+`Tienda.ubicacion` en `prisma/schema.prisma`). Levantar:
+
+```
+docker compose -f infra/docker-compose.yml up -d postgres
+```
+
+Credenciales de desarrollo (`DATABASE_URL` en `.env`, ver `.env.example`):
+usuario/contraseña/db `almacenia`/`almacenia`/`almacenia`, puerto `5432`.
+
+Migraciones con Prisma:
+
+```
+npx prisma migrate dev
+npx prisma generate
+```
+
+## Qdrant + Ollama (pausado — pipeline local de agentes)
+
+El resto de esta infra (Qdrant + Ollama nativo + `agents/orchestrator.py`) era para
+un pipeline de desarrollo agéntico local que quedó **pausado** — ver
+`agents/memory/decisiones/claude-code-primario.md`. Se documenta acá por si se
+retoma, no es necesaria para el desarrollo activo (que usa Claude Code + Postgres).
 
 Qdrant corre en Docker (memoria RAG). Ollama corre **nativo en Windows** (no en Docker),
 reusando la instalación y los modelos ya existentes en el host, con acceso directo a la
 GPU sin capas de virtualización extra. Ambos exponen sus puertos habituales en
 `localhost`, así que `agents/` los usa igual sin importar cómo corren.
 
-## Levantar
-
 ```
-docker compose -f infra/docker-compose.yml up -d
+docker compose -f infra/docker-compose.yml up -d qdrant
 ```
 
 Ollama nativo debe estar corriendo (la app de Ollama en Windows, o `ollama serve`).
@@ -32,19 +54,19 @@ Verificar:
 - Qdrant: http://localhost:6333/collections
 - Ollama: http://localhost:11434/api/tags
 
-## Apagar
+## Apagar todo
 
 ```
 docker compose -f infra/docker-compose.yml down
 ```
 
-## Resetear (borra memoria RAG)
+## Resetear (borra datos de Postgres y memoria RAG de Qdrant)
 
 ```
 docker compose -f infra/docker-compose.yml down -v
 ```
 
-## Modelos (Ollama nativo)
+## Modelos (Ollama nativo, pipeline pausado)
 
 - `deepseek-r1:8b` — agente arquitecto (specs)
 - `qwen2.5-coder:7b` — agente desarrollador (código)
@@ -53,4 +75,5 @@ docker compose -f infra/docker-compose.yml down -v
 ## GPU
 
 La GPU NVIDIA la usa Ollama nativo directamente (sin Docker), que es más simple y
-eficiente en Windows que pasar la GPU a un contenedor. Qdrant no necesita GPU.
+eficiente en Windows que pasar la GPU a un contenedor. Ni Postgres ni Qdrant
+necesitan GPU.
