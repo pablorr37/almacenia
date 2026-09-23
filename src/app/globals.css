@@ -1,13 +1,44 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@import "tailwindcss";
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  /* Paleta — ver Artifact "Almacenia — Design" */
+  --color-primary: #0e6b5c;
+  --color-primary-dark: #094f44;
+  --color-primary-soft: #d8f3ea;
+  --color-accent: #e2723a;
+  --color-accent-dark: #b85423;
+  --color-text: #201a15;
+  --color-text-2: #6b6058;
+  --color-bg: #fbf8f3;
+  --color-surface: #ffffff;
+  --color-border: #e7e0d5;
+  --color-placeholder: #f0eae0;
+
+  /* Estados de pedido */
+  --color-estado-pendiente-bg: #fff4d6;
+  --color-estado-pendiente-text: #8a6400;
+  --color-estado-confirmado-bg: #dceefb;
+  --color-estado-confirmado-text: #0b5a8c;
+  --color-estado-listo-bg: #d8f3ea;
+  --color-estado-listo-text: #0e6b5c;
+  --color-estado-entregado-bg: #dff5e3;
+  --color-estado-entregado-text: #1e7a3d;
+  --color-estado-rechazado-bg: #fce4e1;
+  --color-estado-rechazado-text: #b4402a;
+  --color-estado-cancelado-bg: #efebe4;
+  --color-estado-cancelado-text: #6b6058;
+
+  /* Tipografía — next/font inyecta --font-fraunces / --font-plus-jakarta en <html> */
+  --font-display: var(--font-fraunces), serif;
+  --font-sans: var(--font-plus-jakarta), sans-serif;
+
+  /* Radios */
+  --radius-control: 12px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+
+  /* Movimiento — spring táctil para botones/cards interactivas */
+  --ease-tactile: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 html {
@@ -22,19 +53,15 @@ body {
 
 body {
   min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 * {
   box-sizing: border-box;
-  padding: 0;
-  margin: 0;
 }
 
 a {
@@ -42,8 +69,17 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+button,
+a {
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease,
+    transform 0.18s var(--ease-tactile);
+}
+
+button:active,
+a:active {
+  transform: scale(0.96);
 }
