@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import { esComprable } from "@/lib/productos/productos";
+import { crearVentaDesdePedido } from "@/lib/ventas/ventas";
 import type { Usuario } from "@/lib/auth/auth";
 import type { Pedido as PedidoDb, ItemPedido as ItemPedidoDb, Producto as ProductoDb } from "@/generated-prisma/client";
 
@@ -166,6 +167,15 @@ export async function transicionarPedido(
   }
 
   const nuevoEstado = TRANSICIONES[pedido.estado][accion]!;
+
+  // 'entregar' dispara la creación de la Venta asociada (05-ventas.md). Si falla por
+  // stock insuficiente, el pedido debe quedar tal cual (listo_para_retirar) para que
+  // el vendedor lo resuelva a mano — por eso la venta se crea ANTES de persistir el
+  // cambio de estado, no después.
+  if (accion === "entregar") {
+    await crearVentaDesdePedido(aPedido(pedido));
+  }
+
   const actualizado = await prisma.pedido.update({
     where: { id: pedidoId },
     data: { estado: nuevoEstado },

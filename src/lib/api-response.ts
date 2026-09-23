@@ -15,6 +15,8 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   NO_AUTORIZADO_PEDIDO: 403,
   TRANSICION_INVALIDA: 409,
   STOCK_INSUFICIENTE: 409,
+  VENTA_NO_ENCONTRADA: 404,
+  NO_AUTORIZADO_VENTA: 403,
 };
 
 export function respuestaExitosa<T>(
