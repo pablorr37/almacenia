@@ -48,3 +48,12 @@ export async function apiDelete<T>(path: string): Promise<T> {
   const res = await fetch(path, { method: "DELETE" });
   return parse<T>(res);
 }
+
+// Multipart, para /api/archivos/upload (08-archivos.md) — sin Content-Type manual,
+// el navegador arma el boundary del form-data solo.
+export async function apiUpload<T>(path: string, archivo: File): Promise<T> {
+  const form = new FormData();
+  form.set("archivo", archivo);
+  const res = await fetch(path, { method: "POST", body: form });
+  return parse<T>(res);
+}

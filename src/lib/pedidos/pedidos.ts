@@ -32,23 +32,27 @@ export interface Pedido {
   estado: EstadoPedido;
   nota: string | null;
   items: ItemPedido[];
+  total: number;
 }
 
 type PedidoConItems = PedidoDb & { items: ItemPedidoDb[] };
 
 function aPedido(pedido: PedidoConItems): Pedido {
+  const items = pedido.items.map((item) => ({
+    id: item.id,
+    productoId: item.productoId,
+    cantidad: item.cantidad,
+    precioUnitario: Number(item.precioUnitario),
+  }));
+
   return {
     id: pedido.id,
     tiendaId: pedido.tiendaId,
     compradorId: pedido.compradorId,
     estado: pedido.estado,
     nota: pedido.nota,
-    items: pedido.items.map((item) => ({
-      id: item.id,
-      productoId: item.productoId,
-      cantidad: item.cantidad,
-      precioUnitario: Number(item.precioUnitario),
-    })),
+    items,
+    total: items.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0),
   };
 }
 
@@ -95,7 +99,7 @@ export async function crearPedido(comprador: Usuario, input: CrearPedidoInput): 
     if (!producto || producto.tiendaId !== input.tiendaId) {
       throw new AppError("PRODUCTOS_DE_OTRA_TIENDA", "Todos los productos deben pertenecer a la misma tienda.");
     }
-    if (!esComprable({ ...producto, precio: Number(producto.precio) })) {
+    if (!esComprable({ disponible: producto.disponible, stock: producto.stock })) {
       throw new AppError("PRODUCTO_NO_COMPRABLE", `El producto "${producto.nombre}" no está disponible.`);
     }
     if (item.cantidad > producto.stock) {
@@ -189,7 +193,8 @@ export async function transicionarPedido(
 // GET /api/pedidos?tiendaId=|compradorId= que sí está documentado ahí.
 export interface ListarPedidosInput {
   tiendaId?: string;
-  compradorId?: string;
+  compradorId?: string; // o el literal 'me'
+  estado?: EstadoPedido;
   page?: number;
   pageSize?: number;
 }
@@ -198,7 +203,7 @@ export async function listarPedidos(
   usuario: Usuario,
   input: ListarPedidosInput
 ): Promise<{ data: Pedido[]; page: number; pageSize: number; total: number }> {
-  const where: { tiendaId?: string; compradorId?: string } = {};
+  const where: { tiendaId?: string; compradorId?: string; estado?: EstadoPedido } = {};
 
   if (input.tiendaId) {
     const tienda = await prisma.tienda.findUnique({ where: { id: input.tiendaId } });
@@ -212,10 +217,15 @@ export async function listarPedidos(
   }
 
   if (input.compradorId) {
-    if (input.compradorId !== usuario.id) {
+    const compradorId = input.compradorId === "me" ? usuario.id : input.compradorId;
+    if (compradorId !== usuario.id) {
       throw new AppError("NO_AUTORIZADO_PEDIDO", "Solo podés listar tus propios pedidos.");
     }
-    where.compradorId = input.compradorId;
+    where.compradorId = compradorId;
+  }
+
+  if (input.estado) {
+    where.estado = input.estado;
   }
 
   const page = input.page && input.page > 0 ? input.page : 1;

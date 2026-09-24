@@ -16,7 +16,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const producto = await actualizarProducto(usuario, id, {
       nombre: body.nombre,
       descripcion: body.descripcion,
+      imagenUrl: body.imagenUrl,
       precio: body.precio,
+      precioOferta: body.precioOferta,
+      destacado: body.destacado,
       stock: body.stock,
       disponible: body.disponible,
     });

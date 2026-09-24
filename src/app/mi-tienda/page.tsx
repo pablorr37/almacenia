@@ -6,7 +6,17 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
+import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
+import { useCodigoBarras } from "@/lib/scanner/useCodigoBarras";
+
+type ProductoCatalogo = {
+  id: string;
+  nombre: string;
+  marca: string | null;
+  codigoBarras: string | null;
+  imagenUrl: string | null;
+};
 
 type MedioPago = "efectivo" | "transferencia" | "mercado_pago" | "debito" | "qr";
 
@@ -24,6 +34,9 @@ type Tienda = {
   lat: number;
   lon: number;
   activa: boolean;
+  imagenUrl: string | null;
+  verificada: boolean;
+  plan: "free" | "premium";
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[];
 };
@@ -49,6 +62,7 @@ function horarioPorDefecto(): HorarioTienda[] {
 type Producto = {
   id: string;
   nombre: string;
+  imagenUrl: string | null;
   precio: number;
   stock: number;
   disponible: boolean;
@@ -101,6 +115,53 @@ export default function MiTiendaPage() {
   const [horariosForm, setHorariosForm] = useState<HorarioTienda[]>(horarioPorDefecto());
   const [guardandoTienda, setGuardandoTienda] = useState(false);
   const [tiendaGuardada, setTiendaGuardada] = useState(false);
+  const [solicitandoVerificacion, setSolicitandoVerificacion] = useState(false);
+  const [verificacionSolicitada, setVerificacionSolicitada] = useState(false);
+
+  // Alta de producto vía catálogo compartido (06-catalogo.md): se busca primero
+  // por nombre/código de barras; si hay coincidencia se "adopta" (catalogoId), si
+  // no se da de alta un producto nuevo en el catálogo (nuevo.nombre).
+  const [busquedaCatalogo, setBusquedaCatalogo] = useState("");
+  const [resultadosCatalogo, setResultadosCatalogo] = useState<ProductoCatalogo[]>([]);
+  const [catalogoSeleccionado, setCatalogoSeleccionado] = useState<ProductoCatalogo | null>(null);
+  const [escaneando, setEscaneando] = useState(false);
+  const { videoRef, activo: scannerActivo, error: scannerError, iniciar: iniciarScanner, detener: detenerScanner } =
+    useCodigoBarras(async (texto) => {
+      setEscaneando(false);
+      detenerScanner();
+      try {
+        const resultados = await apiGet<ProductoCatalogo[]>(
+          `/api/catalogo/buscar?codigoBarras=${encodeURIComponent(texto)}`,
+        );
+        if (resultados[0]) {
+          setCatalogoSeleccionado(resultados[0]);
+          setBusquedaCatalogo(resultados[0].nombre);
+        } else {
+          setBusquedaCatalogo(texto);
+        }
+      } catch {
+        setBusquedaCatalogo(texto);
+      }
+    });
+
+  useEffect(() => {
+    if (escaneando) iniciarScanner();
+    // Solo se dispara al abrir/cerrar el scanner, no en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [escaneando]);
+
+  useEffect(() => {
+    if (catalogoSeleccionado || busquedaCatalogo.trim().length < 2) {
+      setResultadosCatalogo([]);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      apiGet<ProductoCatalogo[]>(`/api/catalogo/buscar?q=${encodeURIComponent(busquedaCatalogo)}`)
+        .then(setResultadosCatalogo)
+        .catch(() => setResultadosCatalogo([]));
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [busquedaCatalogo, catalogoSeleccionado]);
 
   useEffect(() => {
     if (status !== "authenticated") {
@@ -203,12 +264,17 @@ export default function MiTiendaPage() {
     if (!tienda) return;
     const form = new FormData(e.currentTarget);
     const nuevo = await apiPost<Producto>(`/api/tiendas/${tienda.id}/productos`, {
-      nombre: form.get("nombre"),
+      ...(catalogoSeleccionado
+        ? { catalogoId: catalogoSeleccionado.id }
+        : { nuevo: { nombre: busquedaCatalogo } }),
       precio: Number(form.get("precio")),
       stock: Number(form.get("stock")),
     });
     setProductos([...productos, nuevo]);
     e.currentTarget.reset();
+    setBusquedaCatalogo("");
+    setCatalogoSeleccionado(null);
+    setResultadosCatalogo([]);
   }
 
   async function transicionar(pedidoId: string, accion: AccionPedido) {
@@ -295,6 +361,16 @@ export default function MiTiendaPage() {
                 placeholder="Contale a tus clientes qué vendés"
               />
               <div className="text-[13px] text-text-2">{tienda.direccion}</div>
+              <ImageUploadField
+                tipo="tienda"
+                entidadId={tienda.id}
+                valorActual={tienda.imagenUrl}
+                label="Foto de portada"
+                onSubido={async (url) => {
+                  const actualizada = await apiPatch<Tienda>(`/api/tiendas/${tienda.id}`, { imagenUrl: url });
+                  setTienda(actualizada);
+                }}
+              />
             </div>
 
             <div className="flex flex-col gap-2">
@@ -396,10 +472,149 @@ export default function MiTiendaPage() {
           </form>
         )}
 
+        {tab === "tienda" && (
+          <div className="flex items-center justify-between rounded-card border border-border bg-surface p-3.5">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[13px] font-semibold text-text">
+                Plan {tienda.plan === "premium" ? "Premium" : "Free"}
+              </span>
+              {tienda.plan === "free" && (
+                <span className="text-[12px] text-text-2">
+                  Fotos hasta en 3 productos. Premium: fotos ilimitadas y prioridad en el mapa.
+                </span>
+              )}
+            </div>
+            {tienda.plan === "premium" && (
+              <span className="rounded-pill bg-accent px-2.5 py-1 text-[11px] font-bold text-white">PREMIUM</span>
+            )}
+          </div>
+        )}
+
+        {tab === "tienda" && (
+          <div className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5">
+            {tienda.verificada ? (
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-estado-entregado-text">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                Tienda verificada
+              </div>
+            ) : (
+              <>
+                <p className="text-[13px] text-text-2">
+                  Un asesor técnico te visitará para verificar tu tienda. Las tiendas verificadas
+                  tienen un 64% más de clientes que una tienda no verificada.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={solicitandoVerificacion || verificacionSolicitada}
+                  onClick={async () => {
+                    setSolicitandoVerificacion(true);
+                    setError(null);
+                    try {
+                      await apiPost(`/api/tiendas/${tienda.id}/verificacion`, {});
+                      setVerificacionSolicitada(true);
+                    } catch (err) {
+                      setError(
+                        err instanceof ApiError && err.code === "SOLICITUD_YA_PENDIENTE"
+                          ? "Ya hay una solicitud de verificación en curso."
+                          : err instanceof ApiError
+                            ? err.message
+                            : "No se pudo enviar la solicitud.",
+                      );
+                    } finally {
+                      setSolicitandoVerificacion(false);
+                    }
+                  }}
+                >
+                  {verificacionSolicitada
+                    ? "Solicitud enviada"
+                    : solicitandoVerificacion
+                      ? "Enviando..."
+                      : "Solicitar verificación"}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
         {tab === "productos" && (
           <div className="flex flex-col gap-3">
             <form onSubmit={crearProducto} className="flex flex-col gap-2 rounded-card border border-dashed border-accent p-3">
-              <Input id="p-nombre" name="nombre" placeholder="Nombre del producto" required />
+              <div className="flex gap-2">
+                <Input
+                  id="p-nombre"
+                  value={busquedaCatalogo}
+                  onChange={(e) => {
+                    setBusquedaCatalogo(e.target.value);
+                    setCatalogoSeleccionado(null);
+                  }}
+                  placeholder="Nombre o código de barras del producto"
+                  required
+                  className="flex-grow"
+                />
+                <button
+                  type="button"
+                  onClick={() => setEscaneando((v) => !v)}
+                  aria-label="Escanear código de barras"
+                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-control border border-border bg-surface"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#201A15" strokeWidth="1.6" strokeLinecap="round">
+                    <path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M6 8v8M9 8v8M12 8v8M16 8v8M19 8v8" />
+                  </svg>
+                </button>
+              </div>
+
+              {escaneando && (
+                <div className="flex flex-col gap-1.5 rounded-control border border-border bg-bg p-2">
+                  <video ref={videoRef} className="w-full rounded-control" muted playsInline />
+                  {scannerError && <p className="text-[12px] text-estado-rechazado-text">{scannerError}</p>}
+                  {!scannerActivo && !scannerError && (
+                    <p className="text-[12px] text-text-2">Iniciando cámara...</p>
+                  )}
+                </div>
+              )}
+
+              {catalogoSeleccionado && (
+                <div className="flex items-center justify-between rounded-control bg-estado-entregado-bg px-2.5 py-1.5 text-[12px] font-semibold text-estado-entregado-text">
+                  <span>Producto del catálogo: {catalogoSeleccionado.nombre}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCatalogoSeleccionado(null);
+                      setBusquedaCatalogo("");
+                    }}
+                  >
+                    Cambiar
+                  </button>
+                </div>
+              )}
+
+              {!catalogoSeleccionado && resultadosCatalogo.length > 0 && (
+                <div className="flex flex-col gap-1 rounded-control border border-border bg-bg p-1.5">
+                  {resultadosCatalogo.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => {
+                        setCatalogoSeleccionado(r);
+                        setBusquedaCatalogo(r.nombre);
+                      }}
+                      className="rounded-control px-2 py-1.5 text-left text-[13px] hover:bg-surface"
+                    >
+                      {r.nombre}
+                      {r.marca ? ` · ${r.marca}` : ""}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!catalogoSeleccionado && busquedaCatalogo.trim().length >= 2 && resultadosCatalogo.length === 0 && (
+                <p className="text-[12px] text-text-2">
+                  No está en el catálogo compartido — se va a crear como producto nuevo.
+                </p>
+              )}
+
               <div className="flex gap-2">
                 <Input id="p-precio" name="precio" type="number" step="0.01" min="0" placeholder="Precio" required />
                 <Input id="p-stock" name="stock" type="number" min="0" placeholder="Stock" required />
@@ -413,12 +628,31 @@ export default function MiTiendaPage() {
                 key={p.id}
                 className="flex items-center gap-3 rounded-card border border-border bg-surface p-3.5"
               >
-                <div style={{ width: 44, height: 44 }} className="flex-shrink-0 rounded-control bg-placeholder" />
+                {p.imagenUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={p.imagenUrl}
+                    alt=""
+                    style={{ width: 44, height: 44 }}
+                    className="flex-shrink-0 rounded-control object-cover"
+                  />
+                ) : (
+                  <div style={{ width: 44, height: 44 }} className="flex-shrink-0 rounded-control bg-placeholder" />
+                )}
                 <div className="flex min-w-0 flex-grow flex-col gap-0.5">
                   <div className="text-[14px] font-semibold">{p.nombre}</div>
                   <div className="text-xs text-text-2">
                     {formatoARS(p.precio)} · stock {p.stock}
                   </div>
+                  <ImageUploadField
+                    tipo="producto"
+                    entidadId={p.id}
+                    valorActual={null}
+                    onSubido={async (url) => {
+                      const actualizado = await apiPatch<Producto>(`/api/productos/${p.id}`, { imagenUrl: url });
+                      setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
+                    }}
+                  />
                 </div>
                 <span
                   className={`rounded-pill px-2.5 py-1 text-[11px] font-bold ${

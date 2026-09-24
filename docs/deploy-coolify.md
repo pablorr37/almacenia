@@ -56,6 +56,29 @@ postgresql://<usuario>:<password>@<host-interno>:5432/<nombre-db>?schema=public
   hay que codificarlos con `encodeURIComponent` antes de pegarlos en la URL — si tu
   password es alfanumérico no hace falta.
 
+## 2.5. Storage S3-compatible para fotos (08-archivos.md)
+
+La subida de fotos (producto, tienda, perfil) necesita un bucket S3-compatible —
+sin esto, `POST /api/archivos/upload` va a fallar en cuanto se lo use.
+
+1. En Coolify: **New Resource → Docker Image**, imagen `minio/minio` (requiere
+   cuenta/login de Docker Hub para esa imagen — si no la tenés, cualquier otro
+   servidor S3-compatible autoalojado, o un proveedor S3 real como Cloudflare R2 o
+   AWS S3, sirve igual: el cliente (`@aws-sdk/client-s3`) solo necesita un
+   `endpoint` y credenciales, no depende de que sea MinIO específicamente).
+2. Comando: `server /data --console-address ":9001"`. Exponé el puerto 9000 (API
+   S3) al menos internamente para la app; el 9001 (consola web) es opcional.
+3. No hace falta crear el bucket a mano: `subirArchivo`
+   (`src/lib/archivos/archivos.ts`) lo crea solo en el primer upload si no existe.
+4. Variables de entorno de la app (ver paso 4):
+   `S3_ENDPOINT`, `S3_PUBLIC_URL`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY`,
+   `S3_SECRET_KEY`.
+   - `S3_ENDPOINT` es el host interno del recurso MinIO en Coolify (service-to-
+     service, como con `DATABASE_URL`).
+   - `S3_PUBLIC_URL` es la URL **pública** desde la que el navegador va a cargar
+     las fotos (`<img src>`) — si `S3_ENDPOINT` no es accesible desde afuera,
+     asignale un dominio propio al recurso MinIO en Coolify y usá ese acá.
+
 ## 3. Crear el recurso de la app en Coolify
 
 1. **New Resource** → fuente **Dockerfile** o **Git Repository** apuntando a este
@@ -71,6 +94,11 @@ En la sección de Environment Variables del recurso de la app:
 | --- | --- |
 | `DATABASE_URL` | La URL armada en el paso 2. |
 | `AUTH_SECRET` | Un valor nuevo, generado para producción — **no reutilices** el de tu `.env` local. Generalo con `openssl rand -base64 32` (o `npx auth secret` si tenés el CLI de Auth.js). |
+| `S3_ENDPOINT` | Host interno del recurso S3/MinIO (paso 2.5). |
+| `S3_PUBLIC_URL` | URL pública desde la que el navegador carga las fotos (puede ser igual a `S3_ENDPOINT` si ese host ya es público). |
+| `S3_BUCKET` | Nombre del bucket (ej. `almacenia`). |
+| `S3_REGION` | `us-east-1` sirve para MinIO/la mayoría de proveedores S3-compatibles. |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | Credenciales del recurso S3/MinIO. |
 
 No hace falta `NEXTAUTH_URL`: `trustHost: true` en `src/auth.ts` ya cubre correr
 detrás del proxy de Coolify. `ALLOWED_ORIGIN`/`MAP_TILES_API_KEY` de `.env.example`

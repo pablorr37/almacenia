@@ -12,6 +12,8 @@ export interface Usuario {
   nombre: string;
   esComprador: boolean;
   esVendedor: boolean;
+  esAdmin: boolean;
+  avatarUrl: string | null;
 }
 
 export interface RegistrarUsuarioInput {
@@ -27,6 +29,8 @@ function aUsuario(usuario: UsuarioDb): Usuario {
     nombre: usuario.nombre,
     esComprador: usuario.esComprador,
     esVendedor: usuario.esVendedor,
+    esAdmin: usuario.esAdmin,
+    avatarUrl: usuario.avatarUrl,
   };
 }
 
@@ -83,6 +87,7 @@ export async function activarVendedor(usuarioId: string): Promise<Usuario> {
 
 export interface ActualizarPerfilInput {
   nombre?: string;
+  avatarUrl?: string;
 }
 
 export async function actualizarPerfil(usuario: Usuario, input: ActualizarPerfilInput): Promise<Usuario> {
@@ -92,7 +97,15 @@ export async function actualizarPerfil(usuario: Usuario, input: ActualizarPerfil
 
   const actualizado = await prisma.usuario.update({
     where: { id: usuario.id },
-    data: { nombre: input.nombre?.trim() },
+    data: { nombre: input.nombre?.trim(), avatarUrl: input.avatarUrl },
   });
   return aUsuario(actualizado);
+}
+
+// Tira FORBIDDEN si el usuario no tiene esAdmin=true. Usada al principio de las
+// funciones de servicio de admin (11-admin.md), no es un endpoint propio.
+export function requireAdmin(usuario: Usuario): void {
+  if (!usuario.esAdmin) {
+    throw new AppError("FORBIDDEN", "No tenés permisos de administrador.");
+  }
 }

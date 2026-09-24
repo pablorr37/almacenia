@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import { apiPatch, ApiError } from "@/lib/api-client";
 
 export default function PerfilPage() {
@@ -73,6 +74,21 @@ export default function PerfilPage() {
         />
         <Input id="perfil-email" label="Email" value={session?.user?.email ?? ""} disabled readOnly />
 
+        <ImageUploadField
+          tipo="avatar"
+          entidadId=""
+          valorActual={session?.user?.image ?? null}
+          label="Foto de perfil"
+          onSubido={async (url) => {
+            try {
+              await apiPatch("/api/auth/perfil", { avatarUrl: url });
+              await update({ image: url });
+            } catch (err) {
+              setError(err instanceof ApiError ? err.message : "No se pudo guardar la foto.");
+            }
+          }}
+        />
+
         {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}
         {guardado && (
           <p className="text-[13px] font-semibold text-estado-entregado-text">Cambios guardados.</p>
@@ -82,6 +98,13 @@ export default function PerfilPage() {
           {cargando ? "Guardando..." : "Guardar cambios"}
         </Button>
       </form>
+
+      <Link
+        href="/perfil/pedidos"
+        className="rounded-control border border-border bg-surface px-3.5 py-3.5 text-[15px] font-semibold text-text"
+      >
+        Mis pedidos
+      </Link>
 
       <div className="flex-grow" />
 

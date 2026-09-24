@@ -12,6 +12,8 @@ CREATE TABLE usuarios (
   nombre         TEXT NOT NULL,
   es_comprador   BOOLEAN NOT NULL DEFAULT true,
   es_vendedor    BOOLEAN NOT NULL DEFAULT false,
+  es_admin       BOOLEAN NOT NULL DEFAULT false,
+  avatar_url     TEXT,
   creado_en      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -19,8 +21,12 @@ CREATE TABLE usuarios (
 Sin tabla de sesiones propia: la sesión la maneja NextAuth (JWT o adapter de base de
 datos, a decidir en la tarea de implementación — no es parte de este SDD).
 
-No hay una columna `rol` única: `es_comprador` y `es_vendedor` son independientes, un
-mismo usuario puede tener ambas en `true` a la vez (ver reglas de negocio).
+No hay una columna `rol` única: `es_comprador`, `es_vendedor` y `es_admin` son tres
+flags independientes, un mismo usuario puede tener varios en `true` a la vez (ver
+reglas de negocio).
+
+`avatar_url` guarda la URL de la foto de perfil, subida vía `08-archivos.md`. Nace en
+`null` — no toda cuenta tiene avatar.
 
 ## Reglas de negocio
 
@@ -41,6 +47,11 @@ mismo usuario puede tener ambas en `true` a la vez (ver reglas de negocio).
   vendedor, el usuario conserva acceso a su panel de gestión aunque pause la tienda.
 - `password_hash` se genera con bcrypt (o equivalente), nunca se guarda ni se devuelve
   la contraseña en texto plano en ninguna respuesta.
+- **`es_admin` nace en `false`** y no tiene endpoint propio para activarse — se asigna
+  a mano en la base de datos (seed o intervención manual), nunca vía un endpoint de la
+  API. No confundir con `es_vendedor`: un admin no necesariamente tiene tienda, y una
+  cuenta admin puede además ser comprador/vendedor (flags independientes). Las rutas
+  bajo `/api/admin/**` (ver `11-admin.md`) requieren `es_admin = true`.
 
 ## Endpoints REST
 
@@ -72,7 +83,9 @@ payload propio acá.
 
 Requiere sesión válida. Permite al usuario autenticado editar su propio perfil.
 
-Request: `{ nombre?: string }`
+Request: `{ nombre?: string; avatarUrl?: string }`. `avatarUrl` normalmente llega ya
+subida vía `POST /api/archivos/upload?tipo=avatar` (`08-archivos.md`), este endpoint
+solo persiste la URL resultante.
 
 Response `200`: `{ data: Usuario }`. `400 NOMBRE_INVALIDO` si `nombre` viene vacío o
 solo espacios.
@@ -88,6 +101,8 @@ interface Usuario {
   nombre: string;
   esComprador: boolean;
   esVendedor: boolean;
+  esAdmin: boolean;
+  avatarUrl: string | null;
 }
 
 interface RegistrarUsuarioInput {
@@ -106,8 +121,13 @@ async function verificarPassword(email: string, password: string): Promise<Usuar
 // No se expone como endpoint propio.
 async function activarVendedor(usuarioId: string): Promise<Usuario>;
 
+// Tira FORBIDDEN si el usuario no tiene esAdmin=true. Usada al principio de las
+// funciones de servicio de 11-admin.md, no es un endpoint propio.
+function requireAdmin(usuario: Usuario): void;
+
 interface ActualizarPerfilInput {
   nombre?: string;
+  avatarUrl?: string;
 }
 
 async function actualizarPerfil(usuario: Usuario, input: ActualizarPerfilInput): Promise<Usuario>;
@@ -122,3 +142,4 @@ async function actualizarPerfil(usuario: Usuario, input: ActualizarPerfilInput):
 | `PASSWORD_DEBIL`         | `password` no cumple longitud mínima (8 caracteres).               |
 | `CREDENCIALES_INVALIDAS` | Login con email inexistente o password incorrecta (mismo código para ambos casos, para no filtrar qué emails existen). |
 | `NOMBRE_INVALIDO`        | `nombre` vacío o solo espacios en `actualizarPerfil`.               |
+| `FORBIDDEN`               | `requireAdmin` con un usuario que no tiene `esAdmin = true`.        |

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { crearPedido, listarPedidos } from "@/lib/pedidos/pedidos";
+import { crearPedido, listarPedidos, type EstadoPedido } from "@/lib/pedidos/pedidos";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { respuestaExitosa, respuestaError } from "@/lib/api-response";
 import { AppError } from "@/lib/errors";
@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     const resultado = await listarPedidos(usuario, {
       tiendaId: sp.get("tiendaId") ?? undefined,
       compradorId: sp.get("compradorId") ?? undefined,
+      estado: (sp.get("estado") as EstadoPedido) ?? undefined,
       page: sp.get("page") ? Number(sp.get("page")) : undefined,
       pageSize: sp.get("pageSize") ? Number(sp.get("pageSize")) : undefined,
     });

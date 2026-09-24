@@ -32,7 +32,7 @@ async function crearVendedorConTiendaYProducto(
     lon: -58.3816,
   });
   const producto = await crearProducto(vendedor, tienda.id, {
-    nombre: "Producto",
+    nuevo: { nombre: "Producto" },
     precio: 100,
     stock,
   });
@@ -133,7 +133,7 @@ describe("crearVentaPresencial", () => {
 
   it("lanza STOCK_INSUFICIENTE y no debita nada si algún producto no alcanza (atomicidad)", async () => {
     const otroProducto = await crearProducto(vendedor, tienda.id, {
-      nombre: "Otro producto",
+      nuevo: { nombre: "Otro producto" },
       precio: 50,
       stock: 2,
     });

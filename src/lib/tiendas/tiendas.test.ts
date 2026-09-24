@@ -8,6 +8,8 @@ import {
   obtenerTiendaPorVendedor,
   actualizarTienda,
   horarioValido,
+  solicitarVerificacion,
+  revisarSolicitudVerificacion,
   type HorarioTienda,
 } from "./tiendas";
 
@@ -22,6 +24,7 @@ async function crearUsuarioDePrueba(): Promise<Usuario> {
 }
 
 async function limpiar(usuarioIds: string[]) {
+  await prisma.solicitudVerificacion.deleteMany({ where: { tienda: { vendedorId: { in: usuarioIds } } } });
   await prisma.horarioTienda.deleteMany({ where: { tienda: { vendedorId: { in: usuarioIds } } } });
   await prisma.tienda.deleteMany({ where: { vendedorId: { in: usuarioIds } } });
   await prisma.usuario.deleteMany({ where: { id: { in: usuarioIds } } });
@@ -248,6 +251,32 @@ describe("buscarTiendasCercanas", () => {
     }
   });
 
+  it("lista las tiendas premium antes que las free, dentro de un mismo radio (destacado_prioritario, 10-planes.md)", async () => {
+    // Una tienda premium bastante más lejos (pero dentro del radio de 5km) que la
+    // free más cercana igual debe listarse primero.
+    const premiumUsuario = await crearUsuarioDePrueba();
+    const tiendaPremium = await crearTienda(premiumUsuario, {
+      nombre: "Tienda premium lejos",
+      direccion: "Dirección",
+      lat: LAT_BASE + 0.03,
+      lon: LON_BASE,
+    });
+    await prisma.tienda.update({ where: { id: tiendaPremium.id }, data: { plan: "premium" } });
+
+    try {
+      const resultado = await buscarTiendasCercanas({ lat: LAT_BASE, lon: LON_BASE, radioKm: 5 });
+      const indicePremium = resultado.findIndex((t) => t.nombre === "Tienda premium lejos");
+      const indiceCercana = resultado.findIndex((t) => t.nombre === "Tienda cercana");
+
+      expect(indicePremium).toBeGreaterThanOrEqual(0);
+      expect(indiceCercana).toBeGreaterThanOrEqual(0);
+      expect(indicePremium).toBeLessThan(indiceCercana);
+      expect(resultado[indicePremium].distanciaKm).toBeGreaterThan(resultado[indiceCercana].distanciaKm);
+    } finally {
+      await limpiar([premiumUsuario.id]);
+    }
+  });
+
   it("incluye horarios y mediosDePago en cada resultado", async () => {
     const resultado = await buscarTiendasCercanas({ lat: LAT_BASE, lon: LON_BASE, radioKm: 5 });
 
@@ -435,5 +464,97 @@ describe("actualizarTienda", () => {
     await expect(
       actualizarTienda(dueno, tienda.id, { horarios: semanaCompleta().slice(0, 2) })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "HORARIO_INVALIDO" });
+  });
+});
+
+describe("desactivadaEn", () => {
+  let dueno: Usuario;
+  afterEach(() => limpiar([dueno.id]));
+
+  it("se setea al pasar activa a false y se limpia al reactivar", async () => {
+    dueno = await crearUsuarioDePrueba();
+    const tienda = await crearTienda(dueno, {
+      nombre: "Tienda",
+      direccion: "Dirección",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+    });
+    expect(tienda.desactivadaEn).toBeNull();
+
+    const desactivada = await actualizarTienda(dueno, tienda.id, { activa: false });
+    expect(desactivada.desactivadaEn).not.toBeNull();
+
+    const reactivada = await actualizarTienda(dueno, tienda.id, { activa: true });
+    expect(reactivada.desactivadaEn).toBeNull();
+  });
+});
+
+describe("solicitarVerificacion / revisarSolicitudVerificacion", () => {
+  let dueno: Usuario;
+  let admin: Usuario;
+  let tienda: Awaited<ReturnType<typeof crearTienda>>;
+
+  beforeEach(async () => {
+    dueno = await crearUsuarioDePrueba();
+    admin = await crearUsuarioDePrueba();
+    await prisma.usuario.update({ where: { id: admin.id }, data: { esAdmin: true } });
+    admin = (await buscarUsuarioPorEmail(admin.email))!;
+    tienda = await crearTienda(dueno, {
+      nombre: "Tienda",
+      direccion: "Dirección",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+    });
+  });
+
+  afterEach(() => limpiar([dueno.id, admin.id]));
+
+  it("crea la solicitud en estado pendiente", async () => {
+    const solicitud = await solicitarVerificacion(dueno, tienda.id);
+    expect(solicitud.estado).toBe("pendiente");
+    expect(solicitud.tiendaId).toBe(tienda.id);
+  });
+
+  it("lanza SOLICITUD_YA_PENDIENTE si ya hay una pendiente", async () => {
+    await solicitarVerificacion(dueno, tienda.id);
+    await expect(solicitarVerificacion(dueno, tienda.id)).rejects.toMatchObject<Partial<AppError>>({
+      code: "SOLICITUD_YA_PENDIENTE",
+    });
+  });
+
+  it("lanza NO_ES_DUENO_DE_TIENDA si no es el dueño", async () => {
+    const otro = await crearUsuarioDePrueba();
+    try {
+      await expect(solicitarVerificacion(otro, tienda.id)).rejects.toMatchObject<Partial<AppError>>({
+        code: "NO_ES_DUENO_DE_TIENDA",
+      });
+    } finally {
+      await prisma.usuario.deleteMany({ where: { id: otro.id } });
+    }
+  });
+
+  it("aprobar marca la tienda como verificada", async () => {
+    const solicitud = await solicitarVerificacion(dueno, tienda.id);
+    const revisada = await revisarSolicitudVerificacion(admin, solicitud.id, "aprobada");
+    expect(revisada.estado).toBe("aprobada");
+
+    const tiendaActualizada = await obtenerTienda(tienda.id);
+    expect(tiendaActualizada?.verificada).toBe(true);
+  });
+
+  it("lanza TIENDA_YA_VERIFICADA al solicitar de nuevo tras aprobarse", async () => {
+    const solicitud = await solicitarVerificacion(dueno, tienda.id);
+    await revisarSolicitudVerificacion(admin, solicitud.id, "aprobada");
+
+    await expect(solicitarVerificacion(dueno, tienda.id)).rejects.toMatchObject<Partial<AppError>>({
+      code: "TIENDA_YA_VERIFICADA",
+    });
+  });
+
+  it("lanza FORBIDDEN si quien revisa no es admin", async () => {
+    const solicitud = await solicitarVerificacion(dueno, tienda.id);
+    await expect(
+      revisarSolicitudVerificacion(dueno, solicitud.id, "aprobada")
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "FORBIDDEN" });
   });
 });

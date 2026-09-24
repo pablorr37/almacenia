@@ -33,6 +33,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       lat: body.lat,
       lon: body.lon,
       activa: body.activa,
+      imagenUrl: body.imagenUrl,
+      rubro: body.rubro,
       mediosDePago: body.mediosDePago,
       horarios: body.horarios,
     });

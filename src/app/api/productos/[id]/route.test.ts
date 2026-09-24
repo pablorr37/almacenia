@@ -36,7 +36,7 @@ describe("/api/productos/[id]", () => {
       lat: -34.6037,
       lon: -58.3816,
     });
-    producto = await crearProducto(dueno, tienda.id, { nombre: "Producto", precio: 100, stock: 10 });
+    producto = await crearProducto(dueno, tienda.id, { nuevo: { nombre: "Producto" }, precio: 100, stock: 10 });
   });
 
   afterEach(async () => {

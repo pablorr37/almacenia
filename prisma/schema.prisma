@@ -4,9 +4,10 @@
 //
 // Los CHECK constraints documentados en cada spec (precio_no_negativo,
 // stock_no_negativo, cantidad_positiva, total_no_negativo,
-// pedido_id_solo_si_origen_pedido) y el índice GIST de Tienda.ubicacion no se pueden
-// declarar en este DSL de forma estable en esta versión de Prisma — se agregan a
-// mano en la migración SQL generada (ver prisma/migrations/, comentario ahí).
+// pedido_id_solo_si_origen_pedido, precio_oferta_no_negativo, precio_oferta_menor,
+// puntuacion_valida) y el índice GIST de Tienda.ubicacion no se pueden declarar en
+// este DSL de forma estable en esta versión de Prisma — se agregan a mano en la
+// migración SQL generada (ver prisma/migrations/, comentario ahí).
 
 generator client {
   provider        = "prisma-client"
@@ -30,11 +31,15 @@ model Usuario {
   nombre       String
   esComprador  Boolean  @default(true) @map("es_comprador")
   esVendedor   Boolean  @default(false) @map("es_vendedor")
+  esAdmin      Boolean  @default(false) @map("es_admin")
+  avatarUrl    String?  @map("avatar_url")
   creadoEn     DateTime @default(now()) @map("creado_en")
 
-  tienda  Tienda?
-  pedidos Pedido[]
-  ventas  Venta[]
+  tienda        Tienda?
+  pedidos       Pedido[]
+  ventas        Venta[]
+  resenas       Resena[]
+  eventosPuntos EventoPuntos[]
 
   @@map("usuarios")
 }
@@ -44,25 +49,32 @@ model Usuario {
 // ---------------------------------------------------------------------------
 
 model Tienda {
-  id            String   @id @default(uuid())
-  vendedorId    String   @unique @map("vendedor_id")
-  nombre        String
-  descripcion   String?
-  direccion     String
+  id             String    @id @default(uuid())
+  vendedorId     String    @unique @map("vendedor_id")
+  nombre         String
+  descripcion    String?
+  direccion      String
   // PostGIS no tiene tipo nativo en Prisma: se declara Unsupported y se accede vía
   // $queryRaw para operaciones espaciales (ST_DWithin, ST_Distance, etc.). El índice
   // GIST se agrega a mano en la migración generada (Prisma no lo declara solo).
-  ubicacion     Unsupported("geography(Point, 4326)")
-  activa        Boolean  @default(true)
-  mediosDePago  MedioPago[] @default([]) @map("medios_de_pago")
-  creadaEn      DateTime @default(now()) @map("creada_en")
-  actualizadaEn DateTime @default(now()) @updatedAt @map("actualizada_en")
+  ubicacion      Unsupported("geography(Point, 4326)")
+  activa         Boolean   @default(true)
+  desactivadaEn  DateTime? @map("desactivada_en")
+  imagenUrl      String?   @map("imagen_url")
+  rubro          Categoria?
+  verificada     Boolean   @default(false)
+  plan           Plan      @default(free)
+  mediosDePago   MedioPago[] @default([]) @map("medios_de_pago")
+  creadaEn       DateTime  @default(now()) @map("creada_en")
+  actualizadaEn  DateTime  @default(now()) @updatedAt @map("actualizada_en")
 
-  vendedor  Usuario         @relation(fields: [vendedorId], references: [id])
-  productos Producto[]
-  pedidos   Pedido[]
-  ventas    Venta[]
-  horarios  HorarioTienda[]
+  vendedor               Usuario                 @relation(fields: [vendedorId], references: [id])
+  productos              Producto[]
+  pedidos                Pedido[]
+  ventas                 Venta[]
+  horarios               HorarioTienda[]
+  resenas                Resena[]
+  solicitudesVerificacion SolicitudVerificacion[]
 
   @@map("tiendas")
 }
@@ -75,6 +87,50 @@ enum MedioPago {
   qr
 
   @@map("medio_pago")
+}
+
+enum Categoria {
+  almacen
+  bebidas
+  lacteos
+  panaderia
+  limpieza
+  kiosco
+  verduleria
+  fiambreria
+  otros
+
+  @@map("categoria")
+}
+
+enum Plan {
+  free
+  premium
+
+  @@map("plan")
+}
+
+enum EstadoVerificacion {
+  pendiente
+  aprobada
+  rechazada
+
+  @@map("estado_verificacion")
+}
+
+model SolicitudVerificacion {
+  id           String             @id @default(uuid())
+  tiendaId     String             @map("tienda_id")
+  estado       EstadoVerificacion @default(pendiente)
+  creadaEn     DateTime           @default(now()) @map("creada_en")
+  revisadaEn   DateTime?          @map("revisada_en")
+  revisadaPor  String?            @map("revisada_por")
+  notaAdmin    String?            @map("nota_admin")
+
+  tienda Tienda @relation(fields: [tiendaId], references: [id])
+
+  @@index([tiendaId])
+  @@map("solicitudes_verificacion")
 }
 
 model HorarioTienda {
@@ -91,26 +147,78 @@ model HorarioTienda {
 }
 
 // ---------------------------------------------------------------------------
+// 06-catalogo.md
+// ---------------------------------------------------------------------------
+
+model ProductoCatalogo {
+  id           String    @id @default(uuid())
+  nombre       String
+  descripcion  String?
+  marca        String?
+  categoria    Categoria?
+  codigoBarras String?   @unique @map("codigo_barras")
+  imagenUrl    String?   @map("imagen_url")
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+
+  productos Producto[]
+
+  @@index([nombre])
+  @@map("productos_catalogo")
+}
+
+// ---------------------------------------------------------------------------
 // 03-productos.md
 // ---------------------------------------------------------------------------
 
 model Producto {
   id            String   @id @default(uuid())
   tiendaId      String   @map("tienda_id")
+  catalogoId    String   @map("catalogo_id")
   nombre        String
   descripcion   String?
+  categoria     Categoria?
+  imagenUrl     String?  @map("imagen_url")
   precio        Decimal  @db.Decimal(12, 2)
+  precioOferta  Decimal? @map("precio_oferta") @db.Decimal(12, 2)
+  destacado     Boolean  @default(false)
   stock         Int      @default(0)
   disponible    Boolean  @default(true)
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
 
-  tienda      Tienda        @relation(fields: [tiendaId], references: [id])
+  tienda      Tienda           @relation(fields: [tiendaId], references: [id])
+  catalogo    ProductoCatalogo @relation(fields: [catalogoId], references: [id])
   itemsPedido ItemPedido[]
   itemsVenta  ItemVenta[]
+  resenas     Resena[]
 
   @@index([tiendaId])
+  @@index([catalogoId])
+  @@index([categoria])
   @@map("productos")
+}
+
+// ---------------------------------------------------------------------------
+// 07-resenas.md
+// ---------------------------------------------------------------------------
+
+model Resena {
+  id          String   @id @default(uuid())
+  compradorId String   @map("comprador_id")
+  tiendaId    String   @map("tienda_id")
+  productoId  String?  @map("producto_id")
+  puntuacion  Int
+  comentario  String?
+  creadaEn    DateTime @default(now()) @map("creada_en")
+
+  comprador Usuario   @relation(fields: [compradorId], references: [id])
+  tienda    Tienda    @relation(fields: [tiendaId], references: [id])
+  producto  Producto? @relation(fields: [productoId], references: [id])
+
+  @@unique([compradorId, productoId])
+  @@index([tiendaId])
+  @@index([productoId])
+  @@map("resenas")
 }
 
 // ---------------------------------------------------------------------------
@@ -203,4 +311,22 @@ model ItemVenta {
 
   @@index([ventaId])
   @@map("items_venta")
+}
+
+// ---------------------------------------------------------------------------
+// 12-gamificacion.md — infraestructura, sin reglas de negocio activas en el MVP
+// ---------------------------------------------------------------------------
+
+model EventoPuntos {
+  id        String   @id @default(uuid())
+  usuarioId String   @map("usuario_id")
+  tipo      String
+  puntos    Int
+  metadata  Json?
+  creadoEn  DateTime @default(now()) @map("creado_en")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([usuarioId])
+  @@map("eventos_puntos")
 }

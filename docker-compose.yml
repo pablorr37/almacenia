@@ -1,0 +1,21 @@
+# Infra propia de la app (no confundir con infra/docker-compose.yml, que es del
+# pipeline agéntico local pausado — ver CLAUDE.md). Postgres+PostGIS ya corre desde
+# infra/docker-compose.yml; este archivo agrega un servidor S3-compatible para
+# desarrollar la subida de fotos (08-archivos.md) sin depender de un bucket real.
+#
+# Se usa adobe/s3mock en vez de la imagen oficial de MinIO porque minio/minio dejó
+# de estar disponible públicamente en Docker Hub (pull access denied sin login/
+# suscripción) — s3mock es liviano, sin persistencia real (los datos no sobreviven
+# un restart del container), suficiente para desarrollo local. El deploy en Coolify
+# (docs/deploy-coolify.md) usa un servidor S3-compatible real (MinIO autoalojado con
+# otra distribución, o un proveedor S3 real), no esta imagen.
+services:
+  s3mock:
+    image: adobe/s3mock:latest
+    container_name: almacenia_s3mock
+    restart: unless-stopped
+    # El bucket no se precrea acá: src/lib/archivos/archivos.ts lo crea solo en el
+    # primer upload si todavía no existe (ver subirArchivo), así funciona igual
+    # contra s3mock local o un S3/MinIO real recién provisionado en Coolify.
+    ports:
+      - "9000:9090"

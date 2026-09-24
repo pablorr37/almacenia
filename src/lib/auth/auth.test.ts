@@ -6,6 +6,8 @@ import {
   verificarPassword,
   activarVendedor,
   actualizarPerfil,
+  requireAdmin,
+  type Usuario,
 } from "./auth";
 
 async function limpiarUsuario(email: string) {
@@ -25,6 +27,8 @@ describe("registrarUsuario", () => {
     expect(usuario.nombre).toBe("Ana");
     expect(usuario.esComprador).toBe(true);
     expect(usuario.esVendedor).toBe(false);
+    expect(usuario.esAdmin).toBe(false);
+    expect(usuario.avatarUrl).toBeNull();
     expect(usuario.id).toBeTruthy();
   });
 
@@ -154,6 +158,14 @@ describe("actualizarPerfil", () => {
     expect(actualizado.nombre).toBe("Ana");
   });
 
+  it("actualiza avatarUrl", async () => {
+    const usuario = await registrarUsuario({ email, password: "password123", nombre: "Ana" });
+
+    const actualizado = await actualizarPerfil(usuario, { avatarUrl: "http://localhost:9000/x/y.jpg" });
+
+    expect(actualizado.avatarUrl).toBe("http://localhost:9000/x/y.jpg");
+  });
+
   it.each([["vacío", ""], ["solo espacios", "   "]])(
     "lanza NOMBRE_INVALIDO si nombre es %s",
     async (_desc, nombre) => {
@@ -164,4 +176,29 @@ describe("actualizarPerfil", () => {
       });
     },
   );
+});
+
+describe("requireAdmin", () => {
+  const base: Usuario = {
+    id: "x",
+    email: "a@a.com",
+    nombre: "Ana",
+    esComprador: true,
+    esVendedor: false,
+    esAdmin: false,
+    avatarUrl: null,
+  };
+
+  it("no lanza si esAdmin=true", () => {
+    expect(() => requireAdmin({ ...base, esAdmin: true })).not.toThrow();
+  });
+
+  it("lanza FORBIDDEN si esAdmin=false", () => {
+    expect(() => requireAdmin(base)).toThrow(AppError);
+    try {
+      requireAdmin(base);
+    } catch (e) {
+      expect((e as AppError).code).toBe("FORBIDDEN");
+    }
+  });
 });

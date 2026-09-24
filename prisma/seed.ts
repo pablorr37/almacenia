@@ -12,8 +12,9 @@
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
 import { registrarUsuario } from "../src/lib/auth/auth";
-import { crearTienda, type HorarioTienda, type MedioPago } from "../src/lib/tiendas/tiendas";
+import { crearTienda, actualizarTienda, type HorarioTienda, type MedioPago } from "../src/lib/tiendas/tiendas";
 import { crearProducto } from "../src/lib/productos/productos";
+import type { Categoria } from "../src/generated-prisma/client";
 
 const DOMINIO_SEED = "seed.almacenia.test";
 
@@ -212,6 +213,8 @@ async function limpiarSeedAnterior() {
   const tiendas = await prisma.tienda.findMany({ where: { vendedorId: { in: ids } }, select: { id: true } });
   const tiendaIds = tiendas.map((t) => t.id);
 
+  await prisma.resena.deleteMany({ where: { OR: [{ compradorId: { in: ids } }, { tiendaId: { in: tiendaIds } }] } });
+  await prisma.solicitudVerificacion.deleteMany({ where: { tiendaId: { in: tiendaIds } } });
   await prisma.itemVenta.deleteMany({ where: { venta: { tiendaId: { in: tiendaIds } } } });
   await prisma.venta.deleteMany({ where: { tiendaId: { in: tiendaIds } } });
   await prisma.itemPedido.deleteMany({ where: { pedido: { tiendaId: { in: tiendaIds } } } });
@@ -220,6 +223,11 @@ async function limpiarSeedAnterior() {
   await prisma.producto.deleteMany({ where: { tiendaId: { in: tiendaIds } } });
   await prisma.tienda.deleteMany({ where: { id: { in: tiendaIds } } });
   await prisma.usuario.deleteMany({ where: { id: { in: ids } } });
+  // Entradas de catálogo que este mismo seed da de alta (ver PRODUCTOS_POR_RUBRO) —
+  // se recrean en cada corrida, identificadas por nombre fijo. No se tocan entradas
+  // de catálogo creadas por vendedores reales fuera del seed.
+  const nombresSeed = Object.values(PRODUCTOS_POR_RUBRO).flat().map((p) => p.nombre);
+  await prisma.productoCatalogo.deleteMany({ where: { nombre: { in: nombresSeed } } });
 
   console.log(`Limpieza: se borraron ${ids.length} usuarios de un seed anterior.`);
 }
@@ -227,6 +235,16 @@ async function limpiarSeedAnterior() {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
+
+// El rubro del seed coincide 1:1 con los valores del enum Categoria compartido por
+// tiendas y catálogo (ver 02-tiendas.md / 06-catalogo.md).
+function aCategoria(rubro: Rubro): Categoria {
+  return rubro as Categoria;
+}
+
+function imagenPlaceholder(nombre: string): string {
+  return `https://picsum.photos/seed/${encodeURIComponent(slug(nombre))}/400/300`;
+}
 
 async function main() {
   await limpiarSeedAnterior();
@@ -238,6 +256,12 @@ async function main() {
   }
 
   console.log(`Creando ${DEFINICIONES_TIENDA.length} tiendas...`);
+  // Catálogo compartido entre vendedores (06-catalogo.md): la primera tienda que
+  // carga un producto lo da de alta en productos_catalogo; las siguientes tiendas
+  // del mismo rubro adoptan ese mismo catalogoId con su propio precio/stock, en vez
+  // de duplicar la carga (ítem 2 del pedido del usuario).
+  const catalogoIdPorNombre = new Map<string, string>();
+
   for (const [i, def] of DEFINICIONES_TIENDA.entries()) {
     const email = `vendedor${i + 1}.${slug(def.vendedorNombre)}@${DOMINIO_SEED}`;
     const vendedor = await registrarUsuario({
@@ -246,7 +270,7 @@ async function main() {
       nombre: def.vendedorNombre,
     });
 
-    const tienda = await crearTienda(vendedor, {
+    const tiendaCreada = await crearTienda(vendedor, {
       nombre: def.nombre,
       descripcion: def.descripcion,
       direccion: `${def.departamento}, San Juan`,
@@ -256,9 +280,62 @@ async function main() {
       horarios: elegir(HORARIOS, i)(),
     });
 
+    // rubro/imagenUrl no son parte del alta (CrearTiendaInput), se completan con
+    // el mismo PATCH que usaría el vendedor desde el panel (02-tiendas.md).
+    await actualizarTienda(vendedor, tiendaCreada.id, {
+      rubro: aCategoria(def.rubro),
+      imagenUrl: imagenPlaceholder(def.nombre),
+    });
+
+    // ~30% de las tiendas nacen verificadas y un par en plan premium, para tener
+    // datos de ejemplo de ambos casos en el panel admin (11-admin.md) y en los
+    // tabs de destacados del storefront (10-planes.md) sin pasar por el flujo
+    // completo de solicitud/aprobación en cada corrida del seed.
+    await prisma.tienda.update({
+      where: { id: tiendaCreada.id },
+      data: {
+        verificada: i % 3 === 0,
+        plan: i % 7 === 0 ? "premium" : "free",
+      },
+    });
+
     const productos = PRODUCTOS_POR_RUBRO[def.rubro];
     for (const producto of productos) {
-      await crearProducto(vendedor, tienda.id, producto);
+      const catalogoIdExistente = catalogoIdPorNombre.get(producto.nombre);
+      // Pequeña variación de precio por tienda para que el mismo producto de
+      // catálogo se vea con precios distintos según dónde se compre (la regla de
+      // negocio: catálogo comparte identidad, nunca precio).
+      const variacion = 1 + (((i * 7 + producto.nombre.length) % 5) - 2) * 0.03;
+      const precioTienda = Math.round((producto.precio * variacion) / 10) * 10;
+
+      const productoCreado = catalogoIdExistente
+        ? await crearProducto(vendedor, tiendaCreada.id, {
+            catalogoId: catalogoIdExistente,
+            precio: precioTienda,
+            stock: producto.stock,
+          })
+        : await crearProducto(vendedor, tiendaCreada.id, {
+            nuevo: {
+              nombre: producto.nombre,
+              categoria: aCategoria(def.rubro),
+              imagenUrl: imagenPlaceholder(producto.nombre),
+            },
+            precio: precioTienda,
+            stock: producto.stock,
+          });
+
+      if (!catalogoIdExistente) {
+        catalogoIdPorNombre.set(producto.nombre, productoCreado.catalogoId);
+      }
+
+      // Algunos productos quedan en oferta, para poblar el tab "ofertas" del
+      // storefront (03-productos.md).
+      if ((i + producto.nombre.length) % 6 === 0) {
+        await prisma.producto.update({
+          where: { id: productoCreado.id },
+          data: { precioOferta: Math.round((precioTienda * 0.85) / 10) * 10 },
+        });
+      }
     }
   }
 

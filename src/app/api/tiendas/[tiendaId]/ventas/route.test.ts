@@ -36,11 +36,11 @@ describe("/api/tiendas/[tiendaId]/ventas", () => {
       lat: -34.6037,
       lon: -58.3816,
     });
-    producto = await crearProducto(vendedor, tienda.id, { nombre: "Producto", precio: 100, stock: 10 });
+    producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Producto" }, precio: 100, stock: 10 });
   });
 
   afterEach(async () => {
-    await prisma.itemVenta.deleteMany({});
+    await prisma.itemVenta.deleteMany({ where: { venta: { tiendaId: tienda.id } } });
     await prisma.venta.deleteMany({ where: { tiendaId: tienda.id } });
     await prisma.producto.deleteMany({ where: { tiendaId: tienda.id } });
     await prisma.tienda.deleteMany({ where: { vendedorId: vendedor.id } });

@@ -38,7 +38,7 @@ describe("/api/tiendas/[tiendaId]/productos", () => {
   });
 
   afterEach(async () => {
-    await prisma.itemPedido.deleteMany({});
+    await prisma.itemPedido.deleteMany({ where: { pedido: { tiendaId: tienda.id } } });
     await prisma.producto.deleteMany({ where: { tiendaId: tienda.id } });
     await prisma.tienda.deleteMany({ where: { vendedorId: { in: [dueno.id, otro.id] } } });
     await prisma.usuario.deleteMany({ where: { id: { in: [dueno.id, otro.id] } } });
@@ -55,13 +55,13 @@ describe("/api/tiendas/[tiendaId]/productos", () => {
 
     it("401 sin sesión", async () => {
       obtenerUsuarioActualMock.mockResolvedValue(null);
-      const res = await POST(req({ nombre: "X", precio: 10, stock: 5 }), params(tienda.id));
+      const res = await POST(req({ nuevo: { nombre: "X" }, precio: 10, stock: 5 }), params(tienda.id));
       expect(res.status).toBe(401);
     });
 
     it("403 NO_ES_DUENO_DE_TIENDA si no es el dueño", async () => {
       obtenerUsuarioActualMock.mockResolvedValue(otro);
-      const res = await POST(req({ nombre: "X", precio: 10, stock: 5 }), params(tienda.id));
+      const res = await POST(req({ nuevo: { nombre: "X" }, precio: 10, stock: 5 }), params(tienda.id));
       const body = await res.json();
       expect(res.status).toBe(403);
       expect(body.error.code).toBe("NO_ES_DUENO_DE_TIENDA");
@@ -70,7 +70,7 @@ describe("/api/tiendas/[tiendaId]/productos", () => {
     it("201 crea el producto, disponible=true por defecto", async () => {
       obtenerUsuarioActualMock.mockResolvedValue(dueno);
       const res = await POST(
-        req({ nombre: "Lechuga fresca", precio: 250, stock: 12 }),
+        req({ nuevo: { nombre: "Lechuga fresca" }, precio: 250, stock: 12 }),
         params(tienda.id),
       );
       const body = await res.json();
@@ -82,8 +82,8 @@ describe("/api/tiendas/[tiendaId]/productos", () => {
 
   describe("GET", () => {
     it("200 público, paginado, con soloDisponibles filtrando por comprable", async () => {
-      await crearProducto(dueno, tienda.id, { nombre: "Disponible", precio: 100, stock: 5 });
-      await crearProducto(dueno, tienda.id, { nombre: "Sin stock", precio: 100, stock: 0 });
+      await crearProducto(dueno, tienda.id, { nuevo: { nombre: "Disponible" }, precio: 100, stock: 5 });
+      await crearProducto(dueno, tienda.id, { nuevo: { nombre: "Sin stock" }, precio: 100, stock: 0 });
 
       const res = await GET(
         new NextRequest(`http://localhost/api/tiendas/x/productos?soloDisponibles=true`),

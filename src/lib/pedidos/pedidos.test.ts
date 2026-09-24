@@ -34,7 +34,7 @@ async function crearVendedorConTiendaYProducto(
     lon: -58.3816,
   });
   const producto = await crearProducto(vendedor, tienda.id, {
-    nombre: "Producto",
+    nuevo: { nombre: "Producto" },
     precio: 100,
     stock,
   });
@@ -42,7 +42,7 @@ async function crearVendedorConTiendaYProducto(
 }
 
 async function limpiar(usuarioIds: string[]) {
-  await prisma.itemVenta.deleteMany({});
+  await prisma.itemVenta.deleteMany({ where: { venta: { tienda: { vendedorId: { in: usuarioIds } } } } });
   await prisma.venta.deleteMany({ where: { tienda: { vendedorId: { in: usuarioIds } } } });
   await prisma.itemPedido.deleteMany({ where: { pedido: { tienda: { vendedorId: { in: usuarioIds } } } } });
   await prisma.pedido.deleteMany({ where: { tienda: { vendedorId: { in: usuarioIds } } } });
@@ -151,7 +151,7 @@ describe("crearPedido", () => {
 
   it("lanza PRODUCTO_NO_COMPRABLE si el producto no está disponible", async () => {
     const noDisponible = await crearProducto(vendedor, tienda.id, {
-      nombre: "Pausado",
+      nuevo: { nombre: "Pausado" },
       precio: 50,
       stock: 5,
     });
@@ -369,5 +369,41 @@ describe("listarPedidos", () => {
     await expect(
       listarPedidos(comprador, { tiendaId: tienda.id })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "NO_ES_DUENO_DE_TIENDA" });
+  });
+
+  it("compradorId='me' resuelve al usuario autenticado", async () => {
+    const resultado = await listarPedidos(comprador, { compradorId: "me" });
+    expect(resultado.total).toBe(1);
+    expect(resultado.data[0].compradorId).toBe(comprador.id);
+  });
+
+  it("filtra por estado", async () => {
+    const resultado = await listarPedidos(comprador, { compradorId: "me", estado: "pendiente" });
+    expect(resultado.total).toBe(1);
+
+    const otroEstado = await listarPedidos(comprador, { compradorId: "me", estado: "cancelado" });
+    expect(otroEstado.total).toBe(0);
+  });
+});
+
+describe("Pedido.total", () => {
+  let vendedor: Usuario;
+  let comprador: Usuario;
+  let tienda: Tienda;
+  let producto: Producto;
+
+  beforeEach(async () => {
+    ({ vendedor, tienda, producto } = await crearVendedorConTiendaYProducto(10));
+    comprador = await crearUsuarioDePrueba("Comprador");
+  });
+
+  afterEach(() => limpiar([vendedor.id, comprador.id]));
+
+  it("es la suma de cantidad*precioUnitario de los items", async () => {
+    const pedido = await crearPedido(comprador, {
+      tiendaId: tienda.id,
+      items: [{ productoId: producto.id, cantidad: 3 }],
+    });
+    expect(pedido.total).toBe(producto.precio * 3);
   });
 });

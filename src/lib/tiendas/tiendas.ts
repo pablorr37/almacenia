@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import { Prisma } from "@/generated-prisma/client";
 import type { Usuario } from "@/lib/auth/auth";
+import { requireAdmin } from "@/lib/auth/auth";
+import type { Categoria, Plan, EstadoVerificacion } from "@/generated-prisma/client";
 
 const RADIO_KM_DEFAULT = 5;
 const RADIO_KM_MAXIMO = 50;
@@ -24,8 +26,23 @@ export interface Tienda {
   lat: number;
   lon: number;
   activa: boolean;
+  desactivadaEn: string | null;
+  imagenUrl: string | null;
+  rubro: Categoria | null;
+  verificada: boolean;
+  plan: Plan;
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[];
+}
+
+export interface SolicitudVerificacion {
+  id: string;
+  tiendaId: string;
+  estado: EstadoVerificacion;
+  creadaEn: string;
+  revisadaEn: string | null;
+  revisadaPor: string | null;
+  notaAdmin: string | null;
 }
 
 interface FilaTienda {
@@ -37,6 +54,11 @@ interface FilaTienda {
   lat: number;
   lon: number;
   activa: boolean;
+  desactivada_en: Date | null;
+  imagen_url: string | null;
+  rubro: Categoria | null;
+  verificada: boolean;
+  plan: Plan;
   // node-postgres no trae un parser por default para arrays de enums custom
   // (medio_pago[]) — llega como el literal crudo de Postgres, ej. "{efectivo,qr}".
   medios_de_pago: string;
@@ -60,6 +82,11 @@ function aTienda(fila: FilaTienda, horarios: HorarioTienda[] = []): Tienda {
     lat: fila.lat,
     lon: fila.lon,
     activa: fila.activa,
+    desactivadaEn: fila.desactivada_en ? fila.desactivada_en.toISOString() : null,
+    imagenUrl: fila.imagen_url,
+    rubro: fila.rubro,
+    verificada: fila.verificada,
+    plan: fila.plan,
     mediosDePago: parsearMediosDePago(fila.medios_de_pago),
     horarios,
   };
@@ -69,7 +96,8 @@ function aTienda(fila: FilaTienda, horarios: HorarioTienda[] = []): Tienda {
 // punto geográfico, ya que Prisma no puede tipar la columna `ubicacion` (geography).
 const SELECT_TIENDA = Prisma.sql`
   SELECT
-    id, vendedor_id, nombre, descripcion, direccion, activa, medios_de_pago,
+    id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
+    imagen_url, rubro, verificada, plan, medios_de_pago,
     ST_Y(ubicacion::geometry) AS lat,
     ST_X(ubicacion::geometry) AS lon
   FROM tiendas
@@ -181,7 +209,8 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
         ${mediosDePago}::medio_pago[]
       )
       RETURNING
-        id, vendedor_id, nombre, descripcion, direccion, activa, medios_de_pago,
+        id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
+        imagen_url, rubro, verificada, plan, medios_de_pago,
         ST_Y(ubicacion::geometry) AS lat,
         ST_X(ubicacion::geometry) AS lon
     `;
@@ -224,14 +253,15 @@ export async function buscarTiendasCercanas(
 
   const filas = await prisma.$queryRaw<Array<FilaTienda & { distancia_km: number }>>`
     SELECT
-      id, vendedor_id, nombre, descripcion, direccion, activa, medios_de_pago,
+      id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
+      imagen_url, rubro, verificada, plan, medios_de_pago,
       ST_Y(ubicacion::geometry) AS lat,
       ST_X(ubicacion::geometry) AS lon,
       ST_Distance(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography) / 1000 AS distancia_km
     FROM tiendas
     WHERE activa = true
       AND ST_DWithin(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography, ${radioMetros})
-    ORDER BY distancia_km ASC
+    ORDER BY (plan = 'premium') DESC, distancia_km ASC
   `;
 
   const horariosPorTienda = await obtenerHorariosPorTiendas(filas.map((f) => f.id));
@@ -267,6 +297,8 @@ export interface ActualizarTiendaInput {
   lat?: number;
   lon?: number;
   activa?: boolean;
+  imagenUrl?: string;
+  rubro?: Categoria;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[];
 }
@@ -295,6 +327,16 @@ export async function actualizarTienda(
   }
 
   const mediosDePago = input.mediosDePago ?? actual.mediosDePago;
+  const nuevaActiva = input.activa ?? actual.activa;
+  // Se registra la fecha de baja para el reporte de churn de 11-admin.md; se limpia
+  // si la tienda se reactiva (ver 02-tiendas.md).
+  const desactivadaEn = nuevaActiva
+    ? null
+    : actual.activa
+      ? new Date()
+      : actual.desactivadaEn
+        ? new Date(actual.desactivadaEn)
+        : null;
 
   const [fila] = await prisma.$transaction(async (tx) => {
     const filas = await tx.$queryRaw<FilaTienda[]>`
@@ -303,12 +345,16 @@ export async function actualizarTienda(
         descripcion = ${input.descripcion ?? actual.descripcion},
         direccion = ${input.direccion ?? actual.direccion},
         ubicacion = ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)::geography,
-        activa = ${input.activa ?? actual.activa},
+        activa = ${nuevaActiva},
+        desactivada_en = ${desactivadaEn},
+        imagen_url = ${input.imagenUrl ?? actual.imagenUrl},
+        rubro = ${input.rubro ?? actual.rubro}::categoria,
         medios_de_pago = ${mediosDePago}::medio_pago[],
         actualizada_en = now()
       WHERE id = ${tiendaId}
       RETURNING
-        id, vendedor_id, nombre, descripcion, direccion, activa, medios_de_pago,
+        id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
+        imagen_url, rubro, verificada, plan, medios_de_pago,
         ST_Y(ubicacion::geometry) AS lat,
         ST_X(ubicacion::geometry) AS lon
     `;
@@ -330,4 +376,81 @@ export async function actualizarTienda(
 
   const horarios = input.horarios ?? (await obtenerHorarios(tiendaId));
   return aTienda(fila, horarios);
+}
+
+function aSolicitudVerificacion(s: {
+  id: string;
+  tiendaId: string;
+  estado: EstadoVerificacion;
+  creadaEn: Date;
+  revisadaEn: Date | null;
+  revisadaPor: string | null;
+  notaAdmin: string | null;
+}): SolicitudVerificacion {
+  return {
+    id: s.id,
+    tiendaId: s.tiendaId,
+    estado: s.estado,
+    creadaEn: s.creadaEn.toISOString(),
+    revisadaEn: s.revisadaEn ? s.revisadaEn.toISOString() : null,
+    revisadaPor: s.revisadaPor,
+    notaAdmin: s.notaAdmin,
+  };
+}
+
+export async function solicitarVerificacion(
+  vendedor: Usuario,
+  tiendaId: string
+): Promise<SolicitudVerificacion> {
+  const tienda = await prisma.tienda.findUnique({ where: { id: tiendaId } });
+  if (!tienda) {
+    throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
+  }
+  if (tienda.vendedorId !== vendedor.id) {
+    throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
+  }
+  if (tienda.verificada) {
+    throw new AppError("TIENDA_YA_VERIFICADA", "La tienda ya está verificada.");
+  }
+
+  const pendiente = await prisma.solicitudVerificacion.findFirst({
+    where: { tiendaId, estado: "pendiente" },
+  });
+  if (pendiente) {
+    throw new AppError("SOLICITUD_YA_PENDIENTE", "Ya hay una solicitud de verificación pendiente.");
+  }
+
+  const solicitud = await prisma.solicitudVerificacion.create({ data: { tiendaId } });
+  return aSolicitudVerificacion(solicitud);
+}
+
+export async function revisarSolicitudVerificacion(
+  admin: Usuario,
+  solicitudId: string,
+  decision: "aprobada" | "rechazada",
+  notaAdmin?: string
+): Promise<SolicitudVerificacion> {
+  requireAdmin(admin);
+
+  const solicitud = await prisma.solicitudVerificacion.findUnique({ where: { id: solicitudId } });
+  if (!solicitud) {
+    throw new AppError("SOLICITUD_NO_ENCONTRADA", "La solicitud no existe.");
+  }
+
+  const [actualizada] = await prisma.$transaction([
+    prisma.solicitudVerificacion.update({
+      where: { id: solicitudId },
+      data: {
+        estado: decision,
+        revisadaEn: new Date(),
+        revisadaPor: admin.id,
+        notaAdmin: notaAdmin ?? null,
+      },
+    }),
+    ...(decision === "aprobada"
+      ? [prisma.tienda.update({ where: { id: solicitud.tiendaId }, data: { verificada: true } })]
+      : []),
+  ]);
+
+  return aSolicitudVerificacion(actualizada);
 }

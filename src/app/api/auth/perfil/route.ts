@@ -12,7 +12,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const actualizado = await actualizarPerfil(usuario, { nombre: body.nombre });
+    const actualizado = await actualizarPerfil(usuario, { nombre: body.nombre, avatarUrl: body.avatarUrl });
     return respuestaExitosa(actualizado);
   } catch (error) {
     return respuestaError(error);

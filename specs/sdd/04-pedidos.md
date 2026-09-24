@@ -104,8 +104,10 @@ Response `200`: `{ data: Pedido }`.
 ### `GET /api/pedidos?tiendaId=` / `GET /api/pedidos?compradorId=`
 
 Listado paginado (ver `00-overview.md`): `?tiendaId=` requiere ser el dueño de esa
-tienda; `?compradorId=` solo admite el propio id del usuario autenticado (implícito
-en la sesión — no se puede pasar el de otro usuario).
+tienda; `?compradorId=` solo admite el propio id del usuario autenticado o el
+literal `me` como atajo (implícito en la sesión — no se puede pasar el de otro
+usuario). Query opcional `?estado=<EstadoPedido>` para filtrar (ej. el perfil del
+comprador separando pedidos activos/cancelados/entregados).
 
 ### `POST /api/pedidos/:id/transicion`
 
@@ -140,6 +142,7 @@ interface Pedido {
   estado: EstadoPedido;
   nota: string | null;
   items: ItemPedido[];
+  total: number; // derivado: SUM(cantidad * precioUnitario) de items, no columna propia
 }
 
 interface CrearPedidoInput {
@@ -159,6 +162,19 @@ async function transicionarPedido(
   pedidoId: string,
   accion: AccionPedido
 ): Promise<Pedido>;
+
+interface ListarPedidosInput {
+  tiendaId?: string;
+  compradorId?: string; // o el literal 'me'
+  estado?: EstadoPedido;
+  page?: number;
+  pageSize?: number;
+}
+
+async function listarPedidos(
+  usuario: Usuario,
+  input: ListarPedidosInput
+): Promise<{ data: Pedido[]; page: number; pageSize: number; total: number }>;
 
 // Determina si una transición es válida desde el estado actual (usada por
 // transicionarPedido y por los tests de la máquina de estados).

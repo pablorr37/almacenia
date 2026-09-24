@@ -29,21 +29,45 @@ async function crearVendedorConTienda(): Promise<{ vendedor: Usuario; tienda: Ti
   return { vendedor, tienda };
 }
 
+// Atajo para las pruebas: siempre da de alta un producto nuevo en el catálogo
+// compartido, que es lo que exige crearProducto por schema (03-productos.md /
+// 06-catalogo.md). contadorNombre evita colisiones de nombre entre tests, aunque el
+// catálogo no exige nombre único (solo codigoBarras si se manda).
+let contadorNombre = 0;
+function inputNuevo(overrides: { precio?: number; stock?: number; nombre?: string } = {}) {
+  contadorNombre += 1;
+  return {
+    nuevo: { nombre: overrides.nombre ?? `Producto de prueba ${contadorNombre}` },
+    precio: overrides.precio ?? 1,
+    stock: overrides.stock ?? 1,
+  };
+}
+
 async function limpiar(usuarioIds: string[]) {
-  await prisma.itemVenta.deleteMany({});
-  await prisma.itemPedido.deleteMany({});
+  const catalogoIds = (
+    await prisma.producto.findMany({ where: { tienda: { vendedorId: { in: usuarioIds } } }, select: { catalogoId: true } })
+  ).map((p) => p.catalogoId);
+  await prisma.itemVenta.deleteMany({ where: { venta: { tienda: { vendedorId: { in: usuarioIds } } } } });
+  await prisma.venta.deleteMany({ where: { tienda: { vendedorId: { in: usuarioIds } } } });
+  await prisma.itemPedido.deleteMany({ where: { pedido: { tienda: { vendedorId: { in: usuarioIds } } } } });
   await prisma.producto.deleteMany({ where: { tienda: { vendedorId: { in: usuarioIds } } } });
   await prisma.tienda.deleteMany({ where: { vendedorId: { in: usuarioIds } } });
   await prisma.usuario.deleteMany({ where: { id: { in: usuarioIds } } });
+  await prisma.productoCatalogo.deleteMany({ where: { id: { in: catalogoIds } } });
 }
 
 describe("esComprable", () => {
   const base: Producto = {
     id: "x",
     tiendaId: "y",
+    catalogoId: "z",
     nombre: "Producto",
     descripcion: null,
+    categoria: null,
+    imagenUrl: null,
     precio: 10,
+    precioOferta: null,
+    destacado: false,
     stock: 1,
     disponible: true,
   };
@@ -77,10 +101,9 @@ describe("crearProducto", () => {
 
   afterEach(() => limpiar([vendedor.id, otro.id]));
 
-  it("crea el producto con disponible=true por defecto", async () => {
+  it("crea el producto con disponible=true por defecto, dando de alta en el catálogo", async () => {
     const producto = await crearProducto(vendedor, tienda.id, {
-      nombre: "Lechuga",
-      descripcion: "Fresca",
+      nuevo: { nombre: "Lechuga" },
       precio: 250.5,
       stock: 10,
     });
@@ -90,33 +113,60 @@ describe("crearProducto", () => {
     expect(producto.precio).toBe(250.5);
     expect(producto.stock).toBe(10);
     expect(producto.disponible).toBe(true);
+    expect(producto.catalogoId).toBeTruthy();
+  });
+
+  it("crea el producto adoptando un catalogoId existente", async () => {
+    const primero = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Fideos" }, precio: 5, stock: 1 });
+
+    const otraTienda = await crearTienda(otro, {
+      nombre: "Otra tienda",
+      direccion: "Dirección",
+      lat: -34.6,
+      lon: -58.4,
+    });
+    const adoptado = await crearProducto(otro, otraTienda.id, {
+      catalogoId: primero.catalogoId,
+      precio: 6,
+      stock: 2,
+    });
+
+    expect(adoptado.catalogoId).toBe(primero.catalogoId);
+    expect(adoptado.nombre).toBe("Fideos");
+    expect(adoptado.precio).toBe(6);
+  });
+
+  it("lanza CATALOGO_NO_ENCONTRADO si el catalogoId no existe", async () => {
+    await expect(
+      crearProducto(vendedor, tienda.id, {
+        catalogoId: "00000000-0000-0000-0000-000000000000",
+        precio: 1,
+        stock: 1,
+      })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "CATALOGO_NO_ENCONTRADO" });
   });
 
   it("lanza TIENDA_NO_ENCONTRADA si la tienda no existe", async () => {
     await expect(
-      crearProducto(vendedor, "00000000-0000-0000-0000-000000000000", {
-        nombre: "X",
-        precio: 1,
-        stock: 1,
-      })
+      crearProducto(vendedor, "00000000-0000-0000-0000-000000000000", inputNuevo())
     ).rejects.toMatchObject<Partial<AppError>>({ code: "TIENDA_NO_ENCONTRADA" });
   });
 
   it("lanza NO_ES_DUENO_DE_TIENDA si el usuario no es el dueño", async () => {
-    await expect(
-      crearProducto(otro, tienda.id, { nombre: "X", precio: 1, stock: 1 })
-    ).rejects.toMatchObject<Partial<AppError>>({ code: "NO_ES_DUENO_DE_TIENDA" });
+    await expect(crearProducto(otro, tienda.id, inputNuevo())).rejects.toMatchObject<Partial<AppError>>({
+      code: "NO_ES_DUENO_DE_TIENDA",
+    });
   });
 
   it("lanza PRECIO_INVALIDO si precio < 0", async () => {
     await expect(
-      crearProducto(vendedor, tienda.id, { nombre: "X", precio: -1, stock: 1 })
+      crearProducto(vendedor, tienda.id, inputNuevo({ precio: -1 }))
     ).rejects.toMatchObject<Partial<AppError>>({ code: "PRECIO_INVALIDO" });
   });
 
   it("lanza STOCK_INVALIDO si stock < 0", async () => {
     await expect(
-      crearProducto(vendedor, tienda.id, { nombre: "X", precio: 1, stock: -1 })
+      crearProducto(vendedor, tienda.id, inputNuevo({ stock: -1 }))
     ).rejects.toMatchObject<Partial<AppError>>({ code: "STOCK_INVALIDO" });
   });
 });
@@ -127,10 +177,10 @@ describe("listarProductos", () => {
 
   beforeEach(async () => {
     ({ vendedor, tienda } = await crearVendedorConTienda());
-    await crearProducto(vendedor, tienda.id, { nombre: "Disponible", precio: 1, stock: 5 });
-    const agotado = await crearProducto(vendedor, tienda.id, { nombre: "Sin stock", precio: 1, stock: 5 });
+    await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Disponible", stock: 5 }));
+    const agotado = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Sin stock", stock: 5 }));
     await actualizarProducto(vendedor, agotado.id, { stock: 0 });
-    const pausado = await crearProducto(vendedor, tienda.id, { nombre: "Pausado", precio: 1, stock: 5 });
+    const pausado = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Pausado", stock: 5 }));
     await actualizarProducto(vendedor, pausado.id, { disponible: false });
   });
 
@@ -161,6 +211,65 @@ describe("listarProductos", () => {
   });
 });
 
+describe("listarProductos: filtros, orden y tabs", () => {
+  let vendedor: Usuario;
+  let tienda: Tienda;
+  let barato: Producto;
+  let caro: Producto;
+
+  beforeEach(async () => {
+    ({ vendedor, tienda } = await crearVendedorConTienda());
+    barato = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Alfajor", precio: 10, stock: 5 }));
+    caro = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Zapallo", precio: 100, stock: 5 }));
+  });
+
+  afterEach(() => limpiar([vendedor.id]));
+
+  it("filtra por q (nombre, insensible a mayúsculas)", async () => {
+    const resultado = await listarProductos({ tiendaId: tienda.id, q: "alfa" });
+    expect(resultado.data).toHaveLength(1);
+    expect(resultado.data[0].id).toBe(barato.id);
+  });
+
+  it("filtra por precioMin/precioMax", async () => {
+    const resultado = await listarProductos({ tiendaId: tienda.id, precioMin: 50 });
+    expect(resultado.data.map((p) => p.id)).toEqual([caro.id]);
+  });
+
+  it("ordena por precio_asc y precio_desc", async () => {
+    const asc = await listarProductos({ tiendaId: tienda.id, sort: "precio_asc" });
+    expect(asc.data.map((p) => p.id)).toEqual([barato.id, caro.id]);
+
+    const desc = await listarProductos({ tiendaId: tienda.id, sort: "precio_desc" });
+    expect(desc.data.map((p) => p.id)).toEqual([caro.id, barato.id]);
+  });
+
+  it("ordena alfabéticamente", async () => {
+    const resultado = await listarProductos({ tiendaId: tienda.id, sort: "alfabetico" });
+    expect(resultado.data.map((p) => p.id)).toEqual([barato.id, caro.id]); // Alfajor < Zapallo
+  });
+
+  it("tab=ofertas filtra productos con precioOferta", async () => {
+    await actualizarProducto(vendedor, barato.id, { precioOferta: 5 });
+    const resultado = await listarProductos({ tiendaId: tienda.id, tab: "ofertas" });
+    expect(resultado.data.map((p) => p.id)).toEqual([barato.id]);
+  });
+
+  it("tab=destacados filtra productos marcados como destacado", async () => {
+    await actualizarProducto(vendedor, caro.id, { destacado: true });
+    const resultado = await listarProductos({ tiendaId: tienda.id, tab: "destacados" });
+    expect(resultado.data.map((p) => p.id)).toEqual([caro.id]);
+  });
+
+  it("sort=mas_vendidos ordena por cantidad vendida", async () => {
+    const { crearVentaPresencial } = await import("@/lib/ventas/ventas");
+    await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: barato.id, cantidad: 3 }] });
+
+    const resultado = await listarProductos({ tiendaId: tienda.id, sort: "mas_vendidos" });
+    expect(resultado.data[0].id).toBe(barato.id);
+  });
+});
+
 describe("actualizarProducto", () => {
   let vendedor: Usuario;
   let otro: Usuario;
@@ -174,7 +283,7 @@ describe("actualizarProducto", () => {
       password: "password123",
       nombre: "Otro usuario",
     });
-    producto = await crearProducto(vendedor, tienda.id, { nombre: "Original", precio: 100, stock: 5 });
+    producto = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Original", precio: 100, stock: 5 }));
   });
 
   afterEach(() => limpiar([vendedor.id, otro.id]));
@@ -207,6 +316,17 @@ describe("actualizarProducto", () => {
       actualizarProducto(vendedor, producto.id, { precio: -1 })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "PRECIO_INVALIDO" });
   });
+
+  it("permite setear precioOferta menor al precio", async () => {
+    const actualizado = await actualizarProducto(vendedor, producto.id, { precioOferta: 80 });
+    expect(actualizado.precioOferta).toBe(80);
+  });
+
+  it("lanza PRECIO_OFERTA_INVALIDO si precioOferta >= precio", async () => {
+    await expect(
+      actualizarProducto(vendedor, producto.id, { precioOferta: 100 })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "PRECIO_OFERTA_INVALIDO" });
+  });
 });
 
 describe("eliminarProducto", () => {
@@ -222,7 +342,7 @@ describe("eliminarProducto", () => {
       password: "password123",
       nombre: "Otro usuario",
     });
-    producto = await crearProducto(vendedor, tienda.id, { nombre: "A borrar", precio: 100, stock: 5 });
+    producto = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "A borrar", precio: 100, stock: 5 }));
   });
 
   afterEach(() => limpiar([vendedor.id, otro.id]));
@@ -248,7 +368,7 @@ describe("debitarStock", () => {
 
   beforeEach(async () => {
     ({ vendedor, tienda } = await crearVendedorConTienda());
-    producto = await crearProducto(vendedor, tienda.id, { nombre: "Con stock", precio: 100, stock: 10 });
+    producto = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Con stock", precio: 100, stock: 10 }));
   });
 
   afterEach(() => limpiar([vendedor.id]));

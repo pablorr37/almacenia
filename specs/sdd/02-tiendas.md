@@ -6,6 +6,13 @@ Convenciones comunes: ver [`00-overview.md`](00-overview.md). Depende de
 ## Modelo de datos
 
 ```sql
+CREATE TYPE categoria AS ENUM (
+  'almacen', 'bebidas', 'lacteos', 'panaderia', 'limpieza', 'kiosco', 'verduleria',
+  'fiambreria', 'otros'
+);
+
+CREATE TYPE plan AS ENUM ('free', 'premium');
+
 CREATE TABLE tiendas (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   vendedor_id   UUID NOT NULL UNIQUE REFERENCES usuarios(id),
@@ -14,6 +21,11 @@ CREATE TABLE tiendas (
   direccion     TEXT NOT NULL,
   ubicacion     GEOGRAPHY(Point, 4326) NOT NULL,
   activa        BOOLEAN NOT NULL DEFAULT true,
+  desactivada_en TIMESTAMPTZ,
+  imagen_url    TEXT,
+  rubro         categoria,
+  verificada    BOOLEAN NOT NULL DEFAULT false,
+  plan          plan NOT NULL DEFAULT 'free',
   creada_en     TIMESTAMPTZ NOT NULL DEFAULT now(),
   actualizada_en TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -37,6 +49,20 @@ CREATE TABLE horarios_tienda (
 );
 
 CREATE INDEX horarios_tienda_tienda_id_idx ON horarios_tienda (tienda_id);
+
+CREATE TYPE estado_verificacion AS ENUM ('pendiente', 'aprobada', 'rechazada');
+
+CREATE TABLE solicitudes_verificacion (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tienda_id    UUID NOT NULL REFERENCES tiendas(id),
+  estado       estado_verificacion NOT NULL DEFAULT 'pendiente',
+  creada_en    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  revisada_en  TIMESTAMPTZ,
+  revisada_por UUID REFERENCES usuarios(id),
+  nota_admin   TEXT
+);
+
+CREATE INDEX solicitudes_verificacion_tienda_id_idx ON solicitudes_verificacion (tienda_id);
 ```
 
 - `vendedor_id UNIQUE` implementa la relación 1:1 vendedor–tienda del MVP (ver
@@ -49,6 +75,21 @@ CREATE INDEX horarios_tienda_tienda_id_idx ON horarios_tienda (tienda_id);
 - `medios_de_pago` es un array del enum `medio_pago` — una tienda puede aceptar
   varios a la vez, sin tabla aparte (no hay atributos propios por medio de pago en
   el MVP, un array alcanza).
+- `desactivada_en` guarda la fecha en la que `activa` pasó a `false` por última vez
+  (se actualiza cada vez que `actualizarTienda` recibe `activa: false`; se limpia a
+  `null` si la tienda se reactiva). Alimenta el reporte de bajas de `11-admin.md` —
+  no se puede reconstruir un histórico confiable a partir del solo booleano `activa`.
+- `imagen_url` es la foto de portada de la tienda, subida vía `08-archivos.md`. Nace
+  en `null`.
+- `rubro` es la categoría general de la tienda (almacén, kiosco, verdulería, etc.),
+  informativa para el mapa/búsqueda — no limita qué `categoria` pueden tener sus
+  productos individuales (ver `03-productos.md`).
+- `verificada` nace en `false` en toda alta automática de tienda. Solo cambia a
+  `true` cuando un admin aprueba una `SolicitudVerificacion` (ver más abajo) — nunca
+  se auto-verifica.
+- `plan` determina qué features premium tiene habilitadas la tienda (ver
+  `10-planes.md`). Nace en `free`; el cambio a `premium` es manual por un admin
+  mientras no haya cobro automatizado.
 - `horarios_tienda` guarda **una fila por día de la semana** (0 a 6, siempre las 7
   presentes para una tienda con horario cargado) — `abre`/`cierra` en formato
   `"HH:mm"` como texto simple (no `TIME` de Postgres, para no lidiar con
@@ -83,6 +124,12 @@ CREATE INDEX horarios_tienda_tienda_id_idx ON horarios_tienda (tienda_id);
 - Al actualizar `horarios`, se reemplazan las 7 filas existentes por las nuevas (no
   hay edición parcial de un solo día vía API — el cliente manda el estado completo
   de la semana).
+- **Verificación**: el dueño de una tienda no verificada puede crear una
+  `SolicitudVerificacion` mientras no tenga ya una `pendiente` (no se permiten
+  solicitudes duplicadas en simultáneo). Solo un admin (`esAdmin = true`, ver
+  `01-auth.md`) puede revisarla; aprobarla pone `tiendas.verificada = true` en la
+  misma operación. Una tienda ya `verificada = true` no puede crear una nueva
+  solicitud (`TIENDA_YA_VERIFICADA`).
 
 ## Endpoints REST
 
@@ -116,7 +163,9 @@ Query: `?lat=<number>&lon=<number>&radioKm=<number>` (default `radioKm=5`, máxi
 Response `200`:
 
 ```ts
-{ data: Array<Tienda & { distanciaKm: number }> } // ordenado por distanciaKm ascendente
+{ data: Array<Tienda & { distanciaKm: number }> }
+// Orden: tiendas plan=premium primero (ver 10-planes.md, feature
+// destacado_prioritario), luego distanciaKm ascendente dentro de cada grupo.
 ```
 
 ### `GET /api/tiendas/:id`
@@ -137,9 +186,22 @@ no creó su tienda.
 
 Requiere ser el dueño de la tienda (`vendedor_id === usuario.id`).
 
-Request (todos los campos opcionales): igual forma que `POST`, más `activa?: boolean`.
+Request (todos los campos opcionales): igual forma que `POST`, más `activa?: boolean`,
+`imagenUrl?: string`, `rubro?: Categoria`.
 
-Response `200`: `{ data: Tienda }`.
+Response `200`: `{ data: Tienda }`. Si `activa` pasa de `true` a `false`, setea
+`desactivadaEn = now()`; si pasa a `true`, limpia `desactivadaEn = null`.
+
+### `POST /api/tiendas/:id/verificacion`
+
+Requiere ser el dueño de la tienda. Crea una `SolicitudVerificacion` en estado
+`pendiente`. Response `201`: `{ data: SolicitudVerificacion }`.
+`409 SOLICITUD_YA_PENDIENTE` si ya hay una pendiente.
+`409 TIENDA_YA_VERIFICADA` si la tienda ya está verificada.
+
+### `GET /api/admin/verificaciones` y `PATCH /api/admin/verificaciones/:id`
+
+Ver `11-admin.md` — requieren `esAdmin = true`.
 
 ## Firmas de funciones/clases TypeScript
 
@@ -154,6 +216,12 @@ interface HorarioTienda {
   cierra: string | null;
 }
 
+type Categoria =
+  | 'almacen' | 'bebidas' | 'lacteos' | 'panaderia' | 'limpieza' | 'kiosco'
+  | 'verduleria' | 'fiambreria' | 'otros';
+
+type Plan = 'free' | 'premium';
+
 interface Tienda {
   id: string;
   vendedorId: string;
@@ -163,8 +231,25 @@ interface Tienda {
   lat: number;
   lon: number;
   activa: boolean;
+  desactivadaEn: string | null; // ISO datetime
+  imagenUrl: string | null;
+  rubro: Categoria | null;
+  verificada: boolean;
+  plan: Plan;
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[]; // 0 o 7 entradas
+}
+
+type EstadoVerificacion = 'pendiente' | 'aprobada' | 'rechazada';
+
+interface SolicitudVerificacion {
+  id: string;
+  tiendaId: string;
+  estado: EstadoVerificacion;
+  creadaEn: string;
+  revisadaEn: string | null;
+  revisadaPor: string | null;
+  notaAdmin: string | null;
 }
 
 interface CrearTiendaInput {
@@ -207,6 +292,8 @@ interface ActualizarTiendaInput {
   lat?: number;
   lon?: number;
   activa?: boolean;
+  imagenUrl?: string;
+  rubro?: Categoria;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[]; // si se manda, reemplaza las 7 filas existentes
 }
@@ -216,6 +303,19 @@ async function actualizarTienda(
   tiendaId: string,
   input: ActualizarTiendaInput
 ): Promise<Tienda>;
+
+async function solicitarVerificacion(
+  vendedor: Usuario,
+  tiendaId: string
+): Promise<SolicitudVerificacion>;
+
+// Usada por 11-admin.md — requireAdmin(admin) primero.
+async function revisarSolicitudVerificacion(
+  admin: Usuario,
+  solicitudId: string,
+  decision: 'aprobada' | 'rechazada',
+  notaAdmin?: string
+): Promise<SolicitudVerificacion>;
 ```
 
 ## Casos de error a contemplar
@@ -229,3 +329,6 @@ async function actualizarTienda(
 | `RADIO_INVALIDO`             | `radioKm` <= 0 o > 50 en la búsqueda por cercanía.              |
 | `HORARIO_INVALIDO`           | `horarios` no trae exactamente 7 entradas, `diaSemana` repetido o fuera de 0-6, formato de hora inválido, o `abre >= cierra` en un día abierto. |
 | `MEDIO_PAGO_INVALIDO`        | Algún valor de `mediosDePago` no es uno de los valores del enum `MedioPago` (el request llega como JSON sin tipar, hay que validarlo en runtime). |
+| `SOLICITUD_YA_PENDIENTE`     | La tienda ya tiene una `SolicitudVerificacion` en estado `pendiente`. |
+| `TIENDA_YA_VERIFICADA`       | La tienda ya tiene `verificada = true` al pedir una nueva solicitud. |
+| `SOLICITUD_NO_ENCONTRADA`    | `:id` de `SolicitudVerificacion` no existe (`revisarSolicitudVerificacion`). |
