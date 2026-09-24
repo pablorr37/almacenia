@@ -68,6 +68,15 @@ de registro (ver reglas de negocio).
 Delegado al flujo estándar de NextAuth (`/api/auth/[...nextauth]`), no se especifica
 payload propio acá.
 
+### `PATCH /api/auth/perfil`
+
+Requiere sesión válida. Permite al usuario autenticado editar su propio perfil.
+
+Request: `{ nombre?: string }`
+
+Response `200`: `{ data: Usuario }`. `400 NOMBRE_INVALIDO` si `nombre` viene vacío o
+solo espacios.
+
 ## Firmas de funciones/clases TypeScript
 
 Ubicación: `src/lib/auth/`.
@@ -96,6 +105,12 @@ async function verificarPassword(email: string, password: string): Promise<Usuar
 // Usada internamente por crearTienda (02-tiendas.md) al completar el alta de tienda.
 // No se expone como endpoint propio.
 async function activarVendedor(usuarioId: string): Promise<Usuario>;
+
+interface ActualizarPerfilInput {
+  nombre?: string;
+}
+
+async function actualizarPerfil(usuario: Usuario, input: ActualizarPerfilInput): Promise<Usuario>;
 ```
 
 ## Casos de error a contemplar
@@ -106,3 +121,4 @@ async function activarVendedor(usuarioId: string): Promise<Usuario>;
 | `EMAIL_INVALIDO`         | `email` no tiene formato válido.                                   |
 | `PASSWORD_DEBIL`         | `password` no cumple longitud mínima (8 caracteres).               |
 | `CREDENCIALES_INVALIDAS` | Login con email inexistente o password incorrecta (mismo código para ambos casos, para no filtrar qué emails existen). |
+| `NOMBRE_INVALIDO`        | `nombre` vacío o solo espacios en `actualizarPerfil`.               |

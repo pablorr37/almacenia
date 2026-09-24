@@ -80,3 +80,19 @@ export async function activarVendedor(usuarioId: string): Promise<Usuario> {
   });
   return aUsuario(usuario);
 }
+
+export interface ActualizarPerfilInput {
+  nombre?: string;
+}
+
+export async function actualizarPerfil(usuario: Usuario, input: ActualizarPerfilInput): Promise<Usuario> {
+  if (input.nombre !== undefined && input.nombre.trim() === "") {
+    throw new AppError("NOMBRE_INVALIDO", "El nombre no puede estar vacío.");
+  }
+
+  const actualizado = await prisma.usuario.update({
+    where: { id: usuario.id },
+    data: { nombre: input.nombre?.trim() },
+  });
+  return aUsuario(actualizado);
+}

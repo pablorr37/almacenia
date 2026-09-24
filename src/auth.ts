@@ -26,4 +26,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
+  callbacks: {
+    // Sin esto, session.update({ name }) del cliente no toca el JWT — el nombre
+    // mostrado quedaría pegado al de cuando se inició sesión. obtenerUsuarioActual
+    // (src/lib/auth/session.ts) igual resuelve fresco desde la DB para las rutas
+    // API; esto es solo para que el nombre en el JWT/sesión del cliente refleje
+    // el cambio sin tener que cerrar y volver a iniciar sesión.
+    async jwt({ token, trigger, session }) {
+      if (trigger === "update" && session?.name) {
+        token.name = session.name;
+      }
+      return token;
+    },
+  },
 });

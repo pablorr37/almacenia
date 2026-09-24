@@ -5,6 +5,7 @@ import {
   buscarUsuarioPorEmail,
   verificarPassword,
   activarVendedor,
+  actualizarPerfil,
 } from "./auth";
 
 async function limpiarUsuario(email: string) {
@@ -128,4 +129,39 @@ describe("activarVendedor", () => {
     expect(actualizado.esVendedor).toBe(true);
     expect(actualizado.esComprador).toBe(true);
   });
+});
+
+describe("actualizarPerfil", () => {
+  const email = "test-perfil@almacenia.test";
+
+  beforeEach(() => limpiarUsuario(email));
+  afterEach(() => limpiarUsuario(email));
+
+  it("actualiza el nombre del usuario", async () => {
+    const usuario = await registrarUsuario({ email, password: "password123", nombre: "Ana" });
+
+    const actualizado = await actualizarPerfil(usuario, { nombre: "Ana María" });
+
+    expect(actualizado.nombre).toBe("Ana María");
+    expect(actualizado.id).toBe(usuario.id);
+  });
+
+  it("no cambia el nombre si no se manda", async () => {
+    const usuario = await registrarUsuario({ email, password: "password123", nombre: "Ana" });
+
+    const actualizado = await actualizarPerfil(usuario, {});
+
+    expect(actualizado.nombre).toBe("Ana");
+  });
+
+  it.each([["vacío", ""], ["solo espacios", "   "]])(
+    "lanza NOMBRE_INVALIDO si nombre es %s",
+    async (_desc, nombre) => {
+      const usuario = await registrarUsuario({ email, password: "password123", nombre: "Ana" });
+
+      await expect(actualizarPerfil(usuario, { nombre })).rejects.toMatchObject<Partial<AppError>>({
+        code: "NOMBRE_INVALIDO",
+      });
+    },
+  );
 });

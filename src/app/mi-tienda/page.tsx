@@ -8,6 +8,14 @@ import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
 
+type MedioPago = "efectivo" | "transferencia" | "mercado_pago" | "debito" | "qr";
+
+type HorarioTienda = {
+  diaSemana: number;
+  abre: string | null;
+  cierra: string | null;
+};
+
 type Tienda = {
   id: string;
   nombre: string;
@@ -16,7 +24,27 @@ type Tienda = {
   lat: number;
   lon: number;
   activa: boolean;
+  mediosDePago: MedioPago[];
+  horarios: HorarioTienda[];
 };
+
+const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+const MEDIOS_DE_PAGO: Array<{ valor: MedioPago; etiqueta: string }> = [
+  { valor: "efectivo", etiqueta: "Efectivo" },
+  { valor: "transferencia", etiqueta: "Transferencia" },
+  { valor: "mercado_pago", etiqueta: "Mercado Pago" },
+  { valor: "debito", etiqueta: "Débito" },
+  { valor: "qr", etiqueta: "QR" },
+];
+
+function horarioPorDefecto(): HorarioTienda[] {
+  return Array.from({ length: 7 }, (_, diaSemana) => ({
+    diaSemana,
+    abre: diaSemana === 0 ? null : "09:00",
+    cierra: diaSemana === 0 ? null : "21:00",
+  }));
+}
 
 type Producto = {
   id: string;
@@ -67,6 +95,13 @@ export default function MiTiendaPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const [nombreForm, setNombreForm] = useState("");
+  const [descripcionForm, setDescripcionForm] = useState("");
+  const [mediosForm, setMediosForm] = useState<MedioPago[]>([]);
+  const [horariosForm, setHorariosForm] = useState<HorarioTienda[]>(horarioPorDefecto());
+  const [guardandoTienda, setGuardandoTienda] = useState(false);
+  const [tiendaGuardada, setTiendaGuardada] = useState(false);
+
   useEffect(() => {
     if (status !== "authenticated") {
       setCargandoTienda(false);
@@ -86,7 +121,57 @@ export default function MiTiendaPage() {
     if (!tienda) return;
     apiGet<Producto[]>(`/api/tiendas/${tienda.id}/productos`).then(setProductos).catch(() => {});
     apiGet<Pedido[]>(`/api/pedidos?tiendaId=${tienda.id}`).then(setPedidos).catch(() => {});
+    setNombreForm(tienda.nombre);
+    setDescripcionForm(tienda.descripcion ?? "");
+    setMediosForm(tienda.mediosDePago);
+    setHorariosForm(tienda.horarios.length === 7 ? tienda.horarios : horarioPorDefecto());
   }, [tienda]);
+
+  function toggleMedioPago(medio: MedioPago) {
+    setMediosForm((actual) =>
+      actual.includes(medio) ? actual.filter((m) => m !== medio) : [...actual, medio],
+    );
+  }
+
+  function toggleDiaCerrado(diaSemana: number) {
+    setHorariosForm((actual) =>
+      actual.map((h) =>
+        h.diaSemana === diaSemana
+          ? h.abre === null
+            ? { ...h, abre: "09:00", cierra: "21:00" }
+            : { ...h, abre: null, cierra: null }
+          : h,
+      ),
+    );
+  }
+
+  function actualizarHora(diaSemana: number, campo: "abre" | "cierra", valor: string) {
+    setHorariosForm((actual) =>
+      actual.map((h) => (h.diaSemana === diaSemana ? { ...h, [campo]: valor } : h)),
+    );
+  }
+
+  async function guardarTienda(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!tienda) return;
+    setError(null);
+    setTiendaGuardada(false);
+    setGuardandoTienda(true);
+    try {
+      const actualizada = await apiPatch<Tienda>(`/api/tiendas/${tienda.id}`, {
+        nombre: nombreForm,
+        descripcion: descripcionForm || undefined,
+        mediosDePago: mediosForm,
+        horarios: horariosForm,
+      });
+      setTienda(actualizada);
+      setTiendaGuardada(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudieron guardar los cambios.");
+    } finally {
+      setGuardandoTienda(false);
+    }
+  }
 
   async function crearTienda(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -193,15 +278,111 @@ export default function MiTiendaPage() {
 
       <div className="flex-grow overflow-y-auto px-5 pb-6">
         {tab === "tienda" && (
-          <div className="flex flex-col gap-3">
-            <div className="rounded-card border border-border bg-surface p-3.5">
-              <div className="text-[15px] font-semibold">{tienda.nombre}</div>
+          <form onSubmit={guardarTienda} className="flex flex-col gap-5">
+            <div className="flex flex-col gap-3">
+              <Input
+                id="tienda-nombre"
+                label="Nombre de la tienda"
+                value={nombreForm}
+                onChange={(e) => setNombreForm(e.target.value)}
+                required
+              />
+              <Input
+                id="tienda-descripcion"
+                label="Descripción"
+                value={descripcionForm}
+                onChange={(e) => setDescripcionForm(e.target.value)}
+                placeholder="Contale a tus clientes qué vendés"
+              />
               <div className="text-[13px] text-text-2">{tienda.direccion}</div>
             </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="text-[13px] font-semibold text-text">Medios de pago</div>
+              <div className="flex flex-wrap gap-2">
+                {MEDIOS_DE_PAGO.map(({ valor, etiqueta }) => {
+                  const activo = mediosForm.includes(valor);
+                  return (
+                    <button
+                      key={valor}
+                      type="button"
+                      onClick={() => toggleMedioPago(valor)}
+                      className={`rounded-pill px-3.5 py-2 text-[13px] font-semibold ${
+                        activo ? "bg-primary text-white" : "border border-border bg-surface text-text"
+                      }`}
+                    >
+                      {etiqueta}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="text-[13px] font-semibold text-text">Horario de atención</div>
+              <div className="flex flex-col gap-2">
+                {horariosForm
+                  .slice()
+                  .sort((a, b) => a.diaSemana - b.diaSemana)
+                  .map((h) => {
+                    const cerrado = h.abre === null;
+                    return (
+                      <div
+                        key={h.diaSemana}
+                        className="flex flex-col gap-2 rounded-control border border-border bg-surface p-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[13px] font-semibold text-text">
+                            {DIAS_SEMANA[h.diaSemana]}
+                          </span>
+                          <label className="flex flex-shrink-0 items-center gap-1.5 text-[12px] text-text-2">
+                            <input
+                              type="checkbox"
+                              checked={cerrado}
+                              onChange={() => toggleDiaCerrado(h.diaSemana)}
+                            />
+                            Cerrado
+                          </label>
+                        </div>
+                        {!cerrado && (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="time"
+                              value={h.abre ?? ""}
+                              onChange={(e) => actualizarHora(h.diaSemana, "abre", e.target.value)}
+                              className="w-full min-w-0 rounded-control border border-border bg-bg px-2 py-1.5 text-[13px]"
+                            />
+                            <span className="flex-shrink-0 text-text-2">–</span>
+                            <input
+                              type="time"
+                              value={h.cierra ?? ""}
+                              onChange={(e) => actualizarHora(h.diaSemana, "cierra", e.target.value)}
+                              className="w-full min-w-0 rounded-control border border-border bg-bg px-2 py-1.5 text-[13px]"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}
+            {tiendaGuardada && (
+              <p className="text-[13px] font-semibold text-estado-entregado-text">
+                Cambios guardados.
+              </p>
+            )}
+
+            <Button type="submit" disabled={guardandoTienda}>
+              {guardandoTienda ? "Guardando..." : "Guardar cambios"}
+            </Button>
+
             <div className="rounded-control bg-estado-entregado-bg p-3 text-[13px] font-semibold text-estado-entregado-text">
               {tienda.activa ? "Tienda activa y visible en el mapa" : "Tienda pausada"}
             </div>
             <Button
+              type="button"
               variant="outline"
               onClick={async () => {
                 const actualizada = await apiPatch<Tienda>(`/api/tiendas/${tienda.id}`, {
@@ -212,7 +393,7 @@ export default function MiTiendaPage() {
             >
               {tienda.activa ? "Pausar tienda" : "Reactivar tienda"}
             </Button>
-          </div>
+          </form>
         )}
 
         {tab === "productos" && (
