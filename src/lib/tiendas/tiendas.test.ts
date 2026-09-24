@@ -7,6 +7,8 @@ import {
   obtenerTienda,
   obtenerTiendaPorVendedor,
   actualizarTienda,
+  horarioValido,
+  type HorarioTienda,
 } from "./tiendas";
 
 let contador = 0;
@@ -20,8 +22,18 @@ async function crearUsuarioDePrueba(): Promise<Usuario> {
 }
 
 async function limpiar(usuarioIds: string[]) {
+  await prisma.horarioTienda.deleteMany({ where: { tienda: { vendedorId: { in: usuarioIds } } } });
   await prisma.tienda.deleteMany({ where: { vendedorId: { in: usuarioIds } } });
   await prisma.usuario.deleteMany({ where: { id: { in: usuarioIds } } });
+}
+
+function semanaCompleta(overrides: Partial<Record<number, Partial<HorarioTienda>>> = {}): HorarioTienda[] {
+  return Array.from({ length: 7 }, (_, diaSemana) => ({
+    diaSemana,
+    abre: "09:00",
+    cierra: "21:00",
+    ...overrides[diaSemana],
+  }));
 }
 
 // Buenos Aires, Argentina (Obelisco) como referencia para las coordenadas de prueba.
@@ -102,6 +114,88 @@ describe("crearTienda", () => {
       })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "UBICACION_INVALIDA" });
   });
+
+  it("crea la tienda con mediosDePago y horarios cuando se mandan", async () => {
+    const tienda = await crearTienda(usuario, {
+      nombre: "Almacén Don José",
+      direccion: "Av. Siempre Viva 123",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+      mediosDePago: ["efectivo", "transferencia"],
+      horarios: semanaCompleta({ 0: { abre: null, cierra: null } }),
+    });
+
+    expect(tienda.mediosDePago.sort()).toEqual(["efectivo", "transferencia"].sort());
+    expect(tienda.horarios).toHaveLength(7);
+    const domingo = tienda.horarios.find((h) => h.diaSemana === 0);
+    expect(domingo).toMatchObject({ abre: null, cierra: null });
+    const lunes = tienda.horarios.find((h) => h.diaSemana === 1);
+    expect(lunes).toMatchObject({ abre: "09:00", cierra: "21:00" });
+  });
+
+  it("crea la tienda con mediosDePago=[] y horarios=[] por defecto si no se mandan", async () => {
+    const tienda = await crearTienda(usuario, {
+      nombre: "Almacén sin extras",
+      direccion: "Dirección",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+    });
+
+    expect(tienda.mediosDePago).toEqual([]);
+    expect(tienda.horarios).toEqual([]);
+  });
+
+  it("lanza HORARIO_INVALIDO si horarios no trae las 7 entradas", async () => {
+    await expect(
+      crearTienda(usuario, {
+        nombre: "Tienda inválida",
+        direccion: "Dirección",
+        lat: LAT_BASE,
+        lon: LON_BASE,
+        horarios: semanaCompleta().slice(0, 3),
+      })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "HORARIO_INVALIDO" });
+  });
+});
+
+describe("horarioValido", () => {
+  it("acepta una semana completa con todos los días abiertos", () => {
+    expect(horarioValido(semanaCompleta())).toBe(true);
+  });
+
+  it("acepta días cerrados (abre y cierra ambos null)", () => {
+    expect(horarioValido(semanaCompleta({ 0: { abre: null, cierra: null } }))).toBe(true);
+  });
+
+  it("rechaza si no vienen las 7 entradas", () => {
+    expect(horarioValido(semanaCompleta().slice(0, 6))).toBe(false);
+  });
+
+  it("rechaza diaSemana repetido", () => {
+    const horarios = semanaCompleta();
+    horarios[6] = { ...horarios[6], diaSemana: 0 };
+    expect(horarioValido(horarios)).toBe(false);
+  });
+
+  it("rechaza diaSemana fuera de 0-6", () => {
+    const horarios = semanaCompleta();
+    horarios[0] = { ...horarios[0], diaSemana: 7 };
+    expect(horarioValido(horarios)).toBe(false);
+  });
+
+  it("rechaza abre sin cierra (o viceversa)", () => {
+    expect(horarioValido(semanaCompleta({ 0: { cierra: null } }))).toBe(false);
+  });
+
+  it("rechaza formato de hora inválido", () => {
+    expect(horarioValido(semanaCompleta({ 0: { abre: "9:00" } }))).toBe(false);
+    expect(horarioValido(semanaCompleta({ 0: { abre: "25:00" } }))).toBe(false);
+  });
+
+  it("rechaza abre >= cierra en un día abierto", () => {
+    expect(horarioValido(semanaCompleta({ 0: { abre: "21:00", cierra: "09:00" } }))).toBe(false);
+    expect(horarioValido(semanaCompleta({ 0: { abre: "09:00", cierra: "09:00" } }))).toBe(false);
+  });
 });
 
 describe("buscarTiendasCercanas", () => {
@@ -154,6 +248,14 @@ describe("buscarTiendasCercanas", () => {
     }
   });
 
+  it("incluye horarios y mediosDePago en cada resultado", async () => {
+    const resultado = await buscarTiendasCercanas({ lat: LAT_BASE, lon: LON_BASE, radioKm: 5 });
+
+    const tiendaCercana = resultado.find((t) => t.nombre === "Tienda cercana");
+    expect(tiendaCercana?.mediosDePago).toEqual([]);
+    expect(tiendaCercana?.horarios).toEqual([]);
+  });
+
   it("usa radioKm=5 por defecto", async () => {
     const resultado = await buscarTiendasCercanas({ lat: LAT_BASE, lon: LON_BASE });
 
@@ -198,6 +300,22 @@ describe("obtenerTienda", () => {
     const encontrada = await obtenerTienda("00000000-0000-0000-0000-000000000000");
 
     expect(encontrada).toBeNull();
+  });
+
+  it("incluye horarios y mediosDePago de la tienda", async () => {
+    const creada = await crearTienda(usuario, {
+      nombre: "Mi tienda",
+      direccion: "Dirección",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+      mediosDePago: ["debito"],
+      horarios: semanaCompleta(),
+    });
+
+    const encontrada = await obtenerTienda(creada.id);
+
+    expect(encontrada?.mediosDePago).toEqual(["debito"]);
+    expect(encontrada?.horarios).toHaveLength(7);
   });
 });
 
@@ -277,5 +395,45 @@ describe("actualizarTienda", () => {
     await expect(
       actualizarTienda(dueno, "00000000-0000-0000-0000-000000000000", { nombre: "X" })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "TIENDA_NO_ENCONTRADA" });
+  });
+
+  it("reemplaza los horarios y medios de pago existentes", async () => {
+    const tienda = await crearTienda(dueno, {
+      nombre: "Tienda con horario",
+      direccion: "Dirección",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+      mediosDePago: ["efectivo"],
+      horarios: semanaCompleta(),
+    });
+
+    const actualizada = await actualizarTienda(dueno, tienda.id, {
+      mediosDePago: ["qr", "mercado_pago"],
+      horarios: semanaCompleta({ 0: { abre: null, cierra: null }, 6: { abre: null, cierra: null } }),
+    });
+
+    expect(actualizada.mediosDePago.sort()).toEqual(["mercado_pago", "qr"].sort());
+    expect(actualizada.horarios).toHaveLength(7);
+    expect(actualizada.horarios.find((h) => h.diaSemana === 0)).toMatchObject({
+      abre: null,
+      cierra: null,
+    });
+    expect(actualizada.horarios.find((h) => h.diaSemana === 6)).toMatchObject({
+      abre: null,
+      cierra: null,
+    });
+  });
+
+  it("lanza HORARIO_INVALIDO al actualizar con horarios incompletos", async () => {
+    const tienda = await crearTienda(dueno, {
+      nombre: "Tienda",
+      direccion: "Dirección",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+    });
+
+    await expect(
+      actualizarTienda(dueno, tienda.id, { horarios: semanaCompleta().slice(0, 2) })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "HORARIO_INVALIDO" });
   });
 });

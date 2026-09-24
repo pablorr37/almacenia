@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
       direccion: body.direccion,
       lat: body.lat,
       lon: body.lon,
+      mediosDePago: body.mediosDePago,
+      horarios: body.horarios,
     });
     return respuestaExitosa(tienda, 201);
   } catch (error) {

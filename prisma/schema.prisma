@@ -54,15 +54,40 @@ model Tienda {
   // GIST se agrega a mano en la migración generada (Prisma no lo declara solo).
   ubicacion     Unsupported("geography(Point, 4326)")
   activa        Boolean  @default(true)
+  mediosDePago  MedioPago[] @default([]) @map("medios_de_pago")
   creadaEn      DateTime @default(now()) @map("creada_en")
   actualizadaEn DateTime @default(now()) @updatedAt @map("actualizada_en")
 
-  vendedor  Usuario    @relation(fields: [vendedorId], references: [id])
+  vendedor  Usuario         @relation(fields: [vendedorId], references: [id])
   productos Producto[]
   pedidos   Pedido[]
   ventas    Venta[]
+  horarios  HorarioTienda[]
 
   @@map("tiendas")
+}
+
+enum MedioPago {
+  efectivo
+  transferencia
+  mercado_pago
+  debito
+  qr
+
+  @@map("medio_pago")
+}
+
+model HorarioTienda {
+  id        String  @id @default(uuid())
+  tiendaId  String  @map("tienda_id")
+  diaSemana Int     @map("dia_semana") // 0=domingo .. 6=sábado
+  abre      String? // "HH:mm", null si cerrado ese día
+  cierra    String? // "HH:mm", null si cerrado ese día
+
+  tienda Tienda @relation(fields: [tiendaId], references: [id])
+
+  @@unique([tiendaId, diaSemana])
+  @@map("horarios_tienda")
 }
 
 // ---------------------------------------------------------------------------

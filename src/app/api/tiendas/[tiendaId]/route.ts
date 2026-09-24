@@ -33,6 +33,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       lat: body.lat,
       lon: body.lon,
       activa: body.activa,
+      mediosDePago: body.mediosDePago,
+      horarios: body.horarios,
     });
     return respuestaExitosa(tienda);
   } catch (error) {

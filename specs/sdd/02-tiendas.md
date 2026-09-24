@@ -19,6 +19,24 @@ CREATE TABLE tiendas (
 );
 
 CREATE INDEX tiendas_ubicacion_gist_idx ON tiendas USING GIST (ubicacion);
+
+CREATE TYPE medio_pago AS ENUM (
+  'efectivo', 'transferencia', 'mercado_pago', 'debito', 'qr'
+);
+
+ALTER TABLE tiendas ADD COLUMN medios_de_pago medio_pago[] NOT NULL DEFAULT '{}';
+
+CREATE TABLE horarios_tienda (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tienda_id   UUID NOT NULL REFERENCES tiendas(id),
+  dia_semana  SMALLINT NOT NULL, -- 0=domingo .. 6=sábado
+  abre        TEXT, -- "HH:mm", NULL si cerrado ese día
+  cierra      TEXT, -- "HH:mm", NULL si cerrado ese día
+  CONSTRAINT dia_semana_valido CHECK (dia_semana BETWEEN 0 AND 6),
+  CONSTRAINT horarios_tienda_tienda_dia_key UNIQUE (tienda_id, dia_semana)
+);
+
+CREATE INDEX horarios_tienda_tienda_id_idx ON horarios_tienda (tienda_id);
 ```
 
 - `vendedor_id UNIQUE` implementa la relación 1:1 vendedor–tienda del MVP (ver
@@ -28,6 +46,15 @@ CREATE INDEX tiendas_ubicacion_gist_idx ON tiendas USING GIST (ubicacion);
   Haversine a mano en la aplicación.
 - `activa` permite que un vendedor oculte temporalmente su tienda del mapa sin
   borrarla (no hay borrado físico de tiendas en el MVP).
+- `medios_de_pago` es un array del enum `medio_pago` — una tienda puede aceptar
+  varios a la vez, sin tabla aparte (no hay atributos propios por medio de pago en
+  el MVP, un array alcanza).
+- `horarios_tienda` guarda **una fila por día de la semana** (0 a 6, siempre las 7
+  presentes para una tienda con horario cargado) — `abre`/`cierra` en formato
+  `"HH:mm"` como texto simple (no `TIME` de Postgres, para no lidiar con
+  zonas horarias/fechas ficticias del lado de la aplicación); ambos `NULL` en una
+  fila significa que la tienda está cerrada ese día. Una tienda recién creada
+  puede no tener filas de horario todavía (es opcional al crear/editar).
 
 ## Reglas de negocio
 
@@ -43,6 +70,19 @@ CREATE INDEX tiendas_ubicacion_gist_idx ON tiendas USING GIST (ubicacion);
 - Una tienda `activa = false` no aparece en las búsquedas del comprador
   (`GET /api/tiendas/cercanas`) pero sigue siendo editable por su dueño y sigue
   existiendo para el historial de ventas/pedidos ya realizados.
+- `horarios` es opcional tanto en `crearTienda` como en `actualizarTienda`; cuando
+  se manda, **tiene que traer exactamente las 7 entradas** (una por `diaSemana`,
+  0 a 6, sin repetidos) — no se permite mandar un subconjunto de días. Cada entrada
+  es `{ diaSemana, abre, cierra }`; si el día está cerrado, `abre` y `cierra` son
+  ambos `null`; si está abierto, ambos son un string `"HH:mm"` válido y `abre` tiene
+  que ser estrictamente anterior a `cierra` (no se contemplan horarios que cruzan la
+  medianoche, ej. locales 24hs se modelan con `abre`/`cierra` ambos `null` — "no
+  tiene horario de cierre" en la práctica se representa igual que "cerrado" a nivel
+  de dato; es la UI la que distingue "24 horas" de "cerrado" con un campo aparte si
+  hiciera falta más adelante, no forma parte de este MVP).
+- Al actualizar `horarios`, se reemplazan las 7 filas existentes por las nuevas (no
+  hay edición parcial de un solo día vía API — el cliente manda el estado completo
+  de la semana).
 
 ## Endpoints REST
 
@@ -54,7 +94,15 @@ de antemano — este endpoint es lo que lo activa).
 Request:
 
 ```ts
-{ nombre: string; descripcion?: string; direccion: string; lat: number; lon: number }
+{
+  nombre: string;
+  descripcion?: string;
+  direccion: string;
+  lat: number;
+  lon: number;
+  mediosDePago?: MedioPago[];
+  horarios?: Array<{ diaSemana: number; abre: string | null; cierra: string | null }>;
+}
 ```
 
 Response `201`: `{ data: Tienda }`
@@ -98,6 +146,14 @@ Response `200`: `{ data: Tienda }`.
 Ubicación: `src/lib/tiendas/`.
 
 ```ts
+type MedioPago = 'efectivo' | 'transferencia' | 'mercado_pago' | 'debito' | 'qr';
+
+interface HorarioTienda {
+  diaSemana: number; // 0=domingo .. 6=sábado
+  abre: string | null; // "HH:mm"
+  cierra: string | null;
+}
+
 interface Tienda {
   id: string;
   vendedorId: string;
@@ -107,6 +163,8 @@ interface Tienda {
   lat: number;
   lon: number;
   activa: boolean;
+  mediosDePago: MedioPago[];
+  horarios: HorarioTienda[]; // 0 o 7 entradas
 }
 
 interface CrearTiendaInput {
@@ -115,7 +173,14 @@ interface CrearTiendaInput {
   direccion: string;
   lat: number;
   lon: number;
+  mediosDePago?: MedioPago[];
+  horarios?: HorarioTienda[]; // si se manda, deben ser exactamente 7
 }
+
+// Valida la forma de `horarios`: exactamente 7 entradas, diaSemana 0-6 sin
+// repetidos, y por cada una: ambos null (cerrado) o ambos "HH:mm" válidos con
+// abre < cierra. Usada por crearTienda/actualizarTienda y testeada aislada.
+function horarioValido(horarios: HorarioTienda[]): boolean;
 
 // Crea la tienda y activa esVendedor=true en el usuario, en una única transacción
 // (llama internamente a activarVendedor de 01-auth.md).
@@ -142,6 +207,8 @@ interface ActualizarTiendaInput {
   lat?: number;
   lon?: number;
   activa?: boolean;
+  mediosDePago?: MedioPago[];
+  horarios?: HorarioTienda[]; // si se manda, reemplaza las 7 filas existentes
 }
 
 async function actualizarTienda(
@@ -160,3 +227,5 @@ async function actualizarTienda(
 | `TIENDA_NO_ENCONTRADA`       | `:id` no existe.                                                |
 | `NO_ES_DUENO_DE_TIENDA`      | El usuario autenticado intenta editar una tienda que no es la suya. |
 | `RADIO_INVALIDO`             | `radioKm` <= 0 o > 50 en la búsqueda por cercanía.              |
+| `HORARIO_INVALIDO`           | `horarios` no trae exactamente 7 entradas, `diaSemana` repetido o fuera de 0-6, formato de hora inválido, o `abre >= cierra` en un día abierto. |
+| `MEDIO_PAGO_INVALIDO`        | Algún valor de `mediosDePago` no es uno de los valores del enum `MedioPago` (el request llega como JSON sin tipar, hay que validarlo en runtime). |
