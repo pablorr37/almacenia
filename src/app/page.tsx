@@ -70,7 +70,12 @@ function MapaAutenticado() {
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-bg">
-      <div className="absolute inset-0">
+      {/* z-0 explícito (no "auto"): abre un contexto de apilamiento propio para
+          que los z-index internos de Leaflet (tiles, controles — hasta 700+ en
+          su CSS) no se comparen contra los de afuera (barra/sheet) y terminen
+          tapándolos. Sin esto el mapa "gana" siempre y captura los gestos de
+          drag/tap que deberían ir al bottom sheet. */}
+      <div className="absolute inset-0 z-0">
         {origen ? (
           <TiendaMap origen={origen} tiendas={tiendas} onSelect={() => {}} />
         ) : (
@@ -80,7 +85,7 @@ function MapaAutenticado() {
         )}
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 mx-auto flex max-w-md items-center justify-between px-5 pt-5">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 mx-auto flex max-w-md items-center justify-between px-5 pt-5">
         <span className="pointer-events-auto rounded-pill bg-surface/95 px-3.5 py-1.5 font-display text-[18px] font-bold text-primary-dark shadow-[0_1px_3px_rgba(32,26,21,0.1)]">
           Almacenia
         </span>
