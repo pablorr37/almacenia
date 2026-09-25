@@ -59,7 +59,8 @@ postgresql://<usuario>:<password>@<host-interno>:5432/<nombre-db>?schema=public
 ## 2.5. Storage S3-compatible para fotos (08-archivos.md)
 
 La subida de fotos (producto, tienda, perfil) necesita un bucket S3-compatible —
-sin esto, `POST /api/archivos/upload` va a fallar en cuanto se lo use.
+sin esto, `POST /api/archivos/upload` va a fallar en cuanto se lo use. Se crea a
+mano (no hay script para esto):
 
 1. En Coolify: **New Resource → Docker Image**, imagen `minio/minio` (requiere
    cuenta/login de Docker Hub para esa imagen — si no la tenés, cualquier otro
@@ -198,3 +199,16 @@ Con la app ya arriba, recorrido manual completo:
 Si algún paso falla, el error debería venir con un `code` (`SCREAMING_SNAKE_CASE`,
 ver `specs/sdd/00-overview.md`) en la respuesta de la API — eso dice exactamente qué
 regla de negocio no se cumplió, no hace falta adivinar por el mensaje.
+
+## 9. Promover una cuenta a admin
+
+No hay endpoint para esto a propósito (`01-auth.md`: `esAdmin` no se activa vía
+API). Con `DATABASE_URL` apuntando a la base de producción:
+
+```bash
+DATABASE_URL="<url de producción>" npx tsx scripts/crear-admin.ts admin@tu-dominio.com "una-password-fuerte"
+```
+
+Si el email ya existe, solo lo promueve (no toca su password). Con la cuenta
+promovida, entrá a `/admin` para ver métricas, verificaciones, usuarios,
+productos y ventas.

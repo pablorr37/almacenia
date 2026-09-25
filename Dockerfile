@@ -25,6 +25,10 @@ COPY --from=builder /app/.next/static ./.next/static
 # aparte junto con el schema/migraciones que necesita para saber qué aplicar.
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma7.config.ts ./prisma7.config.ts
+# prisma/seed.ts reutiliza funciones de src/lib (no las reimplementa) — se copia
+# la carpeta para poder seedear en runtime via RUN_SEED=true (ver docker-entrypoint.sh).
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 # La CLI de Prisma tiene su propio árbol de dependencias (no solo @prisma/*)
 # que el tracing de "standalone" no incluye por no importarse desde código —
 # se copia el node_modules completo encima (superset seguro de lo que ya
