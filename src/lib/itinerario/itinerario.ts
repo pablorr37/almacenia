@@ -64,7 +64,7 @@ export async function compararItems(input: CompararInput, ahora = new Date()): P
 
   const catalogo = await prisma.productoCatalogo.findMany({
     where: { id: { in: items.map((i) => i.catalogoId) } },
-    select: { id: true, nombre: true, marca: true },
+    select: { id: true, nombre: true, marca: true, unidad: true },
   });
   if (catalogo.length !== items.length) {
     throw new AppError("CATALOGO_NO_ENCONTRADO", "Algún producto de la lista no existe en el catálogo.");
@@ -101,7 +101,11 @@ export async function compararItems(input: CompararInput, ahora = new Date()): P
 
   const resultado = armarPlanes({
     origen: { lat: input.lat, lon: input.lon },
-    items: items.map((i) => ({ ...i, nombre: nombrePorId.get(i.catalogoId)! })),
+    items: items.map((i) => ({
+      ...i,
+      nombre: nombrePorId.get(i.catalogoId)!,
+      unidad: catalogo.find((c) => c.id === i.catalogoId)!.unidad,
+    })),
     tiendas,
     ofertas,
     costoKm: await obtenerConfig("itinerario.costo_km"),

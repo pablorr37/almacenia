@@ -1,6 +1,7 @@
 // Algoritmo puro de "Buscar y comparar", fase 1: precio + distancia en línea recta
 // (specs/sdd/15-itinerario.md). Sin DB: lo alimenta itinerario.ts.
 import type { EstadoApertura } from "@/lib/tiendas/horarios";
+import type { UnidadMedida } from "@/lib/productos/unidades";
 
 export const MAX_CANDIDATAS = 15;
 export const MAX_TIENDAS_POR_PLAN = 3;
@@ -71,6 +72,7 @@ export interface ItemPlan {
   productoId: string;
   nombre: string;
   cantidad: number;
+  unidad: UnidadMedida;
   precioUnitario: number;
   subtotal: number;
 }
@@ -85,7 +87,7 @@ export interface ParadaPlan {
 export interface PlanCompra {
   etiquetas: TipoPlan[];
   paradas: ParadaPlan[];
-  faltantes: Array<{ catalogoId: string; nombre: string; cantidad: number; motivo: MotivoFaltante }>;
+  faltantes: Array<{ catalogoId: string; nombre: string; cantidad: number; unidad: UnidadMedida; motivo: MotivoFaltante }>;
   cubiertos: number;
   totalItems: number;
   subtotal: number;
@@ -99,6 +101,7 @@ export interface FilaComparativa {
   catalogoId: string;
   nombre: string;
   cantidad: number;
+  unidad: UnidadMedida;
   ofertas: Array<{ tiendaId: string; precioUnitario: number; subtotal: number }>;
 }
 
@@ -106,6 +109,7 @@ export interface ItemAComparar {
   catalogoId: string;
   nombre: string;
   cantidad: number;
+  unidad?: UnidadMedida; // default 'unidad'
 }
 
 export interface ArmarPlanesInput {
@@ -197,6 +201,7 @@ export function armarPlanes(input: ArmarPlanesInput): {
     catalogoId: item.catalogoId,
     nombre: item.nombre,
     cantidad: item.cantidad,
+    unidad: item.unidad ?? "unidad",
     ofertas: tiendas
       .map((t) => ofertaDe(t.id, item.catalogoId))
       .filter((o): o is Oferta => Boolean(o))
@@ -242,7 +247,13 @@ export function armarPlanes(input: ArmarPlanesInput): {
         }
       }
       if (!elegida) {
-        faltantes.push({ catalogoId: item.catalogoId, nombre: item.nombre, cantidad: item.cantidad, motivo: motivoDe(item) });
+        faltantes.push({
+          catalogoId: item.catalogoId,
+          nombre: item.nombre,
+          cantidad: item.cantidad,
+          unidad: item.unidad ?? "unidad",
+          motivo: motivoDe(item),
+        });
         continue;
       }
       const lista = itemsPorTienda.get(elegida.tienda.id) ?? [];
@@ -251,6 +262,7 @@ export function armarPlanes(input: ArmarPlanesInput): {
         productoId: elegida.oferta.productoId,
         nombre: item.nombre,
         cantidad: item.cantidad,
+        unidad: item.unidad ?? "unidad",
         precioUnitario: elegida.oferta.precioUnitario,
         subtotal: redondear2(elegida.oferta.precioUnitario * item.cantidad),
       });

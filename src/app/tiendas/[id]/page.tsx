@@ -10,6 +10,8 @@ import { Toast } from "@/components/ui/Toast";
 import { formatoPuntos } from "@/components/ui/PuntosChip";
 import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
 import { useAhora } from "@/lib/hooks/useAhora";
+import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
+import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 
 type Tienda = {
   id: string;
@@ -39,6 +41,7 @@ type Producto = {
   precio: number;
   precioOferta: number | null;
   stock: number;
+  unidad: UnidadMedida;
 };
 
 type Sort = "precio_asc" | "precio_desc" | "alfabetico" | "mas_vendidos" | "rating";
@@ -159,19 +162,14 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
       .catch((err) => setError(err instanceof ApiError ? err.message : "Error al cargar el catálogo."));
   }, [id, q, categoria, precioMin, precioMax, sort, tab]);
 
-  const cantidadItems = Object.values(cart).reduce((a, b) => a + b, 0);
-  const total = Object.entries(cart).reduce((sum, [productoId, cantidad]) => sum + cantidad * (preciosCart[productoId] ?? 0), 0);
+  // Cantidad de productos distintos en el carrito (con kg no tiene sentido sumar).
+  const cantidadItems = Object.values(cart).filter((c) => c > 0).length;
+  const total =
+    Math.round(Object.entries(cart).reduce((sum, [productoId, cantidad]) => sum + cantidad * (preciosCart[productoId] ?? 0), 0) * 100) / 100;
 
-  function agregar(p: Producto) {
-    const actual = cart[p.id] ?? 0;
-    if (actual >= p.stock) return;
-    setCart({ ...cart, [p.id]: actual + 1 });
+  function cambiarCantidad(p: Producto, cantidad: number) {
+    setCart({ ...cart, [p.id]: cantidad });
     setPreciosCart({ ...preciosCart, [p.id]: p.precioOferta ?? p.precio });
-  }
-
-  function quitar(p: Producto) {
-    const actual = cart[p.id] ?? 0;
-    setCart({ ...cart, [p.id]: Math.max(0, actual - 1) });
   }
 
   async function confirmarPedido() {
@@ -326,40 +324,17 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
                   {p.precioOferta !== null && (
                     <span className="mr-1.5 text-text-2 line-through">{formatoARS(p.precio)}</span>
                   )}
-                  {formatoARS(precioMostrado)} · {p.stock} disponibles
+                  {formatoARS(precioMostrado)}
+                  {p.unidad === "kg" ? " / kg" : ""} · {formatearCantidad(p.unidad, p.stock)} disponibles
                 </div>
               </div>
-              {qty > 0 ? (
-                <div className="flex flex-shrink-0 animate-scale-in items-center gap-2">
-                  <button
-                    onClick={() => quitar(p)}
-                    aria-label="Quitar uno"
-                    className="press flex h-10 w-10 items-center justify-center rounded-control border border-border bg-surface text-base leading-none"
-                  >
-                    –
-                  </button>
-                  <span className="min-w-[14px] text-center text-sm font-semibold">{qty}</span>
-                  <button
-                    onClick={() => agregar(p)}
-                    aria-label="Agregar uno"
-                    className="press flex h-10 w-10 items-center justify-center rounded-control bg-primary text-white"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                      <path d="M7 1V13M1 7H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => agregar(p)}
-                  aria-label="Agregar al pedido"
-                  className="press flex h-11 w-11 flex-shrink-0 animate-scale-in items-center justify-center rounded-control bg-primary text-white"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M8 1V15M1 8H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </button>
-              )}
+              <SelectorCantidad
+                unidad={p.unidad}
+                valor={qty}
+                max={p.stock}
+                nombre={p.nombre}
+                onChange={(v) => cambiarCantidad(p, v)}
+              />
             </div>
           );
         })}
@@ -372,7 +347,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
             disabled={enviando}
             className="flex w-full items-center justify-between rounded-control bg-primary px-5 py-4 text-[15px] font-semibold text-white shadow-[0_4px_12px_rgba(14,107,92,0.25)] disabled:opacity-60"
           >
-            <span>{enviando ? "Enviando..." : `Confirmar pedido (${cantidadItems})`}</span>
+            <span>{enviando ? "Enviando..." : `Confirmar pedido (${cantidadItems} ${cantidadItems === 1 ? "producto" : "productos"})`}</span>
             <span>{formatoARS(total)}</span>
           </button>
         </div>

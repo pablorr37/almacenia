@@ -6,9 +6,15 @@ import { apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { BotonVolver } from "@/components/ui/BotonVolver";
 import { Toast } from "@/components/ui/Toast";
 import { DialogoNombre } from "@/components/ui/DialogoNombre";
+import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
+import { pasoDe, redondearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 
-type ProductoCatalogo = { id: string; nombre: string; marca: string | null; imagenUrl: string | null };
-type Item = { catalogoId: string; cantidad: number; producto: { nombre: string; marca: string | null; imagenUrl: string | null } };
+type ProductoCatalogo = { id: string; nombre: string; marca: string | null; imagenUrl: string | null; unidad: UnidadMedida };
+type Item = {
+  catalogoId: string;
+  cantidad: number;
+  producto: { nombre: string; marca: string | null; imagenUrl: string | null; unidad: UnidadMedida };
+};
 type Lista = { id: string; nombre: string; items: Item[] };
 
 // "Mi lista 26 sept": el nombre automático; si sigue así al guardar, se pide uno.
@@ -59,18 +65,26 @@ export function EditorLista({ listaId }: { listaId?: string }) {
   function agregar(p: ProductoCatalogo) {
     setItems((prev) =>
       prev.some((i) => i.catalogoId === p.id)
-        ? prev.map((i) => (i.catalogoId === p.id ? { ...i, cantidad: i.cantidad + 1 } : i))
-        : [...prev, { catalogoId: p.id, cantidad: 1, producto: { nombre: p.nombre, marca: p.marca, imagenUrl: p.imagenUrl } }]
+        ? prev.map((i) =>
+            i.catalogoId === p.id ? { ...i, cantidad: redondearCantidad(p.unidad, i.cantidad + pasoDe(p.unidad)) } : i
+          )
+        : [
+            ...prev,
+            {
+              catalogoId: p.id,
+              // Por kg arranca en un cuarto kilo (03-productos.md).
+              cantidad: p.unidad === "kg" ? 0.25 : 1,
+              producto: { nombre: p.nombre, marca: p.marca, imagenUrl: p.imagenUrl, unidad: p.unidad },
+            },
+          ]
     );
     setQ("");
     setResultados([]);
   }
 
-  function cambiarCantidad(catalogoId: string, delta: number) {
+  function cambiarCantidad(catalogoId: string, cantidad: number) {
     setItems((prev) =>
-      prev
-        .map((i) => (i.catalogoId === catalogoId ? { ...i, cantidad: i.cantidad + delta } : i))
-        .filter((i) => i.cantidad > 0)
+      prev.map((i) => (i.catalogoId === catalogoId ? { ...i, cantidad } : i)).filter((i) => i.cantidad > 0)
     );
   }
 
@@ -104,7 +118,6 @@ export function EditorLista({ listaId }: { listaId?: string }) {
     }
   }
 
-  const unidades = items.reduce((s, i) => s + i.cantidad, 0);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-bg">
@@ -153,7 +166,9 @@ export function EditorLista({ listaId }: { listaId?: string }) {
                 >
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-[14px] font-semibold text-text">{p.nombre}</span>
-                    {p.marca && <span className="text-[12px] text-text-2">{p.marca}</span>}
+                    <span className="text-[12px] text-text-2">
+                      {[p.marca, p.unidad === "kg" ? "se vende por kg" : null].filter(Boolean).join(" · ")}
+                    </span>
                   </span>
                   <span className="flex-shrink-0 text-[13px] font-semibold text-primary">+ Agregar</span>
                 </button>
@@ -188,25 +203,12 @@ export function EditorLista({ listaId }: { listaId?: string }) {
               <span className="truncate text-[14px] font-semibold text-text">{i.producto.nombre}</span>
               {i.producto.marca && <span className="text-[12px] text-text-2">{i.producto.marca}</span>}
             </div>
-            <div className="flex flex-shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => cambiarCantidad(i.catalogoId, -1)}
-                aria-label={i.cantidad === 1 ? `Quitar ${i.producto.nombre}` : `Uno menos de ${i.producto.nombre}`}
-                className="press flex h-10 w-10 items-center justify-center rounded-control border border-border bg-surface text-lg leading-none"
-              >
-                {i.cantidad === 1 ? "×" : "–"}
-              </button>
-              <span className="min-w-6 text-center text-[15px] font-semibold tabular-nums">{i.cantidad}</span>
-              <button
-                type="button"
-                onClick={() => cambiarCantidad(i.catalogoId, 1)}
-                aria-label={`Uno más de ${i.producto.nombre}`}
-                className="press flex h-10 w-10 items-center justify-center rounded-control bg-primary text-lg leading-none text-white"
-              >
-                +
-              </button>
-            </div>
+            <SelectorCantidad
+              unidad={i.producto.unidad}
+              valor={i.cantidad}
+              nombre={i.producto.nombre}
+              onChange={(v) => cambiarCantidad(i.catalogoId, v)}
+            />
           </div>
         ))}
         {error && (
@@ -218,7 +220,7 @@ export function EditorLista({ listaId }: { listaId?: string }) {
 
       <div className="sticky bottom-0 flex flex-col gap-2 border-t border-border bg-surface px-5 pb-6 pt-3">
         <span className="text-center text-[12px] text-text-2 tabular-nums">
-          {items.length} {items.length === 1 ? "producto" : "productos"} · {unidades} {unidades === 1 ? "unidad" : "unidades"}
+          {items.length} {items.length === 1 ? "producto" : "productos"}
         </span>
         <div className="flex gap-2">
           <button

@@ -8,6 +8,7 @@ import { BotonVolver } from "@/components/ui/BotonVolver";
 import { EstadoAperturaPill } from "@/components/ui/EstadoAperturaPill";
 import type { ResultadoComparacion } from "@/lib/itinerario/itinerario";
 import type { PlanCompra, TipoPlan } from "@/lib/itinerario/planes";
+import { formatearCantidad } from "@/lib/productos/unidades";
 import { Faltantes, AccionMotivo, textoMotivo, RADIOS_KM, type AccionesFaltante } from "@/components/listas/Faltantes";
 
 const MAX_TIENDAS = 3;
@@ -164,11 +165,11 @@ export default function CompararPage({ params }: { params: Promise<{ id: string 
               return (
                 <li key={cid} className="flex flex-col gap-1.5 text-[13px]">
                   <span>
-                    <strong>{fila?.nombre}:</strong> {motivo ? textoMotivo(motivo, radioKm, MAX_TIENDAS) : ""}
+                    <strong>{fila?.nombre}:</strong> {motivo ? textoMotivo(motivo, radioKm, MAX_TIENDAS, fila?.unidad) : ""}
                   </span>
                   {motivo && (
                     <span className="self-start">
-                      <AccionMotivo catalogoId={cid} motivo={motivo} acciones={acciones} />
+                      <AccionMotivo catalogoId={cid} motivo={motivo} acciones={acciones} unidad={fila?.unidad} />
                     </span>
                   )}
                 </li>
@@ -263,7 +264,7 @@ export default function CompararPage({ params }: { params: Promise<{ id: string 
                     {p.items.map((it) => (
                       <li key={it.catalogoId} className="flex justify-between gap-2 text-[13px]">
                         <span className="min-w-0 truncate">
-                          {it.cantidad}× {it.nombre}
+                          {formatearCantidad(it.unidad, it.cantidad)} · {it.nombre}
                         </span>
                         <span className="flex-shrink-0 text-text-2 tabular-nums">{formatoARS(it.subtotal)}</span>
                       </li>
@@ -280,12 +281,12 @@ export default function CompararPage({ params }: { params: Promise<{ id: string 
               {resultado.comparativa.map((f) => (
                 <div key={f.catalogoId} className="flex flex-col gap-1">
                   <span className="text-[13px] font-semibold">
-                    {f.cantidad}× {f.nombre}
+                    {formatearCantidad(f.unidad, f.cantidad)} · {f.nombre}
                   </span>
                   {f.ofertas.length === 0 ? (
                     <span className="text-[12px] text-text-2">
                       {resultado.motivos[f.catalogoId]
-                        ? textoMotivo(resultado.motivos[f.catalogoId], radioKm, MAX_TIENDAS)
+                        ? textoMotivo(resultado.motivos[f.catalogoId], radioKm, MAX_TIENDAS, f.unidad)
                         : "Sin ofertas cerca"}
                     </span>
                   ) : (
