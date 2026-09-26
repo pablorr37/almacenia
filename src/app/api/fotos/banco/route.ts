@@ -5,6 +5,8 @@ import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { respuestaExitosa, respuestaError } from "@/lib/api-response";
 import { AppError } from "@/lib/errors";
 
+const ESTADOS = ["pendiente", "aprobada", "rechazada"] as const;
+
 // 16-banco-fotos.md — búsqueda en el banco (visibilidad según rol y plan).
 export async function GET(request: NextRequest) {
   try {
@@ -15,6 +17,7 @@ export async function GET(request: NextRequest) {
     const resultado = await buscarEnBanco(usuario, sp.get("q") ?? "", {
       page: sp.get("page") ? Number(sp.get("page")) : undefined,
       pageSize: sp.get("pageSize") ? Number(sp.get("pageSize")) : undefined,
+      estado: ESTADOS.find((e) => e === sp.get("estado")),
     });
     return respuestaExitosa(resultado.data, 200, {
       page: resultado.page,

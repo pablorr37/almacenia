@@ -108,7 +108,7 @@ function raiz(palabra: string): string {
 }
 
 async function buscar(
-  visible: Prisma.Sql,
+  filtro: Prisma.Sql,
   texto: string,
   page: number,
   pageSize: number
@@ -127,7 +127,7 @@ async function buscar(
     SELECT id, puntaje, COUNT(*) OVER () AS total FROM (
       SELECT f.id, f.creada_en, ${puntaje} AS puntaje
       FROM fotos_banco f
-      WHERE ${visible}
+      WHERE ${filtro}
     ) AS s
     WHERE puntaje > 0
     ORDER BY puntaje DESC, creada_en DESC
@@ -143,14 +143,61 @@ async function buscar(
 export async function buscarEnBanco(
   usuario: Usuario,
   q: string,
-  paginacion: { page?: number; pageSize?: number }
+  paginacion: { page?: number; pageSize?: number; estado?: FotoBanco["estado"] }
 ): Promise<{ data: FotoBanco[]; page: number; pageSize: number; total: number }> {
   const page = paginacion.page && paginacion.page > 0 ? paginacion.page : 1;
   const pageSize =
     paginacion.pageSize && paginacion.pageSize > 0 ? Math.min(paginacion.pageSize, PAGE_SIZE_MAXIMO) : PAGE_SIZE_DEFAULT;
   const fuentes = fuentesVisibles(usuario, await planDe(usuario));
-  const { data, total } = await buscar(condicionVisible(usuario, fuentes), q, page, pageSize);
+  const visible = condicionVisible(usuario, fuentes);
+  const filtro = paginacion.estado
+    ? Prisma.sql`${visible} AND f.estado = ${paginacion.estado}::estado_foto`
+    : visible;
+  const { data, total } = await buscar(filtro, q, page, pageSize);
   return { data, page, pageSize, total };
+}
+
+// Lo que la UI necesita saber para armar el buscador (misma UI para todos).
+export async function permisosFotos(
+  usuario: Usuario
+): Promise<{ fuentes: Fuente[]; curador: boolean; puedeSubir: boolean }> {
+  const fuentes = fuentesVisibles(usuario, await planDe(usuario));
+  return { fuentes, curador: esCurador(usuario), puedeSubir: fuentes.includes("propias") };
+}
+
+// Curaduría (11-admin.md): entradas de catálogo sin foto, las más usadas primero.
+export async function catalogoSinFoto(
+  curador: Usuario,
+  input: { q?: string; page?: number; pageSize?: number }
+): Promise<{
+  data: Array<{ id: string; nombre: string; marca: string | null; tiendas: number }>;
+  page: number;
+  pageSize: number;
+  total: number;
+}> {
+  if (!esCurador(curador)) throw soloCuradores();
+  const page = input.page && input.page > 0 ? input.page : 1;
+  const pageSize = input.pageSize && input.pageSize > 0 ? Math.min(input.pageSize, PAGE_SIZE_MAXIMO) : PAGE_SIZE_DEFAULT;
+  const where = {
+    imagenUrl: null,
+    ...(input.q ? { nombre: { contains: input.q, mode: "insensitive" as const } } : {}),
+  };
+  const [entradas, total] = await Promise.all([
+    prisma.productoCatalogo.findMany({
+      where,
+      select: { id: true, nombre: true, marca: true, _count: { select: { productos: true } } },
+      orderBy: [{ productos: { _count: "desc" } }, { nombre: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.productoCatalogo.count({ where }),
+  ]);
+  return {
+    data: entradas.map((e) => ({ id: e.id, nombre: e.nombre, marca: e.marca, tiendas: e._count.productos })),
+    page,
+    pageSize,
+    total,
+  };
 }
 
 // Para el seed: la mejor foto aprobada (cualquier fuente) para un nombre de producto.

@@ -123,9 +123,22 @@ El seed nunca borra `fotos_banco`.
 
 ## Endpoints REST
 
-### `GET /api/fotos/banco?q=&page&pageSize`
+### `GET /api/fotos/banco?q=&estado=&page&pageSize`
 
-Requiere sesión. Paginado. Response `200`: `{ data: FotoBanco[]; page; pageSize; total }`.
+Requiere sesión. `estado` opcional (`pendiente|aprobada|rechazada`) filtra dentro
+de lo visible (la cola de pendientes de los curadores). Paginado. Response `200`:
+`{ data: FotoBanco[]; page; pageSize; total }`.
+
+### `GET /api/fotos/permisos`
+
+Requiere sesión. Response `200`:
+`{ data: { fuentes: Fuente[]; curador: boolean; puedeSubir: boolean } }` — con esto
+la UI decide qué pestañas y botones mostrar.
+
+### `GET /api/fotos/catalogo-sin-foto?q=&page&pageSize`
+
+Solo curadores. Entradas de catálogo sin foto, las que más tiendas venden primero.
+Response `200`: `{ data: Array<{ id; nombre; marca; tiendas }>; page; pageSize; total }`.
 
 ### `GET /api/fotos/web?q=`
 
@@ -184,6 +197,8 @@ function esCurador(usuario: Usuario): boolean;
 function fuentesVisibles(usuario: Usuario, plan: Plan | null): Fuente[]; // pura
 function normalizarEtiquetas(etiquetas: unknown): string[];           // pura
 async function buscarEnBanco(usuario: Usuario, q: string, paginacion): Promise<Paginado<FotoBanco>>;
+async function permisosFotos(usuario: Usuario): Promise<{ fuentes: Fuente[]; curador: boolean; puedeSubir: boolean }>;
+async function catalogoSinFoto(curador: Usuario, input: { q?: string; page?: number; pageSize?: number }): Promise<Paginado<{ id; nombre; marca; tiendas: number }>>;
 async function mejorFotoDelBanco(texto: string): Promise<FotoBanco | null>;
 async function aprobarFotoWeb(curador: Usuario, resultado: ResultadoWeb, etiquetas: string[], opciones?: { fetch?: typeof fetch; estado?: 'aprobada' | 'pendiente' }): Promise<FotoBanco>;
 async function subirFotoBanco(usuario: Usuario, archivo: { contentType: string; buffer: Buffer }, etiquetas: string[]): Promise<FotoBanco>;

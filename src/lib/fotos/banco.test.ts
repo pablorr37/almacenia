@@ -28,6 +28,8 @@ import {
   subirFotoBanco,
   revisarFoto,
   usarFoto,
+  permisosFotos,
+  catalogoSinFoto,
 } from "./banco";
 
 const JPG = { contentType: "image/jpeg", buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
@@ -338,5 +340,60 @@ describe("banco de fotos (DB)", () => {
       const foto = await aprobarFotoWeb(tester, resultadoWeb(44), ["tomate"], { fetch: fetchImagen });
       await expect(usarFoto(tester, foto.id, {} as { catalogoId: string })).rejects.toMatchObject({ code: "DESTINO_INVALIDO" });
     });
+  });
+});
+
+describe("permisos, filtro por estado y catálogo sin foto", () => {
+  const usuarios: string[] = [];
+  const catalogos: string[] = [];
+  let n = 0;
+  afterEach(async () => {
+    await prisma.fotoBanco.deleteMany({ where: { OR: [{ origenUrl: { contains: PREFIJO } }, { etiquetas: { has: PREFIJO } }] } });
+    await prisma.producto.deleteMany({ where: { catalogoId: { in: catalogos } } });
+    await prisma.productoCatalogo.deleteMany({ where: { id: { in: catalogos.splice(0) } } });
+    const ids = usuarios.splice(0);
+    await prisma.tienda.deleteMany({ where: { vendedorId: { in: ids } } });
+    await prisma.usuario.deleteMany({ where: { id: { in: ids } } });
+  });
+  async function usuario(flags: { esAdmin?: boolean; esTester?: boolean } = {}): Promise<Usuario> {
+    n += 1;
+    const u = await registrarUsuario({ email: `${PREFIJO}-p${n}@almacenia.test`, password: "password123", nombre: "U" });
+    usuarios.push(u.id);
+    await prisma.usuario.update({ where: { id: u.id }, data: flags });
+    return { ...u, ...flags };
+  }
+
+  it("permisosFotos resume fuentes, curador y si puede subir", async () => {
+    const tester = await usuario({ esTester: true });
+    const premium = await usuario();
+    const t = await crearTienda(premium, { nombre: "T", direccion: "D", lat: -31.5, lon: -68.5 });
+    await prisma.tienda.update({ where: { id: t.id }, data: { plan: "premium" } });
+    const comprador = await usuario();
+
+    expect(await permisosFotos(tester)).toEqual({ fuentes: ["web", "curado", "subidas", "propias"], curador: true, puedeSubir: true });
+    expect(await permisosFotos(premium)).toEqual({ fuentes: ["curado", "subidas", "propias"], curador: false, puedeSubir: true });
+    expect(await permisosFotos(comprador)).toEqual({ fuentes: ["curado"], curador: false, puedeSubir: false });
+  });
+
+  it("buscarEnBanco filtra por estado (cola de pendientes)", async () => {
+    const tester = await usuario({ esTester: true });
+    const tag = `est${Date.now()}`;
+    const pendiente = await guardarFotoWeb(resultadoWeb(50), [tag], { estado: "pendiente", fetch: fetchImagen });
+    await aprobarFotoWeb(tester, resultadoWeb(51), [tag], { fetch: fetchImagen });
+    const r = await buscarEnBanco(tester, tag, { estado: "pendiente" });
+    expect(r.data.map((f) => f.id)).toEqual([pendiente.id]);
+  });
+
+  it("catalogoSinFoto: solo curadores, entradas sin foto filtradas por q", async () => {
+    const tester = await usuario({ esTester: true });
+    const comprador = await usuario();
+    const sin = await prisma.productoCatalogo.create({ data: { nombre: `${PREFIJO} Sin foto` } });
+    const con = await prisma.productoCatalogo.create({ data: { nombre: `${PREFIJO} Con foto`, imagenUrl: "http://x.jpg" } });
+    catalogos.push(sin.id, con.id);
+
+    const r = await catalogoSinFoto(tester, { q: PREFIJO });
+    expect(r.data.map((c) => c.id)).toEqual([sin.id]);
+    expect(r.total).toBe(1);
+    await expect(catalogoSinFoto(comprador, {})).rejects.toMatchObject({ code: "SOLO_CURADORES" });
   });
 });

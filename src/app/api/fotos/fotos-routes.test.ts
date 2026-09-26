@@ -10,6 +10,8 @@ import { GET as getBanco, POST as postBanco } from "./banco/route";
 import { PATCH as patchFoto } from "./banco/[id]/route";
 import { POST as postUsar } from "./banco/[id]/usar/route";
 import { GET as getWeb } from "./web/route";
+import { GET as getPermisos } from "./permisos/route";
+import { GET as getSinFoto } from "./catalogo-sin-foto/route";
 
 vi.mock("@/lib/auth/session", () => ({ obtenerUsuarioActual: vi.fn() }));
 vi.mock("@/lib/fotos/banco", async (importOriginal) => {
@@ -21,6 +23,8 @@ vi.mock("@/lib/fotos/banco", async (importOriginal) => {
     subirFotoBanco: vi.fn(),
     revisarFoto: vi.fn(),
     usarFoto: vi.fn(),
+    permisosFotos: vi.fn(),
+    catalogoSinFoto: vi.fn(),
   };
 });
 vi.mock("@/lib/fotos/buscador-web", async (importOriginal) => ({
@@ -55,7 +59,14 @@ describe("GET /api/fotos/banco", () => {
     const res = await getBanco(json("http://l/api/fotos/banco?q=tomate&page=2&pageSize=10", "GET"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ data: [foto], page: 2, pageSize: 10, total: 11 });
-    expect(banco.buscarEnBanco).toHaveBeenCalledWith(usuario, "tomate", { page: 2, pageSize: 10 });
+    expect(banco.buscarEnBanco).toHaveBeenCalledWith(usuario, "tomate", { page: 2, pageSize: 10, estado: undefined });
+  });
+
+  it("pasa el filtro de estado si es válido", async () => {
+    sesion.mockResolvedValue(tester);
+    vi.mocked(banco.buscarEnBanco).mockResolvedValue({ data: [], page: 1, pageSize: 24, total: 0 });
+    await getBanco(json("http://l/api/fotos/banco?estado=pendiente", "GET"));
+    expect(banco.buscarEnBanco).toHaveBeenCalledWith(tester, "", { page: undefined, pageSize: undefined, estado: "pendiente" });
   });
 });
 
@@ -129,5 +140,25 @@ describe("PATCH /api/fotos/banco/:id y POST /usar", () => {
 
     vi.mocked(banco.usarFoto).mockRejectedValue(new AppError("CATALOGO_YA_TIENE_FOTO", "x"));
     expect((await postUsar(json("http://l/x", "POST", { catalogoId: "c1" }), params)).status).toBe(409);
+  });
+});
+
+describe("GET /api/fotos/permisos y /catalogo-sin-foto", () => {
+  it("permisos: 401 sin sesión, 200 con sesión", async () => {
+    sesion.mockResolvedValue(null);
+    expect((await getPermisos()).status).toBe(401);
+    sesion.mockResolvedValue(usuario);
+    vi.mocked(banco.permisosFotos).mockResolvedValue({ fuentes: ["curado"], curador: false, puedeSubir: false });
+    const res = await getPermisos();
+    expect(await res.json()).toEqual({ data: { fuentes: ["curado"], curador: false, puedeSubir: false } });
+  });
+
+  it("catálogo sin foto: paginado; 403 si no es curador", async () => {
+    sesion.mockResolvedValue(tester);
+    vi.mocked(banco.catalogoSinFoto).mockResolvedValue({ data: [], page: 1, pageSize: 24, total: 0 });
+    expect((await getSinFoto(json("http://l/api/fotos/catalogo-sin-foto?q=yerba", "GET"))).status).toBe(200);
+    expect(banco.catalogoSinFoto).toHaveBeenCalledWith(tester, { q: "yerba", page: undefined, pageSize: undefined });
+    vi.mocked(banco.catalogoSinFoto).mockRejectedValue(new AppError("SOLO_CURADORES", "x"));
+    expect((await getSinFoto(json("http://l/api/fotos/catalogo-sin-foto", "GET"))).status).toBe(403);
   });
 });
