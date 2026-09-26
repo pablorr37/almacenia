@@ -45,8 +45,11 @@ CREATE TABLE items_lista_compras (
   No hay límite de cantidad de listas.
 - Solo el dueño de una lista puede verla, editarla, borrarla o compararla —
   `LISTA_NO_ENCONTRADA` (404) para cualquier otro usuario, para no revelar que existe.
-- `nombre`: obligatorio, 1–80 caracteres (trim). Si la UI no pide nombre, usa
-  "Mi lista" + fecha.
+- `nombre`: obligatorio, 1–80 caracteres (trim). El editor muestra un campo
+  visible "Nombre de la lista", precargado con "Mi lista" + fecha. Si al tocar
+  **Guardar** o **Buscar y comparar** el nombre sigue siendo ese automático, la UI
+  pide uno en un diálogo (se puede dejar el automático). Desde "Mis listas" se
+  puede renombrar (`PATCH` con `nombre`).
 - Ítems: cada `catalogoId` debe existir; `cantidad` entero ≥ 1; sin `catalogoId`
   repetidos en la misma lista (si vienen repetidos en el request, se suman las
   cantidades). Máximo 100 ítems por lista.

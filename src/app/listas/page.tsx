@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { apiDelete, apiGetPaginado, ApiError } from "@/lib/api-client";
+import { apiDelete, apiGetPaginado, apiPatch, ApiError } from "@/lib/api-client";
+import { DialogoNombre } from "@/components/ui/DialogoNombre";
 import { BotonVolver } from "@/components/ui/BotonVolver";
 
 type ResumenLista = { id: string; nombre: string; cantidadItems: number; actualizadaEn: string };
@@ -13,6 +14,17 @@ export default function ListasPage() {
   const { status } = useSession();
   const [listas, setListas] = useState<ResumenLista[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [renombrando, setRenombrando] = useState<ResumenLista | null>(null);
+
+  async function renombrar(lista: ResumenLista, nombre: string) {
+    setRenombrando(null);
+    try {
+      await apiPatch(`/api/listas/${lista.id}`, { nombre });
+      setListas((prev) => prev?.map((l) => (l.id === lista.id ? { ...l, nombre } : l)) ?? null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No pudimos renombrar la lista.");
+    }
+  }
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -100,6 +112,16 @@ export default function ListasPage() {
             </Link>
             <button
               type="button"
+              onClick={() => setRenombrando(l)}
+              aria-label={`Renombrar ${l.nombre}`}
+              className="press flex h-10 w-10 items-center justify-center rounded-pill text-text-2"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" />
+              </svg>
+            </button>
+            <button
+              type="button"
               onClick={() => borrar(l.id)}
               aria-label={`Borrar ${l.nombre}`}
               className="press flex h-10 w-10 items-center justify-center rounded-pill text-text-2"
@@ -111,6 +133,15 @@ export default function ListasPage() {
           </li>
         ))}
       </ul>
+
+      <DialogoNombre
+        abierto={renombrando !== null}
+        titulo="Renombrar lista"
+        valorInicial={renombrando?.nombre ?? ""}
+        textoConfirmar="Guardar"
+        onConfirmar={(n) => renombrando && renombrar(renombrando, n)}
+        onCancelar={() => setRenombrando(null)}
+      />
     </div>
   );
 }
