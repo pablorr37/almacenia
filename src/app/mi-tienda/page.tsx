@@ -40,6 +40,7 @@ type Tienda = {
   plan: "free" | "premium";
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[];
+  abierto24hs: boolean;
 };
 
 const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -118,6 +119,7 @@ export default function MiTiendaPage() {
   const [descripcionForm, setDescripcionForm] = useState("");
   const [mediosForm, setMediosForm] = useState<MedioPago[]>([]);
   const [horariosForm, setHorariosForm] = useState<HorarioTienda[]>(horarioPorDefecto());
+  const [abierto24hsForm, setAbierto24hsForm] = useState(false);
   const [guardandoTienda, setGuardandoTienda] = useState(false);
   const [tiendaGuardada, setTiendaGuardada] = useState(false);
   const [solicitandoVerificacion, setSolicitandoVerificacion] = useState(false);
@@ -191,7 +193,15 @@ export default function MiTiendaPage() {
     setDescripcionForm(tienda.descripcion ?? "");
     setMediosForm(tienda.mediosDePago);
     setHorariosForm(tienda.horarios.length === 7 ? tienda.horarios : horarioPorDefecto());
+    setAbierto24hsForm(tienda.abierto24hs);
   }, [tienda]);
+
+  // Sin horarios ni 24 hs la tienda no aparece en "Solo abiertas ahora" y los
+  // compradores ven "Horario no informado" (02-tiendas.md): aviso persistente.
+  function irAHorarios() {
+    setTab("tienda");
+    setTimeout(() => document.getElementById("horarios")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
 
   function toggleMedioPago(medio: MedioPago) {
     setMediosForm((actual) =>
@@ -229,6 +239,7 @@ export default function MiTiendaPage() {
         descripcion: descripcionForm || undefined,
         mediosDePago: mediosForm,
         horarios: horariosForm,
+        abierto24hs: abierto24hsForm,
       });
       setTienda(actualizada);
       setTiendaGuardada(true);
@@ -347,6 +358,25 @@ export default function MiTiendaPage() {
         ))}
       </div>
 
+      {tienda.horarios.length === 0 && !tienda.abierto24hs && (
+        <div
+          role="status"
+          className="mx-5 mb-3 flex animate-fade-up flex-col gap-2 rounded-card border border-estado-pendiente-text/30 bg-estado-pendiente-bg p-3.5 text-estado-pendiente-text"
+        >
+          <p className="text-[13px] leading-snug">
+            <strong>Tu tienda no tiene horarios cargados:</strong> no aparece en &quot;Solo abiertas ahora&quot; y los
+            compradores ven &quot;Horario no informado&quot;.
+          </p>
+          <button
+            type="button"
+            onClick={irAHorarios}
+            className="press self-start rounded-pill bg-estado-pendiente-text px-3.5 py-2 text-[13px] font-semibold text-white"
+          >
+            Configurar horarios
+          </button>
+        </div>
+      )}
+
       <div className="flex-grow overflow-y-auto px-5 pb-6">
         {tab === "tienda" && (
           <form onSubmit={guardarTienda} className="flex flex-col gap-5">
@@ -399,9 +429,22 @@ export default function MiTiendaPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div id="horarios" className="flex scroll-mt-4 flex-col gap-2">
               <div className="text-[13px] font-semibold text-text">Horario de atención</div>
-              <div className="flex flex-col gap-2">
+              <label className="flex items-center justify-between gap-3 rounded-control border border-border bg-surface p-3">
+                <span className="flex flex-col">
+                  <span className="text-[14px] font-semibold text-text">Abierto las 24 hs</span>
+                  <span className="text-[12px] text-text-2">Todos los días, sin horario de cierre</span>
+                </span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={abierto24hsForm}
+                  onChange={(e) => setAbierto24hsForm(e.target.checked)}
+                  className="h-5 w-5 accent-[#0e6b5c]"
+                />
+              </label>
+              <div className={`flex flex-col gap-2 ${abierto24hsForm ? "hidden" : ""}`}>
                 {horariosForm
                   .slice()
                   .sort((a, b) => a.diaSemana - b.diaSemana)

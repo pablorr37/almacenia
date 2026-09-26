@@ -90,6 +90,13 @@ describe("compararItems / compararLista (15-itinerario.md)", () => {
     expect(r.tiendas.map((t) => t.id)).toEqual([a.tienda.id]);
   });
 
+  it("soloAbiertas incluye tiendas 24 hs aunque no tengan horarios", async () => {
+    await prisma.tienda.update({ where: { id: b.tienda.id }, data: { abierto24hs: true } });
+    const r = await compararItems({ items: ITEMS(), lat: LAT, lon: LON, soloAbiertas: true });
+    expect(r.tiendas.map((t) => t.id).sort()).toEqual([a.tienda.id, b.tienda.id].sort());
+    expect(r.tiendas.find((t) => t.id === b.tienda.id)!.estadoApertura).toEqual({ estado: "abierta", cierraA: null });
+  });
+
   it("usa el costo por km de la configuración", async () => {
     await prisma.configuracionSistema.create({ data: { clave: "itinerario.costo_km", valor: 0 } });
     const r = await compararItems({ items: ITEMS(), lat: LAT, lon: LON });

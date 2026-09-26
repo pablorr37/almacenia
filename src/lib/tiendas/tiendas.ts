@@ -30,6 +30,7 @@ export interface Tienda {
   plan: Plan;
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[];
+  abierto24hs: boolean;
 }
 
 export interface SolicitudVerificacion {
@@ -59,6 +60,7 @@ interface FilaTienda {
   // node-postgres no trae un parser por default para arrays de enums custom
   // (medio_pago[]) — llega como el literal crudo de Postgres, ej. "{efectivo,qr}".
   medios_de_pago: string;
+  abierto_24hs: boolean;
 }
 
 // Convierte el literal de array de Postgres ("{}", "{efectivo,qr}") a string[].
@@ -86,6 +88,7 @@ function aTienda(fila: FilaTienda, horarios: HorarioTienda[] = []): Tienda {
     plan: fila.plan,
     mediosDePago: parsearMediosDePago(fila.medios_de_pago),
     horarios,
+    abierto24hs: fila.abierto_24hs,
   };
 }
 
@@ -94,7 +97,7 @@ function aTienda(fila: FilaTienda, horarios: HorarioTienda[] = []): Tienda {
 const SELECT_TIENDA = Prisma.sql`
   SELECT
     id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-    imagen_url, rubro, verificada, plan, medios_de_pago,
+    imagen_url, rubro, verificada, plan, medios_de_pago, abierto_24hs,
     ST_Y(ubicacion::geometry) AS lat,
     ST_X(ubicacion::geometry) AS lon
   FROM tiendas
@@ -106,6 +109,12 @@ export function validarUbicacion(lat: number, lon: number): void {
   }
   if (typeof lon !== "number" || Number.isNaN(lon) || lon < -180 || lon > 180) {
     throw new AppError("UBICACION_INVALIDA", "La longitud debe ser un número entre -180 y 180.");
+  }
+}
+
+function validarAbierto24hs(valor: unknown): void {
+  if (valor !== undefined && typeof valor !== "boolean") {
+    throw new AppError("ABIERTO_24HS_INVALIDO", "abierto24hs debe ser true o false.");
   }
 }
 
@@ -174,11 +183,13 @@ export interface CrearTiendaInput {
   lon: number;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[];
+  abierto24hs?: boolean;
 }
 
 export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Promise<Tienda> {
   validarUbicacion(input.lat, input.lon);
   validarMediosDePago(input.mediosDePago);
+  validarAbierto24hs(input.abierto24hs);
   if (input.horarios !== undefined && !horarioValido(input.horarios)) {
     throw new AppError("HORARIO_INVALIDO", "Los horarios deben traer las 7 entradas de la semana.");
   }
@@ -195,7 +206,7 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
     // de la columna en Postgres — al insertar con SQL crudo hay que generarlo acá.
     const id = crypto.randomUUID();
     const filas = await tx.$queryRaw<FilaTienda[]>`
-      INSERT INTO tiendas (id, vendedor_id, nombre, descripcion, direccion, ubicacion, medios_de_pago)
+      INSERT INTO tiendas (id, vendedor_id, nombre, descripcion, direccion, ubicacion, medios_de_pago, abierto_24hs)
       VALUES (
         ${id},
         ${usuario.id},
@@ -203,11 +214,12 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
         ${input.descripcion ?? null},
         ${input.direccion},
         ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography,
-        ${mediosDePago}::medio_pago[]
+        ${mediosDePago}::medio_pago[],
+        ${input.abierto24hs ?? false}
       )
       RETURNING
         id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-        imagen_url, rubro, verificada, plan, medios_de_pago,
+        imagen_url, rubro, verificada, plan, medios_de_pago, abierto_24hs,
         ST_Y(ubicacion::geometry) AS lat,
         ST_X(ubicacion::geometry) AS lon
     `;
@@ -251,7 +263,7 @@ export async function buscarTiendasCercanas(
   const filas = await prisma.$queryRaw<Array<FilaTienda & { distancia_km: number }>>`
     SELECT
       id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-      imagen_url, rubro, verificada, plan, medios_de_pago,
+      imagen_url, rubro, verificada, plan, medios_de_pago, abierto_24hs,
       ST_Y(ubicacion::geometry) AS lat,
       ST_X(ubicacion::geometry) AS lon,
       ST_Distance(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography) / 1000 AS distancia_km
@@ -298,6 +310,7 @@ export interface ActualizarTiendaInput {
   rubro?: Categoria;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[];
+  abierto24hs?: boolean;
 }
 
 export async function actualizarTienda(
@@ -319,6 +332,7 @@ export async function actualizarTienda(
     validarUbicacion(lat, lon);
   }
   validarMediosDePago(input.mediosDePago);
+  validarAbierto24hs(input.abierto24hs);
   if (input.horarios !== undefined && !horarioValido(input.horarios)) {
     throw new AppError("HORARIO_INVALIDO", "Los horarios deben traer las 7 entradas de la semana.");
   }
@@ -347,11 +361,12 @@ export async function actualizarTienda(
         imagen_url = ${input.imagenUrl ?? actual.imagenUrl},
         rubro = ${input.rubro ?? actual.rubro}::categoria,
         medios_de_pago = ${mediosDePago}::medio_pago[],
+        abierto_24hs = ${input.abierto24hs ?? actual.abierto24hs},
         actualizada_en = now()
       WHERE id = ${tiendaId}
       RETURNING
         id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-        imagen_url, rubro, verificada, plan, medios_de_pago,
+        imagen_url, rubro, verificada, plan, medios_de_pago, abierto_24hs,
         ST_Y(ubicacion::geometry) AS lat,
         ST_X(ubicacion::geometry) AS lon
     `;

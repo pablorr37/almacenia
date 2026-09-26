@@ -170,7 +170,7 @@ function MapaAutenticado() {
                 <div className="truncate text-xs text-text-2 tabular-nums">
                   {t.direccion} · {t.distanciaKm.toFixed(1)} km
                 </div>
-                <EstadoAperturaPill estado={estadoApertura(t.horarios, ahora)} className="self-start" />
+                <EstadoAperturaPill estado={estadoApertura(t.horarios, ahora, { abierto24hs: t.abierto24hs })} className="self-start" />
               </div>
             </Link>
           ))}

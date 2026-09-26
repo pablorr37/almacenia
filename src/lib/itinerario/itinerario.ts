@@ -53,7 +53,7 @@ export async function compararItems(input: CompararInput, ahora = new Date()): P
       lon: t.lon,
       distanciaKm: t.distanciaKm,
       verificada: t.verificada,
-      estadoApertura: estadoApertura(t.horarios, ahora),
+      estadoApertura: estadoApertura(t.horarios, ahora, { abierto24hs: t.abierto24hs }),
     }))
     .filter((t) => !input.soloAbiertas || t.estadoApertura.estado === "abierta");
 

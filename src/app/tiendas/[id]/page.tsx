@@ -17,6 +17,7 @@ type Tienda = {
   direccion: string;
   verificada: boolean;
   horarios: HorarioTienda[];
+  abierto24hs?: boolean;
 };
 
 type Categoria =
@@ -205,7 +206,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
             )}
           </div>
           <div className="truncate text-[13px] text-text-2">{tienda?.direccion}</div>
-          {tienda && <EstadoAperturaPill estado={estadoApertura(tienda.horarios, ahora)} className="self-start" />}
+          {tienda && <EstadoAperturaPill estado={estadoApertura(tienda.horarios, ahora, { abierto24hs: tienda.abierto24hs })} className="self-start" />}
         </div>
         {/* El backend rechaza el check-in del dueño (CHECKIN_TIENDA_PROPIA). */}
         {tienda && status === "authenticated" && (

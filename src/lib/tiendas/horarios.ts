@@ -12,7 +12,7 @@ export interface HorarioTienda {
 
 export type EstadoApertura =
   | { estado: "desconocido" }
-  | { estado: "abierta"; cierraA: string }
+  | { estado: "abierta"; cierraA: string | null } // null = abierta las 24 hs
   | {
       estado: "cerrada";
       proximaApertura: { diaSemana: number; hora: string; enDias: number } | null;
@@ -37,9 +37,12 @@ export function horaLocal(fecha: Date, zona = ZONA_HORARIA_NEGOCIO): { diaSemana
 export function estadoApertura(
   horarios: HorarioTienda[],
   ahora: Date,
-  zona = ZONA_HORARIA_NEGOCIO
+  opciones: { abierto24hs?: boolean; zona?: string } = {}
 ): EstadoApertura {
+  // Locales 24 hs: siempre abiertos, los horarios no se miran (02-tiendas.md).
+  if (opciones.abierto24hs) return { estado: "abierta", cierraA: null };
   if (horarios.length === 0) return { estado: "desconocido" };
+  const zona = opciones.zona ?? ZONA_HORARIA_NEGOCIO;
 
   const porDia = new Map(horarios.map((h) => [h.diaSemana, h]));
   const { diaSemana: hoy, hora } = horaLocal(ahora, zona);
@@ -63,7 +66,9 @@ export function estadoApertura(
 
 export function textoEstadoApertura(estado: EstadoApertura): string {
   if (estado.estado === "desconocido") return "Horario no informado";
-  if (estado.estado === "abierta") return `Abierto · Cierra a las ${estado.cierraA}`;
+  if (estado.estado === "abierta") {
+    return estado.cierraA === null ? "Abierto las 24 hs" : `Abierto · Cierra a las ${estado.cierraA}`;
+  }
   const prox = estado.proximaApertura;
   if (!prox) return "Cerrado";
   if (prox.enDias === 0) return `Cerrado · Abre a las ${prox.hora}`;

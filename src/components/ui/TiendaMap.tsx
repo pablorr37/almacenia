@@ -18,6 +18,7 @@ export type TiendaMapa = {
   lon: number;
   distanciaKm: number;
   horarios: HorarioTienda[];
+  abierto24hs?: boolean;
   imagenUrl: string | null;
   verificada: boolean;
 };
@@ -84,7 +85,7 @@ export function TiendaMap({
   paddingInferior?: number;
 }) {
   const ahora = useAhora();
-  const estados = useMemo(() => tiendas.map((t) => estadoApertura(t.horarios, ahora)), [tiendas, ahora]);
+  const estados = useMemo(() => tiendas.map((t) => estadoApertura(t.horarios, ahora, { abierto24hs: t.abierto24hs })), [tiendas, ahora]);
   // Los íconos dependen solo de abierta/cerrada: recrearlos en cada tick del reloj
   // re-dispararía la animación de entrada de los pines.
   const firmaCerradas = estados.map((e) => (e.estado === "cerrada" ? "1" : "0")).join("");

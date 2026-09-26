@@ -50,12 +50,22 @@ function horarioCierraTemprano(): HorarioTienda[] {
 }
 
 function horario24hs(): HorarioTienda[] {
-  // Convención documentada en la spec: abre/cierra null también representa
-  // "abierto siempre" para un kiosco 24hs — se distingue en la UI, no en el dato.
-  return Array.from({ length: 7 }, (_, diaSemana) => ({ diaSemana, abre: null, cierra: null }));
+  // Los locales 24 hs se marcan con abierto24hs = true (02-tiendas.md), no con
+  // horarios: no se cargan filas de horario.
+  return [];
 }
 
 const HORARIOS = [horarioNormal, horarioConDomingoMedioDia, horarioCierraTemprano, horario24hs];
+
+// Solo los kioscos a los que les toca horario24hs son 24 hs; el resto de los rubros
+// que caen en ese turno del ciclo usan el horario normal.
+function es24hs(def: { rubro: string }, i: number): boolean {
+  return def.rubro === "kiosco" && elegir(HORARIOS, i) === horario24hs;
+}
+function horarioDeTienda(i: number): () => HorarioTienda[] {
+  const h = elegir(HORARIOS, i);
+  return h === horario24hs ? horarioNormal : h;
+}
 
 const COMBOS_MEDIOS_DE_PAGO: MedioPago[][] = [
   ["efectivo"],
@@ -278,7 +288,8 @@ async function main() {
       lat: def.lat,
       lon: def.lon,
       mediosDePago: elegir(COMBOS_MEDIOS_DE_PAGO, i),
-      horarios: elegir(HORARIOS, i)(),
+      horarios: es24hs(def, i) ? undefined : horarioDeTienda(i)(),
+      abierto24hs: es24hs(def, i),
     });
 
     // rubro/imagenUrl no son parte del alta (CrearTiendaInput), se completan con

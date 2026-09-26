@@ -20,6 +20,7 @@ type Tienda = {
   direccion: string;
   distanciaKm: number;
   horarios: HorarioTienda[];
+  abierto24hs?: boolean;
 };
 
 // Delay de entrada en ms, para la coreografía de la intro.
@@ -95,7 +96,7 @@ export function HomeInvitado() {
             <div className="flex min-w-0 flex-col gap-1">
               <div className="truncate text-[15px] font-semibold text-text">{t.nombre}</div>
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-text-2">
-                <EstadoAperturaPill estado={estadoApertura(t.horarios, ahora)} />
+                <EstadoAperturaPill estado={estadoApertura(t.horarios, ahora, { abierto24hs: t.abierto24hs })} />
               </div>
             </div>
           </Link>

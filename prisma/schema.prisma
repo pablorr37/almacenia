@@ -71,6 +71,7 @@ model Tienda {
   verificada     Boolean   @default(false)
   plan           Plan      @default(free)
   mediosDePago   MedioPago[] @default([]) @map("medios_de_pago")
+  abierto24hs    Boolean   @default(false) @map("abierto_24hs")
   creadaEn       DateTime  @default(now()) @map("creada_en")
   actualizadaEn  DateTime  @default(now()) @updatedAt @map("actualizada_en")
 

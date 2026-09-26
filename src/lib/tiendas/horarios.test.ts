@@ -82,7 +82,28 @@ describe("estadoApertura", () => {
   });
 });
 
+describe("estadoApertura con abierto24hs", () => {
+  it("24 hs: abierta a cualquier hora, sin horarios", () => {
+    for (const h of ["2026-09-26T03:00", "2026-09-27T23:30"]) {
+      expect(estadoApertura([], local(h), { abierto24hs: true })).toEqual({ estado: "abierta", cierraA: null });
+    }
+  });
+
+  it("24 hs ignora horarios que dirían cerrado", () => {
+    const horarios = Array.from({ length: 7 }, (_, diaSemana) => ({ diaSemana, abre: null, cierra: null }));
+    expect(estadoApertura(horarios, local("2026-09-26T12:00"), { abierto24hs: true }).estado).toBe("abierta");
+  });
+
+  it("sin el flag, los 7 días en null son cerrado", () => {
+    const horarios = Array.from({ length: 7 }, (_, diaSemana) => ({ diaSemana, abre: null, cierra: null }));
+    expect(estadoApertura(horarios, local("2026-09-26T12:00")).estado).toBe("cerrada");
+  });
+});
+
 describe("textoEstadoApertura", () => {
+  it("24 hs", () => {
+    expect(textoEstadoApertura({ estado: "abierta", cierraA: null })).toBe("Abierto las 24 hs");
+  });
   it("abierta", () => {
     expect(textoEstadoApertura({ estado: "abierta", cierraA: "21:00" })).toBe("Abierto · Cierra a las 21:00");
   });
