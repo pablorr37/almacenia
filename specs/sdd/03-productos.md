@@ -18,7 +18,7 @@ CREATE TABLE productos (
   precio         NUMERIC(12, 2) NOT NULL,
   precio_oferta  NUMERIC(12, 2),
   destacado      BOOLEAN NOT NULL DEFAULT false,
-  stock          INTEGER NOT NULL DEFAULT 0,
+  stock          NUMERIC(10, 3) NOT NULL DEFAULT 0, -- unidades o kg según catálogo
   disponible     BOOLEAN NOT NULL DEFAULT true,
   creado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
   actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -65,6 +65,26 @@ CREATE INDEX productos_categoria_idx ON productos (categoria);
   `stock > 0` pero pausar la publicación (`disponible = false`, ej. producto de
   temporada) sin perder el conteo. Un producto con `stock = 0` se considera no
   comprable aunque `disponible = true` (ver reglas).
+
+## Cantidades y unidades (venta por peso)
+
+La unidad de venta viene del producto de catálogo (`productos_catalogo.unidad`,
+`06-catalogo.md`):
+
+| `unidad` | Precio | Cantidades válidas (pedido, venta, lista, stock) | Se muestra |
+|---|---|---|---|
+| `'unidad'` | por unidad | enteros ≥ 1 (stock: entero ≥ 0) | "3 u." |
+| `'kg'` | **por kg** | múltiplos de 0,05 kg (50 g), ≥ 0,05 (stock: múltiplo de 0,05, ≥ 0) | "250 g", "1,5 kg" |
+
+- Todas las columnas de cantidad (`productos.stock`, `items_pedido.cantidad`,
+  `items_venta.cantidad`, `items_lista_compras.cantidad`) son `NUMERIC(10, 3)`.
+- Subtotal de una línea = precio × cantidad (para kg: precio por kg × kg), redondeado
+  a 2 decimales.
+- La validación es una función pura compartida, `validarCantidad(unidad, cantidad,
+  { permitirCero })` en `src/lib/productos/unidades.ts`; error `CANTIDAD_INVALIDA`
+  (`400`). `formatearCantidad(unidad, cantidad)` arma el texto para la UI.
+- La UI para productos por kg ofrece atajos de 100 g, 250 g, 500 g y 1 kg y un
+  paso de ±50 g.
 
 ## Reglas de negocio
 
@@ -249,6 +269,7 @@ async function debitarStock(productoId: string, cantidad: number): Promise<Produ
 | `PRODUCTO_NO_ENCONTRADO`    | `:id` no existe.                                                  |
 | `PRECIO_INVALIDO`           | `precio < 0`.                                                     |
 | `STOCK_INVALIDO`            | `stock < 0` (en creación o edición manual).                      |
+| `CANTIDAD_INVALIDA`         | Stock o cantidad que no respeta la unidad del producto (fracción en un producto por unidad, o no múltiplo de 50 g en uno por kg). |
 | `STOCK_INSUFICIENTE`        | `debitarStock` pide debitar más de lo disponible (usado por `ventas`). |
 | `PRECIO_OFERTA_INVALIDO`    | `precioOferta` negativo o mayor/igual a `precio`.                  |
 | `CATALOGO_NO_ENCONTRADO`    | `catalogoId` no existe (ver `06-catalogo.md`).                     |

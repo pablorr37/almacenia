@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
+import { BuscadorFotos, type DestinoFoto } from "@/components/fotos/BuscadorFotos";
 import { ValoracionCliente } from "@/components/ui/ValoracionCliente";
+import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { useCodigoBarras } from "@/lib/scanner/useCodigoBarras";
 
@@ -17,6 +19,7 @@ type ProductoCatalogo = {
   marca: string | null;
   codigoBarras: string | null;
   imagenUrl: string | null;
+  unidad: UnidadMedida;
 };
 
 type MedioPago = "efectivo" | "transferencia" | "mercado_pago" | "debito" | "qr";
@@ -70,6 +73,7 @@ type Producto = {
   imagenEfectiva: string | null;
   precio: number;
   stock: number;
+  unidad: UnidadMedida;
   disponible: boolean;
 };
 
@@ -114,6 +118,10 @@ export default function MiTiendaPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Unidad de venta de un producto NUEVO en el catálogo; si se adopta uno existente,
+  // manda la del catálogo (03-productos.md, "Cantidades y unidades").
+  const [unidadNueva, setUnidadNueva] = useState<UnidadMedida>("unidad");
+  const [errorProducto, setErrorProducto] = useState<string | null>(null);
 
   const [nombreForm, setNombreForm] = useState("");
   const [descripcionForm, setDescripcionForm] = useState("");
@@ -132,6 +140,8 @@ export default function MiTiendaPage() {
   const [resultadosCatalogo, setResultadosCatalogo] = useState<ProductoCatalogo[]>([]);
   const [catalogoSeleccionado, setCatalogoSeleccionado] = useState<ProductoCatalogo | null>(null);
   const [escaneando, setEscaneando] = useState(false);
+  // Buscador de fotos (16-banco-fotos.md): para qué producto y destino está abierto.
+  const [fotoPara, setFotoPara] = useState<{ producto: Producto; destino: DestinoFoto } | null>(null);
   const { videoRef, activo: scannerActivo, error: scannerError, iniciar: iniciarScanner, detener: detenerScanner } =
     useCodigoBarras(async (texto) => {
       setEscaneando(false);
@@ -278,19 +288,26 @@ export default function MiTiendaPage() {
   async function crearProducto(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!tienda) return;
-    const form = new FormData(e.currentTarget);
-    const nuevo = await apiPost<Producto>(`/api/tiendas/${tienda.id}/productos`, {
-      ...(catalogoSeleccionado
-        ? { catalogoId: catalogoSeleccionado.id }
-        : { nuevo: { nombre: busquedaCatalogo } }),
-      precio: Number(form.get("precio")),
-      stock: Number(form.get("stock")),
-    });
-    setProductos([...productos, nuevo]);
-    e.currentTarget.reset();
-    setBusquedaCatalogo("");
-    setCatalogoSeleccionado(null);
-    setResultadosCatalogo([]);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
+    setErrorProducto(null);
+    try {
+      const nuevo = await apiPost<Producto>(`/api/tiendas/${tienda.id}/productos`, {
+        ...(catalogoSeleccionado
+          ? { catalogoId: catalogoSeleccionado.id }
+          : { nuevo: { nombre: busquedaCatalogo, unidad: unidadNueva } }),
+        precio: Number(form.get("precio")),
+        stock: Number(form.get("stock")),
+      });
+      setProductos([...productos, nuevo]);
+      formEl.reset();
+      setBusquedaCatalogo("");
+      setCatalogoSeleccionado(null);
+      setResultadosCatalogo([]);
+      setUnidadNueva("unidad");
+    } catch (err) {
+      setErrorProducto(err instanceof ApiError ? err.message : "No se pudo agregar el producto.");
+    }
   }
 
   async function transicionar(pedidoId: string, accion: AccionPedido) {
@@ -528,7 +545,7 @@ export default function MiTiendaPage() {
               </span>
               {tienda.plan === "free" && (
                 <span className="text-[12px] text-text-2">
-                  Fotos hasta en 3 productos. Premium: fotos ilimitadas y prioridad en el mapa.
+                  Fotos del banco de Almacenia. Premium: fotos propias y prioridad en el mapa.
                 </span>
               )}
             </div>
@@ -663,10 +680,55 @@ export default function MiTiendaPage() {
                 </p>
               )}
 
-              <div className="flex gap-2">
-                <Input id="p-precio" name="precio" type="number" step="0.01" min="0" placeholder="Precio" required />
-                <Input id="p-stock" name="stock" type="number" min="0" placeholder="Stock" required />
-              </div>
+              {(() => {
+                const unidad = catalogoSeleccionado?.unidad ?? unidadNueva;
+                return (
+                  <>
+                    <div className="flex items-center gap-2 text-[13px]">
+                      <span className="font-semibold text-text">Se vende por</span>
+                      {(["unidad", "kg"] as const).map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          disabled={!!catalogoSeleccionado}
+                          aria-pressed={unidad === u}
+                          onClick={() => setUnidadNueva(u)}
+                          className={`press rounded-pill px-3 py-1.5 font-semibold disabled:opacity-70 ${
+                            unidad === u ? "bg-primary text-white" : "border border-border bg-surface text-text"
+                          }`}
+                        >
+                          {u === "kg" ? "kg (peso)" : "unidad"}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        id="p-precio"
+                        name="precio"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder={unidad === "kg" ? "Precio por kg" : "Precio"}
+                        required
+                      />
+                      <Input
+                        id="p-stock"
+                        name="stock"
+                        type="number"
+                        min="0"
+                        step={unidad === "kg" ? "0.05" : "1"}
+                        placeholder={unidad === "kg" ? "Stock (kg)" : "Stock"}
+                        required
+                      />
+                    </div>
+                  </>
+                );
+              })()}
+              {errorProducto && (
+                <p role="alert" className="text-[13px] text-estado-rechazado-text">
+                  {errorProducto}
+                </p>
+              )}
               <Button type="submit" variant="accent">
                 + Agregar producto
               </Button>
@@ -690,47 +752,36 @@ export default function MiTiendaPage() {
                 <div className="flex min-w-0 flex-grow flex-col gap-1">
                   <div className="text-[14px] font-semibold">{p.nombre}</div>
                   <div className="text-xs text-text-2">
-                    {formatoARS(p.precio)} · stock {p.stock}
+                    {formatoARS(p.precio)}
+                    {p.unidad === "kg" ? " / kg" : ""} · stock {formatearCantidad(p.unidad, p.stock)}
                   </div>
-                  {tienda?.plan === "premium" ? (
-                    <div className="flex flex-wrap gap-2">
-                      {/* Foto compartida del catálogo: premium puede cargarla si falta (06-catalogo.md). */}
-                      {!p.imagenCatalogoUrl && (
-                        <ImageUploadField
-                          tipo="catalogo"
-                          entidadId={p.catalogoId}
-                          valorActual={null}
-                          textoSubir="Foto del catálogo"
-                          onSubido={async (url) => {
-                            await apiPatch(`/api/catalogo/${p.catalogoId}/foto`, { imagenUrl: url });
-                            setProductos((prev) =>
-                              prev.map((x) =>
-                                x.catalogoId === p.catalogoId
-                                  ? { ...x, imagenCatalogoUrl: url, imagenEfectiva: x.imagenUrl ?? url }
-                                  : x,
-                              ),
-                            );
-                          }}
-                        />
-                      )}
-                      {/* Foto personalizada, visible solo en esta tienda (10-planes.md). */}
-                      <ImageUploadField
-                        tipo="producto"
-                        entidadId={p.id}
-                        valorActual={p.imagenUrl}
-                        textoSubir="Foto propia"
-                        onSubido={async (url) => {
-                          const actualizado = await apiPatch<Producto>(`/api/productos/${p.id}`, { imagenUrl: url });
-                          setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-text-2">
-                      {p.imagenCatalogoUrl ? "Foto del catálogo compartido" : "Sin foto en el catálogo"} · Fotos
-                      propias con <span className="font-semibold text-primary-dark">Premium</span>
-                    </span>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Foto compartida del catálogo: cualquier vendedor la elige del banco si falta (06-catalogo.md). */}
+                    {!p.imagenCatalogoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setFotoPara({ producto: p, destino: { catalogoId: p.catalogoId } })}
+                        className="press rounded-control border border-border bg-surface px-3 py-2 text-[12px] font-semibold text-text"
+                      >
+                        Buscar foto
+                      </button>
+                    )}
+                    {/* Foto personalizada, visible solo en esta tienda (10-planes.md). */}
+                    {tienda?.plan === "premium" ? (
+                      <button
+                        type="button"
+                        onClick={() => setFotoPara({ producto: p, destino: { productoId: p.id } })}
+                        className="press rounded-control border border-border bg-surface px-3 py-2 text-[12px] font-semibold text-text"
+                      >
+                        {p.imagenUrl ? "Cambiar foto propia" : "Foto propia"}
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-text-2">
+                        {p.imagenCatalogoUrl ? "Foto del catálogo compartido · " : ""}Fotos propias con{" "}
+                        <span className="font-semibold text-primary-dark">Premium</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <span
                   className={`rounded-pill px-2.5 py-1 text-[11px] font-bold ${
@@ -787,6 +838,29 @@ export default function MiTiendaPage() {
           </div>
         )}
       </div>
+
+      <BuscadorFotos
+        abierto={fotoPara !== null}
+        textoInicial={fotoPara?.producto.nombre ?? ""}
+        destino={fotoPara?.destino ?? null}
+        titulo={fotoPara && "productoId" in fotoPara.destino ? "Foto propia del producto" : "Foto del catálogo"}
+        onUsada={(url) => {
+          if (!fotoPara) return;
+          const { producto, destino } = fotoPara;
+          setProductos((prev) =>
+            prev.map((x) =>
+              "productoId" in destino
+                ? x.id === producto.id
+                  ? { ...x, imagenUrl: url, imagenEfectiva: url }
+                  : x
+                : x.catalogoId === producto.catalogoId
+                  ? { ...x, imagenCatalogoUrl: url, imagenEfectiva: x.imagenUrl ?? url }
+                  : x,
+            ),
+          );
+        }}
+        onCerrar={() => setFotoPara(null)}
+      />
     </div>
   );
 }

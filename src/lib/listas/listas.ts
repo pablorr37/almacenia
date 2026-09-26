@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import type { Categoria } from "@/generated-prisma/client";
+import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAXIMO = 100;
@@ -18,7 +19,7 @@ export interface ItemListaCompras {
   id: string;
   catalogoId: string;
   cantidad: number;
-  producto: { nombre: string; marca: string | null; imagenUrl: string | null; categoria: Categoria | null };
+  producto: { nombre: string; marca: string | null; imagenUrl: string | null; categoria: Categoria | null; unidad: UnidadMedida };
 }
 
 export interface ListaCompras {
@@ -39,7 +40,7 @@ export interface ResumenLista {
 
 const INCLUDE_ITEMS = {
   items: {
-    include: { catalogo: { select: { nombre: true, marca: true, imagenUrl: true, categoria: true } } },
+    include: { catalogo: { select: { nombre: true, marca: true, imagenUrl: true, categoria: true, unidad: true } } },
     orderBy: { catalogo: { nombre: "asc" as const } },
   },
 };
@@ -54,7 +55,7 @@ function aLista(lista: NonNullable<ListaDb>): ListaCompras {
     items: lista.items.map((i) => ({
       id: i.id,
       catalogoId: i.catalogoId,
-      cantidad: i.cantidad,
+      cantidad: Number(i.cantidad),
       producto: i.catalogo,
     })),
     creadaEn: lista.creadaEn.toISOString(),
@@ -65,7 +66,7 @@ function aLista(lista: NonNullable<ListaDb>): ListaCompras {
 function itemsInvalidos(): AppError {
   return new AppError(
     "ITEMS_LISTA_INVALIDOS",
-    `Los ítems deben ser hasta ${MAX_ITEMS} productos del catálogo con cantidad entera mayor a 0.`
+    `Los ítems deben ser hasta ${MAX_ITEMS} productos del catálogo con cantidad mayor a 0.`
   );
 }
 
@@ -76,8 +77,10 @@ export function normalizarItems(items: unknown): ItemListaInput[] {
   for (const item of items) {
     const { catalogoId, cantidad } = (item ?? {}) as Partial<ItemListaInput>;
     if (typeof catalogoId !== "string" || catalogoId.length === 0) throw itemsInvalidos();
-    if (typeof cantidad !== "number" || !Number.isInteger(cantidad) || cantidad < 1) throw itemsInvalidos();
-    porCatalogo.set(catalogoId, (porCatalogo.get(catalogoId) ?? 0) + cantidad);
+    // La forma de la cantidad (entera o kg de a 50 g) depende del producto y se
+    // valida contra el catálogo en verificarCatalogo.
+    if (typeof cantidad !== "number" || !Number.isFinite(cantidad) || cantidad <= 0) throw itemsInvalidos();
+    porCatalogo.set(catalogoId, Math.round(((porCatalogo.get(catalogoId) ?? 0) + cantidad) * 1000) / 1000);
   }
   if (porCatalogo.size > MAX_ITEMS) throw itemsInvalidos();
   return [...porCatalogo].map(([catalogoId, cantidad]) => ({ catalogoId, cantidad }));
@@ -94,10 +97,12 @@ function normalizarNombre(nombre: unknown): string {
 async function verificarCatalogo(items: ItemListaInput[]): Promise<void> {
   if (items.length === 0) return;
   const ids = items.map((i) => i.catalogoId);
-  const existentes = await prisma.productoCatalogo.count({ where: { id: { in: ids } } });
-  if (existentes !== ids.length) {
+  const existentes = await prisma.productoCatalogo.findMany({ where: { id: { in: ids } }, select: { id: true, unidad: true } });
+  if (existentes.length !== ids.length) {
     throw new AppError("CATALOGO_NO_ENCONTRADO", "Algún producto de la lista no existe en el catálogo.");
   }
+  const unidadPorId = new Map(existentes.map((e) => [e.id, e.unidad]));
+  for (const item of items) validarCantidad(unidadPorId.get(item.catalogoId)!, item.cantidad);
 }
 
 async function buscarListaPropia(comprador: Usuario, listaId: string) {

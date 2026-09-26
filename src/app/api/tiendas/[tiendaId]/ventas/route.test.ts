@@ -79,7 +79,7 @@ describe("/api/tiendas/[tiendaId]/ventas", () => {
       expect(body.data.origen).toBe("presencial");
 
       const actualizado = await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } });
-      expect(actualizado.stock).toBe(7);
+      expect(Number(actualizado.stock)).toBe(7);
     });
 
     it("409 STOCK_INSUFICIENTE si pide más de lo disponible", async () => {

@@ -25,7 +25,7 @@ CREATE TABLE items_lista_compras (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   lista_id     UUID NOT NULL REFERENCES listas_compras(id) ON DELETE CASCADE,
   catalogo_id  UUID NOT NULL REFERENCES productos_catalogo(id),
-  cantidad     INTEGER NOT NULL,
+  cantidad     NUMERIC(10, 3) NOT NULL, -- unidades o kg según el producto
   CONSTRAINT item_lista_cantidad_positiva CHECK (cantidad > 0),
   CONSTRAINT items_lista_compras_lista_catalogo_key UNIQUE (lista_id, catalogo_id)
 );
@@ -45,9 +45,12 @@ CREATE TABLE items_lista_compras (
   No hay límite de cantidad de listas.
 - Solo el dueño de una lista puede verla, editarla, borrarla o compararla —
   `LISTA_NO_ENCONTRADA` (404) para cualquier otro usuario, para no revelar que existe.
-- `nombre`: obligatorio, 1–80 caracteres (trim). Si la UI no pide nombre, usa
-  "Mi lista" + fecha.
-- Ítems: cada `catalogoId` debe existir; `cantidad` entero ≥ 1; sin `catalogoId`
+- `nombre`: obligatorio, 1–80 caracteres (trim). El editor muestra un campo
+  visible "Nombre de la lista", precargado con "Mi lista" + fecha. Si al tocar
+  **Guardar** o **Buscar y comparar** el nombre sigue siendo ese automático, la UI
+  pide uno en un diálogo (se puede dejar el automático). Desde "Mis listas" se
+  puede renombrar (`PATCH` con `nombre`).
+- Ítems: cada `catalogoId` debe existir; `cantidad` válida según la unidad del producto (entero ≥ 1, o kg en pasos de 50 g — `03-productos.md`); sin `catalogoId`
   repetidos en la misma lista (si vienen repetidos en el request, se suman las
   cantidades). Máximo 100 ítems por lista.
 - Actualizar ítems **reemplaza** la lista completa de ítems (como `horarios` en
@@ -127,6 +130,7 @@ function normalizarItems(items: unknown): ItemListaInput[];
 | Código                     | Cuándo                                                      |
 | --------------------------- | -------------------------------------------------------------|
 | `NOMBRE_LISTA_INVALIDO`     | `nombre` vacío o de más de 80 caracteres.                   |
-| `ITEMS_LISTA_INVALIDOS`     | `items` no es un array, `cantidad` no es entero ≥ 1, falta `catalogoId`, o más de 100 ítems. |
+| `ITEMS_LISTA_INVALIDOS`     | `items` no es un array, `cantidad` no es un número mayor a 0, falta `catalogoId`, o más de 100 ítems. |
 | `CATALOGO_NO_ENCONTRADO`    | Algún `catalogoId` no existe (`404`).                        |
+| `CANTIDAD_INVALIDA`         | La cantidad no respeta la unidad del producto (`03-productos.md`). |
 | `LISTA_NO_ENCONTRADA`       | La lista no existe o no es del usuario (`404`).              |

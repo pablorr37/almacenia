@@ -1,11 +1,50 @@
 // Algoritmo puro de "Buscar y comparar", fase 1: precio + distancia en línea recta
 // (specs/sdd/15-itinerario.md). Sin DB: lo alimenta itinerario.ts.
 import type { EstadoApertura } from "@/lib/tiendas/horarios";
+import type { UnidadMedida } from "@/lib/productos/unidades";
 
 export const MAX_CANDIDATAS = 15;
 export const MAX_TIENDAS_POR_PLAN = 3;
 
 export type TipoPlan = "una_tienda" | "mas_barato" | "equilibrado";
+
+// Por qué un ítem no está en un plan (15-itinerario.md §7).
+export type MotivoFaltante =
+  | { tipo: "limite_del_plan" }
+  | { tipo: "stock_insuficiente"; stockMaximo: number; tiendaStockMaximo: string }
+  | { tipo: "solo_cerradas"; cantidadTiendas: number }
+  | { tipo: "fuera_de_radio"; masCercanaKm: number }
+  | { tipo: "sin_oferta" };
+
+export interface DiagnosticoItem {
+  enRadio: Array<{ tiendaId: string; tiendaNombre: string; stock: number; abierta: boolean }>;
+  masCercanaFueraKm: number | null;
+}
+
+const DIAGNOSTICO_VACIO: DiagnosticoItem = { enRadio: [], masCercanaFueraKm: null };
+
+export function motivoFaltante(
+  cantidad: number,
+  diagnostico: DiagnosticoItem,
+  opciones: { tieneOfertaValida: boolean; soloAbiertas: boolean }
+): MotivoFaltante {
+  if (opciones.tieneOfertaValida) return { tipo: "limite_del_plan" };
+
+  const usables = opciones.soloAbiertas ? diagnostico.enRadio.filter((t) => t.abierta) : diagnostico.enRadio;
+  const cerradas = opciones.soloAbiertas ? diagnostico.enRadio.filter((t) => !t.abierta) : [];
+  const stockInsuficiente = (lista: DiagnosticoItem["enRadio"]): MotivoFaltante => {
+    const mejor = lista.reduce((m, t) => (t.stock > m.stock ? t : m));
+    return { tipo: "stock_insuficiente", stockMaximo: mejor.stock, tiendaStockMaximo: mejor.tiendaNombre };
+  };
+
+  if (usables.length > 0) return stockInsuficiente(usables);
+  if (cerradas.length > 0) {
+    const conStock = cerradas.filter((t) => t.stock >= cantidad);
+    return conStock.length > 0 ? { tipo: "solo_cerradas", cantidadTiendas: conStock.length } : stockInsuficiente(cerradas);
+  }
+  if (diagnostico.masCercanaFueraKm !== null) return { tipo: "fuera_de_radio", masCercanaKm: diagnostico.masCercanaFueraKm };
+  return { tipo: "sin_oferta" };
+}
 
 export interface Punto {
   lat: number;
@@ -33,6 +72,7 @@ export interface ItemPlan {
   productoId: string;
   nombre: string;
   cantidad: number;
+  unidad: UnidadMedida;
   precioUnitario: number;
   subtotal: number;
 }
@@ -47,7 +87,9 @@ export interface ParadaPlan {
 export interface PlanCompra {
   etiquetas: TipoPlan[];
   paradas: ParadaPlan[];
-  faltantes: Array<{ catalogoId: string; nombre: string; cantidad: number }>;
+  faltantes: Array<{ catalogoId: string; nombre: string; cantidad: number; unidad: UnidadMedida; motivo: MotivoFaltante }>;
+  cubiertos: number;
+  totalItems: number;
   subtotal: number;
   distanciaKm: number;
   costoDistancia: number;
@@ -59,6 +101,7 @@ export interface FilaComparativa {
   catalogoId: string;
   nombre: string;
   cantidad: number;
+  unidad: UnidadMedida;
   ofertas: Array<{ tiendaId: string; precioUnitario: number; subtotal: number }>;
 }
 
@@ -66,6 +109,7 @@ export interface ItemAComparar {
   catalogoId: string;
   nombre: string;
   cantidad: number;
+  unidad?: UnidadMedida; // default 'unidad'
 }
 
 export interface ArmarPlanesInput {
@@ -75,6 +119,8 @@ export interface ArmarPlanesInput {
   ofertas: Oferta[];
   costoKm: number;
   maxTiendas: number;
+  diagnosticos?: Record<string, DiagnosticoItem>;
+  soloAbiertas?: boolean;
 }
 
 const RADIO_TIERRA_KM = 6371;
@@ -136,6 +182,7 @@ export function armarPlanes(input: ArmarPlanesInput): {
   planes: PlanCompra[];
   comparativa: FilaComparativa[];
   sinOfertas: string[];
+  motivos: Record<string, MotivoFaltante>;
 } {
   const { origen, items, tiendas, costoKm } = input;
   const tiendasPorId = new Map(tiendas.map((t) => [t.id, t]));
@@ -154,6 +201,7 @@ export function armarPlanes(input: ArmarPlanesInput): {
     catalogoId: item.catalogoId,
     nombre: item.nombre,
     cantidad: item.cantidad,
+    unidad: item.unidad ?? "unidad",
     ofertas: tiendas
       .map((t) => ofertaDe(t.id, item.catalogoId))
       .filter((o): o is Oferta => Boolean(o))
@@ -165,13 +213,22 @@ export function armarPlanes(input: ArmarPlanesInput): {
       })),
   }));
   const sinOfertas = comparativa.filter((f) => f.ofertas.length === 0).map((f) => f.catalogoId);
+  const conOferta = new Set(comparativa.filter((f) => f.ofertas.length > 0).map((f) => f.catalogoId));
+  const motivoDe = (item: ItemAComparar): MotivoFaltante =>
+    motivoFaltante(item.cantidad, input.diagnosticos?.[item.catalogoId] ?? DIAGNOSTICO_VACIO, {
+      tieneOfertaValida: conOferta.has(item.catalogoId),
+      soloAbiertas: input.soloAbiertas ?? false,
+    });
+  const motivos: Record<string, MotivoFaltante> = Object.fromEntries(
+    items.filter((i) => !conOferta.has(i.catalogoId)).map((i) => [i.catalogoId, motivoDe(i)])
+  );
 
   const cobertura = (t: TiendaCandidata) => items.filter((i) => ofertaDe(t.id, i.catalogoId)).length;
   const candidatas = tiendas
     .filter((t) => cobertura(t) > 0)
     .sort((a, b) => cobertura(b) - cobertura(a) || a.distanciaKm - b.distanciaKm)
     .slice(0, MAX_CANDIDATAS);
-  if (candidatas.length === 0) return { planes: [], comparativa, sinOfertas };
+  if (candidatas.length === 0) return { planes: [], comparativa, sinOfertas, motivos };
 
   function evaluar(conjunto: TiendaCandidata[]): Evaluacion {
     const itemsPorTienda = new Map<string, ItemPlan[]>();
@@ -190,7 +247,13 @@ export function armarPlanes(input: ArmarPlanesInput): {
         }
       }
       if (!elegida) {
-        faltantes.push({ catalogoId: item.catalogoId, nombre: item.nombre, cantidad: item.cantidad });
+        faltantes.push({
+          catalogoId: item.catalogoId,
+          nombre: item.nombre,
+          cantidad: item.cantidad,
+          unidad: item.unidad ?? "unidad",
+          motivo: motivoDe(item),
+        });
         continue;
       }
       const lista = itemsPorTienda.get(elegida.tienda.id) ?? [];
@@ -199,6 +262,7 @@ export function armarPlanes(input: ArmarPlanesInput): {
         productoId: elegida.oferta.productoId,
         nombre: item.nombre,
         cantidad: item.cantidad,
+        unidad: item.unidad ?? "unidad",
         precioUnitario: elegida.oferta.precioUnitario,
         subtotal: redondear2(elegida.oferta.precioUnitario * item.cantidad),
       });
@@ -226,6 +290,8 @@ export function armarPlanes(input: ArmarPlanesInput): {
         distanciaKm: redondear2(recorrido.distanciaKm),
         costoDistancia,
         costoTotal: redondear2(subtotal + costoDistancia),
+        cubiertos: items.length - faltantes.length,
+        totalItems: items.length,
       },
       cubiertos: items.length - faltantes.length,
       clave: recorrido.orden.join(">"),
@@ -279,5 +345,5 @@ export function armarPlanes(input: ArmarPlanesInput): {
     planes.push(plan);
   }
 
-  return { planes, comparativa, sinOfertas };
+  return { planes, comparativa, sinOfertas, motivos };
 }

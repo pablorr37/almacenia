@@ -26,6 +26,8 @@ Módulos agregados después del MVP inicial:
     multi-tienda por precio + distancia. **Se implementa por fases según la
     infraestructura disponible** (fase 1 hecha; ver la spec y
     [`docs/roadmap-itinerario.md`](../../docs/roadmap-itinerario.md)).
+15. [`16-banco-fotos.md`](16-banco-fotos.md) — banco de fotos curado (búsqueda de
+    fotos libres en la web, aprobación por admin/testers, misma UI para todos).
 
 Todavía fuera de alcance (a especificar después): promociones, balance/reportes,
 entrega a domicilio (delivery), chat in-app, y las fases 2 a 6 del itinerario.

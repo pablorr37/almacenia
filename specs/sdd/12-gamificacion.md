@@ -69,6 +69,12 @@ CREATE TABLE visitas_pagina_tienda (
 Ejemplos de `venta_realizada`: arroz×1 + gaseosa×6 → `1 + 0.1·2 + 0.1·6 = 1.8`;
 caramelo×1 → `1.1`; yerba×2 + azúcar×3 → `1.2` (ninguna línea supera 3 unidades).
 
+**Productos por kg**: una línea por kg cuenta como 1 producto distinto (`D`), pero
+sus kilos **no** suman al bonus de unidades (`U`) ni al umbral de "más de 5
+unidades" de `compra_realizada` — ese bonus es para productos por unidad (si no,
+3,5 kg de papa darían 35 puntos). Una compra de un único producto por kg no
+puntúa por sí sola.
+
 Las líneas de una venta se agrupan por `productoId` antes de calcular (dos líneas
 del mismo producto cuentan como uno con la suma de cantidades).
 

@@ -63,8 +63,9 @@ Entrada: ítems `{ catalogoId, cantidad }[]`, origen `{ lat, lon }`, `radioKm`
      compararla con el ahorro de precio.
    - `costoTotal` = `subtotal + costoDistancia`.
 5. **Planes** (siempre se prioriza cubrir más ítems de la lista):
-   - `una_tienda` — "Todo en un lugar": |S| = 1; máx. cobertura, después menor
-     `costoTotal`.
+   - `una_tienda` — "Todo en un lugar" **solo si cubre toda la lista**; si le falta
+     algo, la UI lo muestra como "Una sola parada": |S| = 1; máx. cobertura, después
+     menor `costoTotal`.
    - `mas_barato` — "Precio más bajo": |S| ≤ `maxTiendas`; máx. cobertura, después
      menor `subtotal`, después menor `distanciaKm`.
    - `equilibrado` — "Mejor equilibrio": |S| ≤ `maxTiendas`; máx. cobertura, después
@@ -73,11 +74,29 @@ Entrada: ítems `{ catalogoId, cantidad }[]`, origen `{ lat, lon }`, `radioKm`
      ambas etiquetas.
    - `ahorroVsUnaTienda` = `subtotal(una_tienda) − subtotal(plan)` cuando ambos cubren
      la misma cantidad de ítems; si no, `null`.
+   - Cada plan informa su **cobertura** (`cubiertos` de `totalItems`); la UI muestra
+     "4 de 6 productos" o "Lista completa".
 6. **Comparativa**: por ítem, todas las ofertas encontradas ordenadas por precio
    (tabla producto × tienda para que el comprador vea los precios directamente).
+7. **Motivo de cada faltante.** Nunca se deja un ítem afuera sin explicar por qué.
+   Cada faltante de un plan (y cada ítem sin ninguna oferta) lleva un `motivo`,
+   calculado con un diagnóstico por ítem sobre los productos del catálogo
+   publicados (`disponible = true`) en las tiendas activas:
+
+   | `motivo` | Cuándo | Dato extra | Acción en la UI |
+   |---|---|---|---|
+   | `limite_del_plan` | Hay ofertas válidas en el radio, pero no entra en las ≤ `maxTiendas` paradas de **este** plan (el tope es del plan, no de la búsqueda). | — | "Este plan tiene un máximo de 3 paradas: mirá otro plan o la tabla por producto." |
+   | `stock_insuficiente` | Se vende en tiendas del radio (abiertas si aplica), pero ninguna tiene stock ≥ cantidad pedida. | `stockMaximo`, `tiendaStockMaximo` | "Hay hasta 2 u. en Almacén X" · "Pedir 2" (ajusta la cantidad y re-compara). |
+   | `solo_cerradas` | Con `soloAbiertas`: solo lo venden (con stock) tiendas del radio que están cerradas ahora. | `cantidadTiendas` | "Lo tienen 2 tiendas cerradas ahora" · "Incluir cerradas" (apaga el filtro). |
+   | `fuera_de_radio` | Ninguna tienda del radio lo vende, pero sí alguna más lejos (hasta 50 km). | `masCercanaKm` | "La más cercana está a 5,6 km" · "Ampliar a 10 km" (re-compara con el radio de la lista 1/2/5/10/20/50 km que la incluye). |
+   | `sin_oferta` | Ninguna tienda activa lo publica (o están a más de 50 km). | — | "Ninguna tienda cercana lo publica todavía." |
+
+   Prioridad cuando aplica más de uno: `limite_del_plan` solo si el ítem tiene
+   alguna oferta válida en el radio; si no, `stock_insuficiente` > `solo_cerradas`
+   > `fuera_de_radio` > `sin_oferta`.
 
 Si no hay ninguna oferta para ningún ítem, `planes = []` y todos los ítems van en
-`sinOfertas`.
+`sinOfertas`, cada uno con su motivo en `motivos`.
 
 ### Endpoints REST
 
@@ -98,6 +117,28 @@ Ubicación: `src/lib/itinerario/`.
 
 ```ts
 type TipoPlan = 'una_tienda' | 'mas_barato' | 'equilibrado';
+
+type MotivoFaltante =
+  | { tipo: 'limite_del_plan' }
+  | { tipo: 'stock_insuficiente'; stockMaximo: number; tiendaStockMaximo: string }
+  | { tipo: 'solo_cerradas'; cantidadTiendas: number }
+  | { tipo: 'fuera_de_radio'; masCercanaKm: number }
+  | { tipo: 'sin_oferta' };
+
+// Diagnóstico por ítem (lo arma itinerario.ts con la DB).
+interface DiagnosticoItem {
+  // Publicado en tiendas del radio: mayor stock y dónde, y si esa tienda está abierta.
+  enRadio: Array<{ tiendaId: string; tiendaNombre: string; stock: number; abierta: boolean }>;
+  masCercanaFueraKm: number | null; // tienda activa que lo publica fuera del radio (≤ 50 km)
+}
+
+// Pura. `tieneOfertaValida`: el ítem tiene alguna oferta válida en el radio (entonces
+// si falta en un plan, es por el límite de paradas).
+function motivoFaltante(
+  cantidad: number,
+  diagnostico: DiagnosticoItem,
+  opciones: { tieneOfertaValida: boolean; soloAbiertas: boolean }
+): MotivoFaltante;
 
 interface TiendaCandidata {
   id: string;
@@ -136,7 +177,9 @@ interface ParadaPlan {
 interface PlanCompra {
   etiquetas: TipoPlan[];
   paradas: ParadaPlan[];
-  faltantes: Array<{ catalogoId: string; nombre: string; cantidad: number }>;
+  faltantes: Array<{ catalogoId: string; nombre: string; cantidad: number; motivo: MotivoFaltante }>;
+  cubiertos: number;
+  totalItems: number;
   subtotal: number;
   distanciaKm: number;
   costoDistancia: number;
@@ -155,7 +198,8 @@ interface ResultadoComparacion {
   tiendas: TiendaCandidata[];
   comparativa: FilaComparativa[];
   planes: PlanCompra[];
-  sinOfertas: string[]; // catalogoIds sin ninguna oferta en el radio
+  sinOfertas: string[]; // catalogoIds sin ninguna oferta válida en el radio
+  motivos: Record<string, MotivoFaltante>; // motivo de cada ítem de sinOfertas
 }
 
 // --- Puras (sin DB) ---

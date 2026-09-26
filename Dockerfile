@@ -29,6 +29,9 @@ COPY --from=builder /app/prisma7.config.ts ./prisma7.config.ts
 # la carpeta para poder seedear en runtime via RUN_SEED=true (ver docker-entrypoint.sh).
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
+# Scripts de operación (p. ej. scripts/crear-admin.ts) para correr con
+# `docker exec … node_modules/.bin/tsx scripts/<script>.ts` (docs/deploy-coolify.md §9).
+COPY --from=builder /app/scripts ./scripts
 # La CLI de Prisma tiene su propio árbol de dependencias (no solo @prisma/*)
 # que el tracing de "standalone" no incluye por no importarse desde código —
 # se copia el node_modules completo encima (superset seguro de lo que ya

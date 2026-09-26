@@ -30,7 +30,7 @@ CREATE TABLE items_pedido (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   pedido_id   UUID NOT NULL REFERENCES pedidos(id),
   producto_id UUID NOT NULL REFERENCES productos(id),
-  cantidad    INTEGER NOT NULL,
+  cantidad    NUMERIC(10, 3) NOT NULL, -- unidades o kg (ver 03-productos.md, "Cantidades y unidades")
   precio_unitario NUMERIC(12, 2) NOT NULL, -- copia del precio del producto al momento del pedido
   CONSTRAINT cantidad_positiva CHECK (cantidad > 0)
 );

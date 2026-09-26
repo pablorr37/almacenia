@@ -1,4 +1,12 @@
-import { distanciaHaversineKm, ordenarRecorrido, armarPlanes, type TiendaCandidata, type Oferta } from "./planes";
+import {
+  distanciaHaversineKm,
+  ordenarRecorrido,
+  armarPlanes,
+  motivoFaltante,
+  type TiendaCandidata,
+  type Oferta,
+  type DiagnosticoItem,
+} from "./planes";
 
 // Tiendas sobre un mismo meridiano al norte del origen: 0,01° de latitud ≈ 1,112 km.
 const ORIGEN = { lat: 0, lon: 0 };
@@ -146,5 +154,95 @@ describe("armarPlanes (15-itinerario.md, fase 1)", () => {
     });
     const yerbaA = comparativa.find((f) => f.catalogoId === "yerba")!.ofertas.filter((o) => o.tiendaId === "A");
     expect(yerbaA).toEqual([{ tiendaId: "A", precioUnitario: 70, subtotal: 70 }]);
+  });
+});
+
+describe("motivoFaltante (15-itinerario.md §7)", () => {
+  const sinNada: DiagnosticoItem = { enRadio: [], masCercanaFueraKm: null };
+  const opts = { tieneOfertaValida: false, soloAbiertas: false };
+
+  it("limite_del_plan si el ítem tiene oferta válida en el radio", () => {
+    expect(motivoFaltante(1, sinNada, { ...opts, tieneOfertaValida: true })).toEqual({ tipo: "limite_del_plan" });
+  });
+
+  it("stock_insuficiente con el stock máximo y la tienda", () => {
+    const d: DiagnosticoItem = {
+      enRadio: [
+        { tiendaId: "a", tiendaNombre: "Almacén A", stock: 1, abierta: true },
+        { tiendaId: "b", tiendaNombre: "Almacén B", stock: 2, abierta: true },
+      ],
+      masCercanaFueraKm: null,
+    };
+    expect(motivoFaltante(3, d, opts)).toEqual({ tipo: "stock_insuficiente", stockMaximo: 2, tiendaStockMaximo: "Almacén B" });
+  });
+
+  it("solo_cerradas: con soloAbiertas, solo lo tienen tiendas cerradas con stock", () => {
+    const d: DiagnosticoItem = {
+      enRadio: [
+        { tiendaId: "a", tiendaNombre: "A", stock: 5, abierta: false },
+        { tiendaId: "b", tiendaNombre: "B", stock: 9, abierta: false },
+      ],
+      masCercanaFueraKm: 8,
+    };
+    expect(motivoFaltante(1, d, { ...opts, soloAbiertas: true })).toEqual({ tipo: "solo_cerradas", cantidadTiendas: 2 });
+  });
+
+  it("stock_insuficiente gana a solo_cerradas si hay abiertas con poco stock", () => {
+    const d: DiagnosticoItem = {
+      enRadio: [
+        { tiendaId: "a", tiendaNombre: "A", stock: 1, abierta: true },
+        { tiendaId: "b", tiendaNombre: "B", stock: 9, abierta: false },
+      ],
+      masCercanaFueraKm: null,
+    };
+    expect(motivoFaltante(2, d, { ...opts, soloAbiertas: true })).toMatchObject({ tipo: "stock_insuficiente", stockMaximo: 1 });
+  });
+
+  it("fuera_de_radio con la distancia de la más cercana", () => {
+    expect(motivoFaltante(1, { enRadio: [], masCercanaFueraKm: 5.6 }, opts)).toEqual({ tipo: "fuera_de_radio", masCercanaKm: 5.6 });
+  });
+
+  it("sin_oferta si nadie lo publica", () => {
+    expect(motivoFaltante(1, sinNada, opts)).toEqual({ tipo: "sin_oferta" });
+  });
+});
+
+describe("armarPlanes: cobertura y motivos", () => {
+  const base = { origen: ORIGEN, tiendas: [A, B, C], ofertas: OFERTAS, maxTiendas: 3, costoKm: 100 };
+
+  it("cada plan informa cubiertos/totalItems", () => {
+    const { planes } = armarPlanes({ ...base, items: ITEMS });
+    const una = planes.find((p) => p.etiquetas.includes("una_tienda"))!;
+    expect(una).toMatchObject({ cubiertos: 3, totalItems: 3 });
+  });
+
+  it("faltante por el límite de paradas del plan -> limite_del_plan", () => {
+    // Con 1 parada máx., el plan de A no puede incluir nada de B/C; con items que solo
+    // tiene C, falta por el límite.
+    const items = [...ITEMS, { catalogoId: "leche", nombre: "Leche", cantidad: 1 }];
+    const ofertas = [...OFERTAS, oferta("C", "leche", 10)];
+    const { planes } = armarPlanes({ ...base, items, ofertas, maxTiendas: 1 });
+    const falta = planes[0].faltantes.find((f) => f.catalogoId === "leche")!;
+    expect(falta.motivo).toEqual({ tipo: "limite_del_plan" });
+    expect(planes[0]).toMatchObject({ cubiertos: 3, totalItems: 4 });
+  });
+
+  it("ítem sin ofertas: usa el diagnóstico (fuera_de_radio) en faltantes y en motivos", () => {
+    const items = [...ITEMS, { catalogoId: "queso", nombre: "Queso", cantidad: 1 }];
+    const r = armarPlanes({
+      ...base,
+      items,
+      diagnosticos: { queso: { enRadio: [], masCercanaFueraKm: 5.6 } },
+    });
+    expect(r.motivos.queso).toEqual({ tipo: "fuera_de_radio", masCercanaKm: 5.6 });
+    expect(r.planes[0].faltantes.find((f) => f.catalogoId === "queso")!.motivo).toEqual({
+      tipo: "fuera_de_radio",
+      masCercanaKm: 5.6,
+    });
+  });
+
+  it("sin diagnóstico, un ítem sin ofertas es sin_oferta", () => {
+    const r = armarPlanes({ ...base, items: [...ITEMS, { catalogoId: "cafe", nombre: "Café", cantidad: 1 }] });
+    expect(r.motivos.cafe).toEqual({ tipo: "sin_oferta" });
   });
 });

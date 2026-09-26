@@ -4,7 +4,7 @@ import { registrarUsuario, type Usuario } from "@/lib/auth/auth";
 import { crearTienda, type Tienda } from "@/lib/tiendas/tiendas";
 import { crearProducto } from "@/lib/productos/productos";
 import { crearVentaPresencial } from "@/lib/ventas/ventas";
-import { listarUsuarios } from "./usuarios";
+import { listarUsuarios, marcarTester } from "./usuarios";
 
 let contador = 0;
 async function crearAdmin(): Promise<Usuario> {
@@ -140,6 +140,36 @@ describe("listarUsuarios", () => {
     } finally {
       await limpiar([admin.id, vendedor.id, comprador.id]);
       await prisma.productoCatalogo.deleteMany({ where: { id: producto.catalogoId } });
+    }
+  });
+});
+
+describe("marcarTester", () => {
+  it("el admin marca y desmarca a un usuario como tester", async () => {
+    const admin = await crearAdmin();
+    const comprador = await crearComprador();
+    try {
+      const marcado = await marcarTester(admin, comprador.id, true);
+      expect(marcado).toMatchObject({ id: comprador.id, esTester: true, tienda: null });
+      expect((await marcarTester(admin, comprador.id, false)).esTester).toBe(false);
+    } finally {
+      await limpiar([admin.id, comprador.id]);
+    }
+  });
+
+  it("FORBIDDEN si no es admin; ES_TESTER_INVALIDO; USUARIO_NO_ENCONTRADO", async () => {
+    const admin = await crearAdmin();
+    const comprador = await crearComprador();
+    try {
+      await expect(marcarTester(comprador, admin.id, true)).rejects.toMatchObject<Partial<AppError>>({ code: "FORBIDDEN" });
+      await expect(marcarTester(admin, comprador.id, "si" as unknown as boolean)).rejects.toMatchObject<Partial<AppError>>({
+        code: "ES_TESTER_INVALIDO",
+      });
+      await expect(marcarTester(admin, crypto.randomUUID(), true)).rejects.toMatchObject<Partial<AppError>>({
+        code: "USUARIO_NO_ENCONTRADO",
+      });
+    } finally {
+      await limpiar([admin.id, comprador.id]);
     }
   });
 });

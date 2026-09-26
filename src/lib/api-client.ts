@@ -79,3 +79,9 @@ export async function apiUpload<T>(path: string, archivo: File): Promise<T> {
   const res = await fetch(path, { method: "POST", body: form });
   return parse<T>(res);
 }
+
+// Multipart con campos extra (p. ej. etiquetas del banco de fotos, 16-banco-fotos.md).
+export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(path, { method: "POST", body: form });
+  return parse<T>(res);
+}

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import { esComprable } from "@/lib/productos/productos";
+import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { crearVentaDesdePedido } from "@/lib/ventas/ventas";
 import type { Usuario } from "@/lib/auth/auth";
 import type { Pedido as PedidoDb, ItemPedido as ItemPedidoDb, Producto as ProductoDb } from "@/generated-prisma/client";
@@ -41,7 +42,7 @@ function aPedido(pedido: PedidoConItems): Pedido {
   const items = pedido.items.map((item) => ({
     id: item.id,
     productoId: item.productoId,
-    cantidad: item.cantidad,
+    cantidad: Number(item.cantidad),
     precioUnitario: Number(item.precioUnitario),
   }));
 
@@ -52,7 +53,7 @@ function aPedido(pedido: PedidoConItems): Pedido {
     estado: pedido.estado,
     nota: pedido.nota,
     items,
-    total: items.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0),
+    total: Math.round(items.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0) * 100) / 100,
   };
 }
 
@@ -91,18 +92,23 @@ export async function crearPedido(comprador: Usuario, input: CrearPedidoInput): 
   }
 
   const productoIds = input.items.map((item) => item.productoId);
-  const productos = await prisma.producto.findMany({ where: { id: { in: productoIds } } });
-  const productosPorId = new Map<string, ProductoDb>(productos.map((p) => [p.id, p]));
+  const productos = await prisma.producto.findMany({
+    where: { id: { in: productoIds } },
+    include: { catalogo: { select: { unidad: true } } },
+  });
+  const productosPorId = new Map<string, ProductoDb & { catalogo: { unidad: UnidadMedida } }>(productos.map((p) => [p.id, p]));
 
   for (const item of input.items) {
     const producto = productosPorId.get(item.productoId);
     if (!producto || producto.tiendaId !== input.tiendaId) {
       throw new AppError("PRODUCTOS_DE_OTRA_TIENDA", "Todos los productos deben pertenecer a la misma tienda.");
     }
-    if (!esComprable({ disponible: producto.disponible, stock: producto.stock })) {
+    // Cantidad según la unidad del producto (03-productos.md, "Cantidades y unidades").
+    validarCantidad(producto.catalogo.unidad, item.cantidad);
+    if (!esComprable({ disponible: producto.disponible, stock: Number(producto.stock) })) {
       throw new AppError("PRODUCTO_NO_COMPRABLE", `El producto "${producto.nombre}" no está disponible.`);
     }
-    if (item.cantidad > producto.stock) {
+    if (item.cantidad > Number(producto.stock)) {
       throw new AppError("STOCK_INSUFICIENTE", `No hay stock suficiente de "${producto.nombre}".`);
     }
   }

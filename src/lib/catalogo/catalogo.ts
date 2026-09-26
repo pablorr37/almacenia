@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { tienePermiso } from "@/lib/planes/planes";
+import type { UnidadMedida } from "@/lib/productos/unidades";
 import { sinRomper, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
 import type { Categoria, ProductoCatalogo as ProductoCatalogoDb } from "@/generated-prisma/client";
 
@@ -13,6 +14,7 @@ export interface ProductoCatalogo {
   categoria: Categoria | null;
   codigoBarras: string | null;
   imagenUrl: string | null;
+  unidad: UnidadMedida;
 }
 
 function aProductoCatalogo(p: ProductoCatalogoDb): ProductoCatalogo {
@@ -24,6 +26,7 @@ function aProductoCatalogo(p: ProductoCatalogoDb): ProductoCatalogo {
     categoria: p.categoria,
     codigoBarras: p.codigoBarras,
     imagenUrl: p.imagenUrl,
+    unidad: p.unidad,
   };
 }
 
@@ -60,11 +63,15 @@ export interface CrearProductoNuevoEnCatalogoInput {
   categoria?: Categoria;
   codigoBarras?: string;
   imagenUrl?: string;
+  unidad?: UnidadMedida; // default 'unidad'
 }
 
 export async function crearProductoNuevoEnCatalogo(
   input: CrearProductoNuevoEnCatalogoInput
 ): Promise<ProductoCatalogo> {
+  if (input.unidad !== undefined && input.unidad !== "unidad" && input.unidad !== "kg") {
+    throw new AppError("UNIDAD_INVALIDA", "La unidad tiene que ser 'unidad' o 'kg'.");
+  }
   if (input.codigoBarras) {
     const existente = await prisma.productoCatalogo.findUnique({
       where: { codigoBarras: input.codigoBarras },
@@ -82,6 +89,7 @@ export async function crearProductoNuevoEnCatalogo(
       categoria: input.categoria ?? null,
       codigoBarras: input.codigoBarras ?? null,
       imagenUrl: input.imagenUrl ?? null,
+      unidad: input.unidad ?? "unidad",
     },
   });
 

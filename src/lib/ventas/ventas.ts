@@ -3,6 +3,7 @@ import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import type { Pedido } from "@/lib/pedidos/pedidos";
 import { sinRomper, otorgarPorVenta } from "@/lib/gamificacion/gamificacion";
+import { validarCantidad } from "@/lib/productos/unidades";
 import type {
   Venta as VentaDb,
   ItemVenta as ItemVentaDb,
@@ -44,7 +45,7 @@ function aVenta(venta: VentaConItems): Venta {
     items: venta.items.map((item) => ({
       id: item.id,
       productoId: item.productoId,
-      cantidad: item.cantidad,
+      cantidad: Number(item.cantidad),
       precioUnitario: Number(item.precioUnitario),
     })),
   };
@@ -79,7 +80,7 @@ async function crearVentaEnTransaccion(
   origen: OrigenVenta,
   items: ItemAProcesar[]
 ): Promise<Venta> {
-  const total = items.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0);
+  const total = Math.round(items.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0) * 100) / 100;
 
   const venta = await prisma.$transaction(async (tx) => {
     for (const item of items) {
@@ -141,7 +142,10 @@ export async function crearVentaPresencial(
   }
 
   const productoIds = input.items.map((item) => item.productoId);
-  const productos = await prisma.producto.findMany({ where: { id: { in: productoIds } } });
+  const productos = await prisma.producto.findMany({
+    where: { id: { in: productoIds } },
+    include: { catalogo: { select: { unidad: true } } },
+  });
   const productosPorId = new Map(productos.map((p) => [p.id, p]));
 
   const items: ItemAProcesar[] = input.items.map((item) => {
@@ -149,6 +153,7 @@ export async function crearVentaPresencial(
     if (!producto || producto.tiendaId !== tiendaId) {
       throw new AppError("PRODUCTOS_DE_OTRA_TIENDA", "Todos los productos deben pertenecer a la misma tienda.");
     }
+    validarCantidad(producto.catalogo.unidad, item.cantidad);
     return {
       productoId: item.productoId,
       cantidad: item.cantidad,

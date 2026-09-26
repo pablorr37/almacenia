@@ -34,6 +34,8 @@ llamador guarda en el campo `imagenUrl`/`avatarUrl` que corresponda (`Usuario`,
     admin, o dueño de una tienda `premium` y la entrada no tener foto todavía
     (`403 FOTOS_SOLO_PREMIUM` / `409 CATALOGO_YA_TIENE_FOTO`). Key en el bucket:
     `catalogo/<catalogoId>/<uuid>.<ext>`.
+  - `tipo=bancofotos`: lo usa internamente `16-banco-fotos.md` (no el endpoint de
+    upload). Key: `bancofotos/<fotoId>/<uuid>.<ext>`.
   El límite anterior de 3 fotos para tiendas free (`LIMITE_FOTOS_PLAN_FREE`) queda
   reemplazado por esta regla.
 

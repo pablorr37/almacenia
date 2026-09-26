@@ -14,11 +14,17 @@ CREATE TABLE productos_catalogo (
   categoria     categoria,
   codigo_barras TEXT UNIQUE,
   imagen_url    TEXT,
+  unidad        unidad_medida NOT NULL DEFAULT 'unidad', -- 'unidad' | 'kg' 
   creado_en     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX productos_catalogo_nombre_idx ON productos_catalogo (nombre);
 ```
+
+`unidad` dice cómo se vende el producto en **todas** las tiendas (es identidad del
+producto, no decisión de cada tienda): `'unidad'` (se cuenta: 1, 2, 3…) o `'kg'`
+(se pesa: fiambre, queso, verdura suelta, pan; precio por kg y cantidades con
+fracción). Ver "Cantidades y unidades" en `03-productos.md`.
 
 `productos_catalogo` es una entidad **global, compartida entre todos los
 vendedores** — no pertenece a ninguna tienda. Guarda la identidad de un producto
@@ -51,8 +57,11 @@ precio ni stock**: eso es siempre propio de cada `Producto` por tienda (ver
   - un vendedor cuya tienda sea `premium`, **solo si la entrada todavía no tiene
     foto** (`409 CATALOGO_YA_TIENE_FOTO` si ya tiene);
   - un admin (`esAdmin`), siempre, incluso reemplazando una foto existente.
-  Un vendedor `free` nunca sube fotos (`403 FOTOS_SOLO_PREMIUM`). Asignar la foto de
-  catálogo otorga `foto_cargada` al vendedor (`12-gamificacion.md`); al admin no.
+  Un vendedor `free` nunca sube fotos (`403 FOTOS_SOLO_PREMIUM`), pero **sí puede
+  elegir una foto del banco curado** para una entrada sin foto
+  (`POST /api/fotos/banco/:id/usar`, `16-banco-fotos.md`); los testers también.
+  Asignar la foto de catálogo otorga `foto_cargada` al vendedor
+  (`12-gamificacion.md`); al admin no.
 - Editar una entrada de catálogo (nombre/marca) está fuera del
   MVP — cada tienda ajusta su copia denormalizada en `Producto` (`03-productos.md`)
   sin tocar la entrada compartida.
@@ -126,6 +135,7 @@ async function asignarFotoCatalogo(
 | ------------------------------ | -------------------------------------------------------------------|
 | `BUSQUEDA_CATALOGO_INVALIDA`   | `buscarEnCatalogo` sin `q` ni `codigoBarras`.                    |
 | `CODIGO_BARRAS_DUPLICADO`      | `crearProductoNuevoEnCatalogo` con un `codigoBarras` que ya existe. |
+| `UNIDAD_INVALIDA`              | `unidad` no es `'unidad'` ni `'kg'` al crear una entrada.         |
 | `CATALOGO_YA_TIENE_FOTO`       | Un vendedor premium (no admin) intenta reemplazar una foto de catálogo existente (`409`). |
 | `FOTOS_SOLO_PREMIUM`           | Un vendedor `free` (o un usuario sin tienda que no es admin) intenta asignar foto de catálogo (`403`). |
 | `CATALOGO_NO_ENCONTRADO`       | `obtenerProductoCatalogo`/`adoptarProductoDeCatalogo` con `id` inexistente (usado desde `03-productos.md`). |

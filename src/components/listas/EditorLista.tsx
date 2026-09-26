@@ -5,10 +5,20 @@ import { useRouter } from "next/navigation";
 import { apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { BotonVolver } from "@/components/ui/BotonVolver";
 import { Toast } from "@/components/ui/Toast";
+import { DialogoNombre } from "@/components/ui/DialogoNombre";
+import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
+import { pasoDe, redondearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 
-type ProductoCatalogo = { id: string; nombre: string; marca: string | null; imagenUrl: string | null };
-type Item = { catalogoId: string; cantidad: number; producto: { nombre: string; marca: string | null; imagenUrl: string | null } };
+type ProductoCatalogo = { id: string; nombre: string; marca: string | null; imagenUrl: string | null; unidad: UnidadMedida };
+type Item = {
+  catalogoId: string;
+  cantidad: number;
+  producto: { nombre: string; marca: string | null; imagenUrl: string | null; unidad: UnidadMedida };
+};
 type Lista = { id: string; nombre: string; items: Item[] };
+
+// "Mi lista 26 sept": el nombre automático; si sigue así al guardar, se pide uno.
+const PATRON_NOMBRE_POR_DEFECTO = /^Mi lista( \d.*)?$/;
 
 function nombrePorDefecto(): string {
   return `Mi lista ${new Date().toLocaleDateString("es-AR", { day: "numeric", month: "short" })}`;
@@ -55,26 +65,45 @@ export function EditorLista({ listaId }: { listaId?: string }) {
   function agregar(p: ProductoCatalogo) {
     setItems((prev) =>
       prev.some((i) => i.catalogoId === p.id)
-        ? prev.map((i) => (i.catalogoId === p.id ? { ...i, cantidad: i.cantidad + 1 } : i))
-        : [...prev, { catalogoId: p.id, cantidad: 1, producto: { nombre: p.nombre, marca: p.marca, imagenUrl: p.imagenUrl } }]
+        ? prev.map((i) =>
+            i.catalogoId === p.id ? { ...i, cantidad: redondearCantidad(p.unidad, i.cantidad + pasoDe(p.unidad)) } : i
+          )
+        : [
+            ...prev,
+            {
+              catalogoId: p.id,
+              // Por kg arranca en un cuarto kilo (03-productos.md).
+              cantidad: p.unidad === "kg" ? 0.25 : 1,
+              producto: { nombre: p.nombre, marca: p.marca, imagenUrl: p.imagenUrl, unidad: p.unidad },
+            },
+          ]
     );
     setQ("");
     setResultados([]);
   }
 
-  function cambiarCantidad(catalogoId: string, delta: number) {
+  function cambiarCantidad(catalogoId: string, cantidad: number) {
     setItems((prev) =>
-      prev
-        .map((i) => (i.catalogoId === catalogoId ? { ...i, cantidad: i.cantidad + delta } : i))
-        .filter((i) => i.cantidad > 0)
+      prev.map((i) => (i.catalogoId === catalogoId ? { ...i, cantidad } : i)).filter((i) => i.cantidad > 0)
     );
   }
 
-  async function guardar(accion: "guardar" | "comparar") {
+  const [pidiendoNombre, setPidiendoNombre] = useState<"guardar" | "comparar" | null>(null);
+
+  // Si el nombre sigue siendo el automático, primero se pide uno (14-listas-compras.md).
+  function intentarGuardar(accion: "guardar" | "comparar") {
+    if (PATRON_NOMBRE_POR_DEFECTO.test(nombre.trim())) {
+      setPidiendoNombre(accion);
+      return;
+    }
+    guardar(accion);
+  }
+
+  async function guardar(accion: "guardar" | "comparar", nombreFinal = nombre) {
     setError(null);
     setGuardando(accion);
     try {
-      const body = { nombre, items: items.map((i) => ({ catalogoId: i.catalogoId, cantidad: i.cantidad })) };
+      const body = { nombre: nombreFinal, items: items.map((i) => ({ catalogoId: i.catalogoId, cantidad: i.cantidad })) };
       const lista = listaId ? await apiPatch<Lista>(`/api/listas/${listaId}`, body) : await apiPost<Lista>("/api/listas", body);
       if (accion === "comparar") {
         router.push(`/listas/${lista.id}/comparar`);
@@ -89,13 +118,15 @@ export function EditorLista({ listaId }: { listaId?: string }) {
     }
   }
 
-  const unidades = items.reduce((s, i) => s + i.cantidad, 0);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-bg">
       <div className="flex items-center gap-2 px-4 pt-5">
         <BotonVolver href="/listas" etiqueta="Volver a mis listas" />
-        <label htmlFor="lista-nombre" className="sr-only">
+        <h1 className="font-display text-[22px] font-bold text-primary-dark">{listaId ? "Editar lista" : "Nueva lista"}</h1>
+      </div>
+      <div className="flex flex-col gap-1.5 px-5 pt-3">
+        <label htmlFor="lista-nombre" className="text-[13px] font-semibold text-text">
           Nombre de la lista
         </label>
         <input
@@ -103,7 +134,8 @@ export function EditorLista({ listaId }: { listaId?: string }) {
           value={nombre}
           maxLength={80}
           onChange={(e) => setNombre(e.target.value)}
-          className="min-w-0 flex-1 rounded-control bg-transparent px-2 py-2 font-display text-[22px] font-bold text-primary-dark focus:bg-surface focus:outline-none"
+          placeholder="Ej: Compra del finde"
+          className="h-12 rounded-control border border-border bg-surface px-4 text-[15px] font-semibold text-text shadow-card focus:border-primary focus:outline-none"
         />
       </div>
 
@@ -134,7 +166,9 @@ export function EditorLista({ listaId }: { listaId?: string }) {
                 >
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-[14px] font-semibold text-text">{p.nombre}</span>
-                    {p.marca && <span className="text-[12px] text-text-2">{p.marca}</span>}
+                    <span className="text-[12px] text-text-2">
+                      {[p.marca, p.unidad === "kg" ? "se vende por kg" : null].filter(Boolean).join(" · ")}
+                    </span>
                   </span>
                   <span className="flex-shrink-0 text-[13px] font-semibold text-primary">+ Agregar</span>
                 </button>
@@ -169,25 +203,12 @@ export function EditorLista({ listaId }: { listaId?: string }) {
               <span className="truncate text-[14px] font-semibold text-text">{i.producto.nombre}</span>
               {i.producto.marca && <span className="text-[12px] text-text-2">{i.producto.marca}</span>}
             </div>
-            <div className="flex flex-shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => cambiarCantidad(i.catalogoId, -1)}
-                aria-label={i.cantidad === 1 ? `Quitar ${i.producto.nombre}` : `Uno menos de ${i.producto.nombre}`}
-                className="press flex h-10 w-10 items-center justify-center rounded-control border border-border bg-surface text-lg leading-none"
-              >
-                {i.cantidad === 1 ? "×" : "–"}
-              </button>
-              <span className="min-w-6 text-center text-[15px] font-semibold tabular-nums">{i.cantidad}</span>
-              <button
-                type="button"
-                onClick={() => cambiarCantidad(i.catalogoId, 1)}
-                aria-label={`Uno más de ${i.producto.nombre}`}
-                className="press flex h-10 w-10 items-center justify-center rounded-control bg-primary text-lg leading-none text-white"
-              >
-                +
-              </button>
-            </div>
+            <SelectorCantidad
+              unidad={i.producto.unidad}
+              valor={i.cantidad}
+              nombre={i.producto.nombre}
+              onChange={(v) => cambiarCantidad(i.catalogoId, v)}
+            />
           </div>
         ))}
         {error && (
@@ -199,13 +220,13 @@ export function EditorLista({ listaId }: { listaId?: string }) {
 
       <div className="sticky bottom-0 flex flex-col gap-2 border-t border-border bg-surface px-5 pb-6 pt-3">
         <span className="text-center text-[12px] text-text-2 tabular-nums">
-          {items.length} {items.length === 1 ? "producto" : "productos"} · {unidades} {unidades === 1 ? "unidad" : "unidades"}
+          {items.length} {items.length === 1 ? "producto" : "productos"}
         </span>
         <div className="flex gap-2">
           <button
             type="button"
             disabled={guardando !== null}
-            onClick={() => guardar("guardar")}
+            onClick={() => intentarGuardar("guardar")}
             className="press h-12 flex-1 rounded-control border border-border bg-surface text-[15px] font-semibold text-text disabled:opacity-50"
           >
             {guardando === "guardar" ? "Guardando..." : "Guardar"}
@@ -213,7 +234,7 @@ export function EditorLista({ listaId }: { listaId?: string }) {
           <button
             type="button"
             disabled={guardando !== null || items.length === 0}
-            onClick={() => guardar("comparar")}
+            onClick={() => intentarGuardar("comparar")}
             className="press h-12 flex-[1.4] rounded-control bg-primary text-[15px] font-semibold text-white shadow-cta disabled:opacity-50"
           >
             {guardando === "comparar" ? "Buscando..." : "Buscar y comparar"}
@@ -221,6 +242,26 @@ export function EditorLista({ listaId }: { listaId?: string }) {
         </div>
       </div>
       <Toast mensaje={aviso} onCerrar={() => setAviso(null)} />
+      <DialogoNombre
+        abierto={pidiendoNombre !== null}
+        titulo="¿Cómo se llama esta lista?"
+        descripcion="Ponele un nombre para encontrarla fácil después (ej: Compra del finde, Asado del sábado)."
+        valorInicial={nombre}
+        textoConfirmar={pidiendoNombre === "comparar" ? "Guardar y comparar" : "Guardar"}
+        textoCancelar="Dejar este nombre"
+        onConfirmar={(n) => {
+          const accion = pidiendoNombre!;
+          setNombre(n);
+          setPidiendoNombre(null);
+          guardar(accion, n);
+        }}
+        onCancelar={() => {
+          const accion = pidiendoNombre!;
+          setPidiendoNombre(null);
+          guardar(accion);
+        }}
+        onCerrar={() => setPidiendoNombre(null)}
+      />
     </div>
   );
 }
