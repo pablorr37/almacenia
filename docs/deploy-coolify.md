@@ -203,12 +203,21 @@ regla de negocio no se cumplió, no hace falta adivinar por el mensaje.
 ## 9. Promover una cuenta a admin
 
 No hay endpoint para esto a propósito (`01-auth.md`: `esAdmin` no se activa vía
-API). Con `DATABASE_URL` apuntando a la base de producción:
+API). El script `scripts/crear-admin.ts` viene dentro de la imagen, así que se
+corre desde el contenedor de la app (en la terminal del VPS):
+
+```bash
+docker ps --format '{{.Names}}' | grep -i almacenia   # nombre del contenedor de la app
+docker exec -it <NOMBRE> sh -c 'cd /app && node_modules/.bin/tsx scripts/crear-admin.ts admin@tu-dominio.com "una-password-fuerte"'
+```
+
+(También se puede pegar solo lo de adentro del `sh -c` en la pestaña **Terminal**
+del recurso en Coolify.) Alternativa desde una máquina con acceso a la base:
 
 ```bash
 DATABASE_URL="<url de producción>" npx tsx scripts/crear-admin.ts admin@tu-dominio.com "una-password-fuerte"
 ```
 
-Si el email ya existe, solo lo promueve (no toca su password). Con la cuenta
+La password tiene que tener al menos 8 caracteres (`PASSWORD_DEBIL`). Si el email ya existe, solo lo promueve (no toca su password). Con la cuenta
 promovida, entrá a `/admin` para ver métricas, verificaciones, usuarios,
 productos y ventas.
