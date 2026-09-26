@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { apiGet, ApiError } from "@/lib/api-client";
+import { apiGet, apiPatch, ApiError } from "@/lib/api-client";
 
 type Rol = "comprador" | "vendedor" | "admin";
 type Plan = "free" | "premium";
@@ -15,6 +15,7 @@ type UsuarioAdmin = {
   esComprador: boolean;
   esVendedor: boolean;
   esAdmin: boolean;
+  esTester: boolean;
   tienda: { id: string; nombre: string; plan: Plan; verificada: boolean } | null;
   cantidadVentas: number;
 };
@@ -56,6 +57,16 @@ export default function AdminUsuariosPage() {
         }
       });
   }, [status, rol, plan]);
+
+  // 11-admin.md: el tester es curador del banco de fotos (16-banco-fotos.md).
+  async function alternarTester(u: UsuarioAdmin) {
+    try {
+      const actualizado = await apiPatch<UsuarioAdmin>(`/api/admin/usuarios/${u.id}`, { esTester: !u.esTester });
+      setUsuarios((prev) => prev.map((x) => (x.id === u.id ? actualizado : x)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo cambiar el rol de tester.");
+    }
+  }
 
   if (status === "unauthenticated") {
     return (
@@ -140,7 +151,17 @@ export default function AdminUsuariosPage() {
               {u.esComprador && <span className="rounded-pill bg-placeholder px-2 py-0.5">Comprador</span>}
               {u.esVendedor && <span className="rounded-pill bg-placeholder px-2 py-0.5">Vendedor</span>}
               {u.esAdmin && <span className="rounded-pill bg-placeholder px-2 py-0.5">Admin</span>}
+              {u.esTester && <span className="rounded-pill bg-primary-soft px-2 py-0.5 text-primary-dark">Tester</span>}
             </div>
+            <label className="flex items-center gap-2 text-[13px] text-text">
+              <input
+                type="checkbox"
+                checked={u.esTester}
+                onChange={() => alternarTester(u)}
+                className="h-4 w-4 accent-primary"
+              />
+              Tester (cura el banco de fotos)
+            </label>
             <div className="flex items-center justify-between text-[13px]">
               <span className="text-text-2">{u.cantidadVentas} venta{u.cantidadVentas !== 1 ? "s" : ""}</span>
               {u.tienda && (

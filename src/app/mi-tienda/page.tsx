@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
+import { BuscadorFotos, type DestinoFoto } from "@/components/fotos/BuscadorFotos";
 import { ValoracionCliente } from "@/components/ui/ValoracionCliente";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
@@ -139,6 +140,8 @@ export default function MiTiendaPage() {
   const [resultadosCatalogo, setResultadosCatalogo] = useState<ProductoCatalogo[]>([]);
   const [catalogoSeleccionado, setCatalogoSeleccionado] = useState<ProductoCatalogo | null>(null);
   const [escaneando, setEscaneando] = useState(false);
+  // Buscador de fotos (16-banco-fotos.md): para qué producto y destino está abierto.
+  const [fotoPara, setFotoPara] = useState<{ producto: Producto; destino: DestinoFoto } | null>(null);
   const { videoRef, activo: scannerActivo, error: scannerError, iniciar: iniciarScanner, detener: detenerScanner } =
     useCodigoBarras(async (texto) => {
       setEscaneando(false);
@@ -542,7 +545,7 @@ export default function MiTiendaPage() {
               </span>
               {tienda.plan === "free" && (
                 <span className="text-[12px] text-text-2">
-                  Fotos hasta en 3 productos. Premium: fotos ilimitadas y prioridad en el mapa.
+                  Fotos del banco de Almacenia. Premium: fotos propias y prioridad en el mapa.
                 </span>
               )}
             </div>
@@ -752,45 +755,33 @@ export default function MiTiendaPage() {
                     {formatoARS(p.precio)}
                     {p.unidad === "kg" ? " / kg" : ""} · stock {formatearCantidad(p.unidad, p.stock)}
                   </div>
-                  {tienda?.plan === "premium" ? (
-                    <div className="flex flex-wrap gap-2">
-                      {/* Foto compartida del catálogo: premium puede cargarla si falta (06-catalogo.md). */}
-                      {!p.imagenCatalogoUrl && (
-                        <ImageUploadField
-                          tipo="catalogo"
-                          entidadId={p.catalogoId}
-                          valorActual={null}
-                          textoSubir="Foto del catálogo"
-                          onSubido={async (url) => {
-                            await apiPatch(`/api/catalogo/${p.catalogoId}/foto`, { imagenUrl: url });
-                            setProductos((prev) =>
-                              prev.map((x) =>
-                                x.catalogoId === p.catalogoId
-                                  ? { ...x, imagenCatalogoUrl: url, imagenEfectiva: x.imagenUrl ?? url }
-                                  : x,
-                              ),
-                            );
-                          }}
-                        />
-                      )}
-                      {/* Foto personalizada, visible solo en esta tienda (10-planes.md). */}
-                      <ImageUploadField
-                        tipo="producto"
-                        entidadId={p.id}
-                        valorActual={p.imagenUrl}
-                        textoSubir="Foto propia"
-                        onSubido={async (url) => {
-                          const actualizado = await apiPatch<Producto>(`/api/productos/${p.id}`, { imagenUrl: url });
-                          setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-text-2">
-                      {p.imagenCatalogoUrl ? "Foto del catálogo compartido" : "Sin foto en el catálogo"} · Fotos
-                      propias con <span className="font-semibold text-primary-dark">Premium</span>
-                    </span>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Foto compartida del catálogo: cualquier vendedor la elige del banco si falta (06-catalogo.md). */}
+                    {!p.imagenCatalogoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setFotoPara({ producto: p, destino: { catalogoId: p.catalogoId } })}
+                        className="press rounded-control border border-border bg-surface px-3 py-2 text-[12px] font-semibold text-text"
+                      >
+                        Buscar foto
+                      </button>
+                    )}
+                    {/* Foto personalizada, visible solo en esta tienda (10-planes.md). */}
+                    {tienda?.plan === "premium" ? (
+                      <button
+                        type="button"
+                        onClick={() => setFotoPara({ producto: p, destino: { productoId: p.id } })}
+                        className="press rounded-control border border-border bg-surface px-3 py-2 text-[12px] font-semibold text-text"
+                      >
+                        {p.imagenUrl ? "Cambiar foto propia" : "Foto propia"}
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-text-2">
+                        {p.imagenCatalogoUrl ? "Foto del catálogo compartido · " : ""}Fotos propias con{" "}
+                        <span className="font-semibold text-primary-dark">Premium</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <span
                   className={`rounded-pill px-2.5 py-1 text-[11px] font-bold ${
@@ -847,6 +838,29 @@ export default function MiTiendaPage() {
           </div>
         )}
       </div>
+
+      <BuscadorFotos
+        abierto={fotoPara !== null}
+        textoInicial={fotoPara?.producto.nombre ?? ""}
+        destino={fotoPara?.destino ?? null}
+        titulo={fotoPara && "productoId" in fotoPara.destino ? "Foto propia del producto" : "Foto del catálogo"}
+        onUsada={(url) => {
+          if (!fotoPara) return;
+          const { producto, destino } = fotoPara;
+          setProductos((prev) =>
+            prev.map((x) =>
+              "productoId" in destino
+                ? x.id === producto.id
+                  ? { ...x, imagenUrl: url, imagenEfectiva: url }
+                  : x
+                : x.catalogoId === producto.catalogoId
+                  ? { ...x, imagenCatalogoUrl: url, imagenEfectiva: x.imagenUrl ?? url }
+                  : x,
+            ),
+          );
+        }}
+        onCerrar={() => setFotoPara(null)}
+      />
     </div>
   );
 }
