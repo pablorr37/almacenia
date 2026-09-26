@@ -3,6 +3,7 @@ import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { crearProductoNuevoEnCatalogo } from "@/lib/catalogo/catalogo";
 import { tienePermiso, type Plan } from "@/lib/planes/planes";
+import { sinRomper, otorgarPorProductoCargado, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
 import type { Categoria, Producto as ProductoDb } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
@@ -164,6 +165,10 @@ export async function crearProducto(
     include: INCLUDE_IMAGEN,
   });
 
+  // 12-gamificacion.md
+  await sinRomper(() => otorgarPorProductoCargado(vendedor.id, tiendaId, catalogo.id));
+  if (producto.imagenUrl) await sinRomper(() => otorgarPorFotoCargada(vendedor.id, tiendaId, catalogo.id));
+
   return aProducto(producto);
 }
 
@@ -322,6 +327,10 @@ export async function actualizarProducto(
     },
     include: INCLUDE_IMAGEN,
   });
+
+  if (input.imagenUrl) {
+    await sinRomper(() => otorgarPorFotoCargada(vendedor.id, producto.tiendaId, producto.catalogoId));
+  }
 
   return aProducto(producto);
 }

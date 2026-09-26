@@ -9,6 +9,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { HomeInvitado } from "@/components/ui/HomeInvitado";
 import { EstadoAperturaPill } from "@/components/ui/EstadoAperturaPill";
 import { IconoTienda } from "@/components/ui/IconoTienda";
+import { PuntosChip } from "@/components/ui/PuntosChip";
 import type { TiendaMapa } from "@/components/ui/TiendaMap";
 import { estadoApertura } from "@/lib/tiendas/horarios";
 import { useAhora } from "@/lib/hooks/useAhora";
@@ -85,22 +86,26 @@ function MapaAutenticado() {
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 mx-auto flex max-w-md items-center justify-between px-5 pt-5">
-        <span className="pointer-events-auto rounded-pill bg-surface/95 px-3.5 py-1.5 font-display text-[18px] font-bold text-primary-dark shadow-[0_1px_3px_rgba(32,26,21,0.1)]">
+        <span className="pointer-events-auto animate-fade-in-down rounded-pill bg-surface/95 px-3.5 py-1.5 font-display text-[18px] font-bold text-primary-dark shadow-card">
           Almacenia
         </span>
         <div className="pointer-events-auto flex items-center gap-2">
+          <PuntosChip />
           <Link
             href="/mi-tienda"
-            className="rounded-pill border border-border bg-surface/95 px-3.5 py-1.5 text-[13px] font-semibold text-text shadow-[0_1px_3px_rgba(32,26,21,0.1)]"
+            className="press flex h-11 items-center rounded-pill border border-border bg-surface/95 px-3.5 text-[13px] font-semibold text-text shadow-card"
           >
             Mi tienda
           </Link>
           <Link
             href="/perfil"
-            className="flex h-9 w-9 items-center justify-center rounded-pill border border-border bg-surface/95 text-[13px] font-semibold shadow-[0_1px_3px_rgba(32,26,21,0.1)]"
+            className="press flex h-11 w-11 items-center justify-center rounded-pill border border-border bg-surface/95 text-text shadow-card"
             aria-label="Ir a mi cuenta"
           >
-            👤
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
+            </svg>
           </Link>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { apiGet, ApiError } from "@/lib/api-client";
+import { ConfigSistema } from "@/components/ui/ConfigSistema";
 
 type Metricas = {
   ventas: { cantidad: number; totalFacturado: number };
@@ -124,6 +125,8 @@ export default function AdminPage() {
           <p className="text-[11px] text-text-2">Últimos 30 días.</p>
         </div>
       )}
+
+      {metricas && <ConfigSistema />}
     </div>
   );
 }

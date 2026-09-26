@@ -1,14 +1,22 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { apiGet, apiPost, ApiError } from "@/lib/api-client";
+import { EstadoAperturaPill } from "@/components/ui/EstadoAperturaPill";
+import { Toast } from "@/components/ui/Toast";
+import { formatoPuntos } from "@/components/ui/PuntosChip";
+import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
+import { useAhora } from "@/lib/hooks/useAhora";
 
 type Tienda = {
   id: string;
   nombre: string;
   direccion: string;
+  verificada: boolean;
+  horarios: HorarioTienda[];
 };
 
 type Categoria =
@@ -71,7 +79,15 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
   const router = useRouter();
   const [tienda, setTienda] = useState<Tienda | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
+  // Carrito: cantidad + precio al agregar, así el total no depende de los filtros
+  // activos (auditoría UI/UX, T1).
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [preciosCart, setPreciosCart] = useState<Record<string, number>>({});
+  const { status } = useSession();
+  const ahora = useAhora();
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [haciendoCheckIn, setHaciendoCheckIn] = useState(false);
+  const cerrarAviso = useCallback(() => setAviso(null), []);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -85,6 +101,48 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
   useEffect(() => {
     apiGet<Tienda>(`/api/tiendas/${id}`).then(setTienda).catch(() => {});
   }, [id]);
+
+  // Visita a la página (12-gamificacion.md): 1 vez por mes por tienda.
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    apiPost<{ puntosOtorgados: number }>(`/api/tiendas/${id}/visita`)
+      .then((r) => {
+        if (r.puntosOtorgados > 0) setAviso(`+${formatoPuntos(r.puntosOtorgados)} puntos por visitar la tienda`);
+      })
+      .catch(() => {});
+  }, [id, status]);
+
+  function hacerCheckIn() {
+    if (!navigator.geolocation) {
+      setAviso("Tu navegador no permite usar la ubicación.");
+      return;
+    }
+    setHaciendoCheckIn(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const r = await apiPost<{ puntosOtorgados: number }>(`/api/tiendas/${id}/checkin`, {
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+          });
+          setAviso(
+            r.puntosOtorgados > 0
+              ? `¡Check-in hecho! +${formatoPuntos(r.puntosOtorgados)} puntos`
+              : "Check-in registrado (hoy ya sumaste puntos acá)."
+          );
+        } catch (err) {
+          setAviso(err instanceof ApiError ? err.message : "No se pudo hacer el check-in.");
+        } finally {
+          setHaciendoCheckIn(false);
+        }
+      },
+      () => {
+        setAviso("Necesitamos tu ubicación para confirmar que estás en la tienda.");
+        setHaciendoCheckIn(false);
+      },
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  }
 
   useEffect(() => {
     const sp = new URLSearchParams({ soloDisponibles: "true" });
@@ -101,12 +159,13 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
   }, [id, q, categoria, precioMin, precioMax, sort, tab]);
 
   const cantidadItems = Object.values(cart).reduce((a, b) => a + b, 0);
-  const total = productos.reduce((sum, p) => sum + (cart[p.id] ?? 0) * (p.precioOferta ?? p.precio), 0);
+  const total = Object.entries(cart).reduce((sum, [productoId, cantidad]) => sum + cantidad * (preciosCart[productoId] ?? 0), 0);
 
   function agregar(p: Producto) {
     const actual = cart[p.id] ?? 0;
     if (actual >= p.stock) return;
     setCart({ ...cart, [p.id]: actual + 1 });
+    setPreciosCart({ ...preciosCart, [p.id]: p.precioOferta ?? p.precio });
   }
 
   function quitar(p: Producto) {
@@ -138,13 +197,34 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
         </Link>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <div className="font-display text-[17px] font-bold text-primary-dark">
+        <div className="flex min-w-0 flex-1 animate-fade-in-down flex-col gap-1">
+          <div className="font-display text-[20px] font-bold leading-tight text-primary-dark">
             {tienda?.nombre ?? "Cargando..."}
+            {tienda?.verificada && (
+              <span className="ml-1.5 align-middle text-[11px] font-semibold text-primary">✓ Verificada</span>
+            )}
           </div>
-          <div className="text-[13px] text-text-2">{tienda?.direccion}</div>
+          <div className="truncate text-[13px] text-text-2">{tienda?.direccion}</div>
+          {tienda && <EstadoAperturaPill estado={estadoApertura(tienda.horarios, ahora)} className="self-start" />}
         </div>
+        {/* El backend rechaza el check-in del dueño (CHECKIN_TIENDA_PROPIA). */}
+        {tienda && status === "authenticated" && (
+          <button
+            type="button"
+            onClick={hacerCheckIn}
+            disabled={haciendoCheckIn}
+            className="press flex h-11 flex-shrink-0 items-center gap-1.5 rounded-pill border border-primary bg-primary-soft px-3 text-[12px] font-semibold text-primary-dark disabled:opacity-60"
+            aria-label="Hacer check-in: estoy en la tienda"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" />
+              <circle cx="12" cy="9.5" r="2.5" />
+            </svg>
+            {haciendoCheckIn ? "..." : "Estoy acá"}
+          </button>
+        )}
       </div>
+      <Toast mensaje={aviso} onCerrar={cerrarAviso} />
 
       <div className="flex flex-col gap-2.5 px-5 pt-2">
         <input
@@ -219,13 +299,14 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
         {productos.length === 0 && !error && (
           <p className="py-6 text-center text-[13px] text-text-2">No encontramos productos con estos filtros.</p>
         )}
-        {productos.map((p) => {
+        {productos.map((p, i) => {
           const qty = cart[p.id] ?? 0;
           const precioMostrado = p.precioOferta ?? p.precio;
           return (
             <div
               key={p.id}
-              className="flex items-center gap-3 rounded-card border border-border bg-surface p-3.5 shadow-[0_1px_3px_rgba(32,26,21,0.05)]"
+              style={{ "--i": i } as React.CSSProperties}
+              className="stagger flex animate-fade-up items-center gap-3 rounded-card border border-border bg-surface p-3.5 shadow-card"
             >
               {p.imagenEfectiva ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -248,11 +329,11 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
                 </div>
               </div>
               {qty > 0 ? (
-                <div className="flex flex-shrink-0 items-center gap-2">
+                <div className="flex flex-shrink-0 animate-scale-in items-center gap-2">
                   <button
                     onClick={() => quitar(p)}
                     aria-label="Quitar uno"
-                    className="flex h-7 w-7 items-center justify-center rounded-control border border-border bg-surface text-base leading-none"
+                    className="press flex h-10 w-10 items-center justify-center rounded-control border border-border bg-surface text-base leading-none"
                   >
                     –
                   </button>
@@ -260,7 +341,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
                   <button
                     onClick={() => agregar(p)}
                     aria-label="Agregar uno"
-                    className="flex h-7 w-7 items-center justify-center rounded-control bg-primary text-white"
+                    className="press flex h-10 w-10 items-center justify-center rounded-control bg-primary text-white"
                   >
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                       <path d="M7 1V13M1 7H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -271,7 +352,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
                 <button
                   onClick={() => agregar(p)}
                   aria-label="Agregar al pedido"
-                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-control bg-primary text-white"
+                  className="press flex h-11 w-11 flex-shrink-0 animate-scale-in items-center justify-center rounded-control bg-primary text-white"
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <path d="M8 1V15M1 8H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -284,7 +365,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
       </div>
 
       {cantidadItems > 0 && (
-        <div className="sticky bottom-0 border-t border-border bg-surface px-5 pb-6 pt-3.5">
+        <div className="sticky bottom-0 animate-slide-up border-t border-border bg-surface px-5 pb-6 pt-3.5">
           <button
             onClick={confirmarPedido}
             disabled={enviando}

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { tienePermiso } from "@/lib/planes/planes";
+import { sinRomper, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
 import type { Categoria, ProductoCatalogo as ProductoCatalogoDb } from "@/generated-prisma/client";
 
 export interface ProductoCatalogo {
@@ -115,7 +116,11 @@ export async function asignarFotoCatalogo(
   catalogoId: string,
   imagenUrl: string
 ): Promise<ProductoCatalogo> {
-  await verificarPermisoFotoCatalogo(usuario, catalogoId);
+  const { tiendaId } = await verificarPermisoFotoCatalogo(usuario, catalogoId);
   const actualizado = await prisma.productoCatalogo.update({ where: { id: catalogoId }, data: { imagenUrl } });
+  // foto_cargada es para vendedores (12-gamificacion.md); un admin no suma.
+  if (tiendaId && !usuario.esAdmin) {
+    await sinRomper(() => otorgarPorFotoCargada(usuario.id, tiendaId, catalogoId));
+  }
   return aProductoCatalogo(actualizado);
 }

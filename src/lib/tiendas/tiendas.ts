@@ -100,7 +100,7 @@ const SELECT_TIENDA = Prisma.sql`
   FROM tiendas
 `;
 
-function validarUbicacion(lat: number, lon: number): void {
+export function validarUbicacion(lat: number, lon: number): void {
   if (typeof lat !== "number" || Number.isNaN(lat) || lat < -90 || lat > 90) {
     throw new AppError("UBICACION_INVALIDA", "La latitud debe ser un número entre -90 y 90.");
   }

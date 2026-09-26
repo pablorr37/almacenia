@@ -30,6 +30,8 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   VALORACION_SIN_VENTA_PREVIA: 409,
   VALORACION_PROPIA: 409,
   USUARIO_NO_ENCONTRADO: 404,
+  CHECKIN_FUERA_DE_RANGO: 409,
+  CHECKIN_TIENDA_PROPIA: 409,
 };
 
 export function respuestaExitosa<T>(

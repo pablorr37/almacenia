@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import type { Pedido } from "@/lib/pedidos/pedidos";
+import { sinRomper, otorgarPorVenta } from "@/lib/gamificacion/gamificacion";
 import type {
   Venta as VentaDb,
   ItemVenta as ItemVentaDb,
@@ -103,6 +104,9 @@ async function crearVentaEnTransaccion(
       include: { items: true },
     });
   });
+
+  // 12-gamificacion.md: después de confirmar la venta, fuera de su transacción.
+  await sinRomper(() => otorgarPorVenta(venta.id));
 
   return aVenta(venta);
 }

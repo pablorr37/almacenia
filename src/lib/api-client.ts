@@ -26,6 +26,19 @@ export async function apiGet<T>(path: string): Promise<T> {
   return parse<T>(res);
 }
 
+// Para listados paginados (00-overview.md): devuelve también page/pageSize/total.
+export async function apiGetPaginado<T>(
+  path: string
+): Promise<{ data: T[]; page: number; pageSize: number; total: number }> {
+  const res = await fetch(path);
+  const body = await res.json();
+  if (!res.ok) {
+    const { code, message, details } = body.error ?? { code: "ERROR_DESCONOCIDO", message: "Ocurrió un error inesperado." };
+    throw new ApiError(code, message, details);
+  }
+  return { data: body.data as T[], page: body.page, pageSize: body.pageSize, total: body.total };
+}
+
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "POST",

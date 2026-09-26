@@ -39,9 +39,13 @@ model Usuario {
   pedidos       Pedido[]
   ventas        Venta[]
   resenas       Resena[]
-  eventosPuntos EventoPuntos[]
+  eventosPuntos EventoPuntos[] @relation("EventosDelUsuario")
 
-  valoracionesRecibidas ValoracionCliente[]
+  valoracionesRecibidas  ValoracionCliente[]
+  eventosComoContraparte EventoPuntos[]        @relation("EventosContraparte")
+  checkIns               CheckInTienda[]
+  visitasPagina          VisitaPaginaTienda[]
+  listasCompras          ListaCompras[]
 
   @@map("usuarios")
 }
@@ -78,6 +82,9 @@ model Tienda {
   resenas                Resena[]
   solicitudesVerificacion SolicitudVerificacion[]
   valoracionesClientes    ValoracionCliente[]
+  eventosPuntos           EventoPuntos[]
+  checkIns                CheckInTienda[]
+  visitasPagina           VisitaPaginaTienda[]
 
   @@map("tiendas")
 }
@@ -163,7 +170,8 @@ model ProductoCatalogo {
   imagenUrl    String?   @map("imagen_url")
   creadoEn     DateTime  @default(now()) @map("creado_en")
 
-  productos Producto[]
+  productos   Producto[]
+  itemsListas ItemListaCompras[]
 
   @@index([nombre])
   @@map("productos_catalogo")
@@ -198,6 +206,7 @@ model Producto {
   @@index([tiendaId])
   @@index([catalogoId])
   @@index([categoria])
+  @@index([catalogoId, disponible])
   @@map("productos")
 }
 
@@ -338,19 +347,98 @@ model ItemVenta {
 }
 
 // ---------------------------------------------------------------------------
-// 12-gamificacion.md — infraestructura, sin reglas de negocio activas en el MVP
+// 12-gamificacion.md
 // ---------------------------------------------------------------------------
+// onDelete Cascade/SetNull: los puntos son un derivado de otras entidades; borrar un
+// usuario/tienda (en la práctica solo pasa en tests y limpieza) no debe trabarse
+// por su historial de puntos.
 
 model EventoPuntos {
-  id        String   @id @default(uuid())
-  usuarioId String   @map("usuario_id")
-  tipo      String
-  puntos    Int
-  metadata  Json?
-  creadoEn  DateTime @default(now()) @map("creado_en")
+  id                   String   @id @default(uuid())
+  usuarioId            String   @map("usuario_id")
+  tipo                 String
+  puntos               Decimal  @db.Decimal(6, 1)
+  tiendaId             String?  @map("tienda_id")
+  contraparteUsuarioId String?  @map("contraparte_usuario_id")
+  claveUnica           String?  @unique @map("clave_unica")
+  metadata             Json?
+  creadoEn             DateTime @default(now()) @map("creado_en")
 
-  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  usuario     Usuario  @relation("EventosDelUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  tienda      Tienda?  @relation(fields: [tiendaId], references: [id], onDelete: SetNull)
+  contraparte Usuario? @relation("EventosContraparte", fields: [contraparteUsuarioId], references: [id], onDelete: SetNull)
 
   @@index([usuarioId])
   @@map("eventos_puntos")
+}
+
+model VisitaPaginaTienda {
+  compradorId String  @map("comprador_id")
+  tiendaId    String  @map("tienda_id")
+  ultimoMes   String  @map("ultimo_mes") // "YYYY-MM"
+  ultimoValor Decimal @map("ultimo_valor") @db.Decimal(3, 1)
+
+  comprador Usuario @relation(fields: [compradorId], references: [id], onDelete: Cascade)
+  tienda    Tienda  @relation(fields: [tiendaId], references: [id], onDelete: Cascade)
+
+  @@id([compradorId, tiendaId])
+  @@map("visitas_pagina_tienda")
+}
+
+// 02-tiendas.md — check-in GPS
+model CheckInTienda {
+  id          String   @id @default(uuid())
+  compradorId String   @map("comprador_id")
+  tiendaId    String   @map("tienda_id")
+  distanciaM  Decimal  @map("distancia_m") @db.Decimal(8, 1)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  comprador Usuario @relation(fields: [compradorId], references: [id], onDelete: Cascade)
+  tienda    Tienda  @relation(fields: [tiendaId], references: [id], onDelete: Cascade)
+
+  @@index([compradorId, tiendaId, creadoEn])
+  @@map("checkins_tienda")
+}
+
+// ---------------------------------------------------------------------------
+// 11-admin.md — configuración del sistema
+// ---------------------------------------------------------------------------
+
+model ConfiguracionSistema {
+  clave         String   @id
+  valor         Json
+  actualizadaEn DateTime @default(now()) @updatedAt @map("actualizada_en")
+
+  @@map("configuracion_sistema")
+}
+
+// ---------------------------------------------------------------------------
+// 14-listas-compras.md
+// ---------------------------------------------------------------------------
+
+model ListaCompras {
+  id            String   @id @default(uuid())
+  compradorId   String   @map("comprador_id")
+  nombre        String
+  creadaEn      DateTime @default(now()) @map("creada_en")
+  actualizadaEn DateTime @default(now()) @updatedAt @map("actualizada_en")
+
+  comprador Usuario            @relation(fields: [compradorId], references: [id], onDelete: Cascade)
+  items     ItemListaCompras[]
+
+  @@index([compradorId])
+  @@map("listas_compras")
+}
+
+model ItemListaCompras {
+  id         String @id @default(uuid())
+  listaId    String @map("lista_id")
+  catalogoId String @map("catalogo_id")
+  cantidad   Int
+
+  lista    ListaCompras     @relation(fields: [listaId], references: [id], onDelete: Cascade)
+  catalogo ProductoCatalogo @relation(fields: [catalogoId], references: [id])
+
+  @@unique([listaId, catalogoId])
+  @@map("items_lista_compras")
 }
