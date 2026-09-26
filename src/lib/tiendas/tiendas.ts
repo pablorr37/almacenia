@@ -11,11 +11,8 @@ const RADIO_KM_MAXIMO = 50;
 const MEDIOS_DE_PAGO_VALIDOS = ["efectivo", "transferencia", "mercado_pago", "debito", "qr"] as const;
 export type MedioPago = (typeof MEDIOS_DE_PAGO_VALIDOS)[number];
 
-export interface HorarioTienda {
-  diaSemana: number; // 0=domingo .. 6=sábado
-  abre: string | null; // "HH:mm"
-  cierra: string | null;
-}
+import type { HorarioTienda } from "./horarios";
+export type { HorarioTienda };
 
 export interface Tienda {
   id: string;

@@ -7,20 +7,18 @@ import { useSession } from "next-auth/react";
 import { apiGet, ApiError } from "@/lib/api-client";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { HomeInvitado } from "@/components/ui/HomeInvitado";
+import { EstadoAperturaPill } from "@/components/ui/EstadoAperturaPill";
+import { IconoTienda } from "@/components/ui/IconoTienda";
+import type { TiendaMapa } from "@/components/ui/TiendaMap";
+import { estadoApertura } from "@/lib/tiendas/horarios";
+import { useAhora } from "@/lib/hooks/useAhora";
 
 const TiendaMap = dynamic(
   () => import("@/components/ui/TiendaMap").then((m) => m.TiendaMap),
   { ssr: false },
 );
 
-type Tienda = {
-  id: string;
-  nombre: string;
-  direccion: string;
-  lat: number;
-  lon: number;
-  distanciaKm: number;
-};
+type Tienda = TiendaMapa;
 
 export default function MapaPage() {
   const { status } = useSession();
@@ -42,6 +40,7 @@ function MapaAutenticado() {
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const [snap, setSnap] = useState<"colapsado" | "medio" | "expandido">("medio");
+  const ahora = useAhora();
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -77,7 +76,7 @@ function MapaAutenticado() {
           drag/tap que deberían ir al bottom sheet. */}
       <div className="absolute inset-0 z-0">
         {origen ? (
-          <TiendaMap origen={origen} tiendas={tiendas} onSelect={() => {}} />
+          <TiendaMap origen={origen} tiendas={tiendas} onSelect={() => setSnap("colapsado")} />
         ) : (
           <div className="flex h-full items-center justify-center bg-primary-soft text-sm text-text-2">
             {cargando ? "Buscando tu ubicación..." : "Ubicación no disponible"}
@@ -111,7 +110,9 @@ function MapaAutenticado() {
         onSnapChange={setSnap}
         header={
           <span className="text-[13px] font-semibold text-text-2">
-            {cargando ? "Buscando tiendas..." : `${tiendas.length} tienda(s) cerca tuyo`}
+            {cargando
+              ? "Buscando tiendas..."
+              : `${tiendas.length} ${tiendas.length === 1 ? "tienda" : "tiendas"} cerca tuyo`}
           </span>
         }
       >
@@ -130,16 +131,23 @@ function MapaAutenticado() {
             <Link
               key={t.id}
               href={`/tiendas/${t.id}`}
-              className="flex items-center gap-3 rounded-card border border-border bg-surface p-3.5 shadow-[0_1px_3px_rgba(32,26,21,0.05)]"
+              style={{ "--i": i } as React.CSSProperties}
+              className="press-soft stagger flex animate-fade-up items-center gap-3 rounded-card border border-border bg-surface p-3.5 shadow-card"
             >
-              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-pill bg-primary-soft font-bold text-primary-dark">
-                {i + 1}
+              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-control bg-primary-soft text-primary-dark">
+                {t.imagenUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={t.imagenUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <IconoTienda />
+                )}
               </div>
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <div className="text-[15px] font-semibold text-text">{t.nombre}</div>
-                <div className="text-xs text-text-2">
+              <div className="flex min-w-0 flex-col gap-1">
+                <div className="truncate text-[15px] font-semibold text-text">{t.nombre}</div>
+                <div className="truncate text-xs text-text-2 tabular-nums">
                   {t.direccion} · {t.distanciaKm.toFixed(1)} km
                 </div>
+                <EstadoAperturaPill estado={estadoApertura(t.horarios, ahora)} className="self-start" />
               </div>
             </Link>
           ))}
