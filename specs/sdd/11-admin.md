@@ -16,8 +16,15 @@ verificación. Todas las rutas bajo `/api/admin/**` requieren `esAdmin = true`
 - "Tiendas nuevas" en un período: `COUNT(*) WHERE creadaEn BETWEEN`.
 - "Tiendas dadas de baja" en un período: `COUNT(*) WHERE desactivadaEn BETWEEN`
   (columna agregada en `02-tiendas.md` específicamente para este reporte).
-- Revisar una solicitud de verificación (aprobar/rechazar) es la única escritura
-  de este módulo, delegada a `revisarSolicitudVerificacion` (`02-tiendas.md`).
+- Revisar una solicitud de verificación (aprobar/rechazar) es una escritura
+  delegada a `revisarSolicitudVerificacion` (`02-tiendas.md`).
+- Marcar o desmarcar un usuario como **tester** (`esTester`, `01-auth.md`) con
+  `PATCH /api/admin/usuarios/:id`. Es la única escritura sobre usuarios: `esAdmin`
+  sigue sin endpoint.
+- **Curaduría de fotos** (`/admin/fotos`, admin y testers): lista de entradas de
+  catálogo sin foto con un botón "Buscar" que abre el buscador de fotos
+  (`16-banco-fotos.md`) precargado con el nombre, y cola de fotos `pendiente`
+  para aprobar o rechazar.
 
 ## Endpoints REST
 
@@ -61,6 +68,11 @@ Query opcional `?rol=comprador|vendedor|admin&plan=free|premium&page&pageSize`.
 `plan` filtra por el plan de la tienda del usuario — implica `esVendedor=true`
 (un usuario sin tienda no puede tener plan). Paginado. Response `200`:
 `{ data: UsuarioAdmin[]; page; pageSize; total }`.
+
+### `PATCH /api/admin/usuarios/:id`
+
+Request `{ esTester: boolean }`. Response `200`: `{ data: UsuarioAdmin }`.
+`400 ES_TESTER_INVALIDO` si `esTester` no es booleano; `404 USUARIO_NO_ENCONTRADO`.
 
 ### `GET /api/admin/productos`
 

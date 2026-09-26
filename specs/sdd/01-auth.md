@@ -13,6 +13,7 @@ CREATE TABLE usuarios (
   es_comprador   BOOLEAN NOT NULL DEFAULT true,
   es_vendedor    BOOLEAN NOT NULL DEFAULT false,
   es_admin       BOOLEAN NOT NULL DEFAULT false,
+  es_tester      BOOLEAN NOT NULL DEFAULT false,
   avatar_url     TEXT,
   creado_en      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -52,6 +53,9 @@ reglas de negocio).
   API. No confundir con `es_vendedor`: un admin no necesariamente tiene tienda, y una
   cuenta admin puede además ser comprador/vendedor (flags independientes). Las rutas
   bajo `/api/admin/**` (ver `11-admin.md`) requieren `es_admin = true`.
+- **`es_tester` nace en `false`** y lo activa un admin (`PATCH /api/admin/usuarios/:id`,
+  `11-admin.md`). Un tester es *curador* del banco de fotos (`16-banco-fotos.md`):
+  busca fotos libres en la web y aprueba fotos. No da acceso a `/api/admin/**`.
 
 ## Endpoints REST
 
@@ -102,6 +106,7 @@ interface Usuario {
   esComprador: boolean;
   esVendedor: boolean;
   esAdmin: boolean;
+  esTester: boolean;
   avatarUrl: string | null;
 }
 

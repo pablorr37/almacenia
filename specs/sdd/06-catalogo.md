@@ -57,8 +57,11 @@ precio ni stock**: eso es siempre propio de cada `Producto` por tienda (ver
   - un vendedor cuya tienda sea `premium`, **solo si la entrada todavía no tiene
     foto** (`409 CATALOGO_YA_TIENE_FOTO` si ya tiene);
   - un admin (`esAdmin`), siempre, incluso reemplazando una foto existente.
-  Un vendedor `free` nunca sube fotos (`403 FOTOS_SOLO_PREMIUM`). Asignar la foto de
-  catálogo otorga `foto_cargada` al vendedor (`12-gamificacion.md`); al admin no.
+  Un vendedor `free` nunca sube fotos (`403 FOTOS_SOLO_PREMIUM`), pero **sí puede
+  elegir una foto del banco curado** para una entrada sin foto
+  (`POST /api/fotos/banco/:id/usar`, `16-banco-fotos.md`); los testers también.
+  Asignar la foto de catálogo otorga `foto_cargada` al vendedor
+  (`12-gamificacion.md`); al admin no.
 - Editar una entrada de catálogo (nombre/marca) está fuera del
   MVP — cada tienda ajusta su copia denormalizada en `Producto` (`03-productos.md`)
   sin tocar la entrada compartida.

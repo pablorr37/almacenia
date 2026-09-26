@@ -28,6 +28,9 @@ en este MVP no hay UI de admin para editarlas dinámicamente.
     `03-productos.md`, `06-catalogo.md` y `08-archivos.md`. No aplica a la foto de
     portada de la tienda ni al avatar de usuario. (Reemplaza a la feature anterior
     `fotos_ilimitadas`, que limitaba a 3 fotos propias en plan free.)
+    En el banco de fotos (`16-banco-fotos.md`): `free` busca solo en el banco
+    curado; `premium` además ve las fotos subidas por testers y las propias, y
+    puede subir fotos al banco.
   - `destacado_prioritario`: en `GET /api/tiendas/cercanas` (`02-tiendas.md`), las
     tiendas con `plan = premium` se listan antes que las `free` dentro del mismo
     radio de búsqueda (orden primario por plan, orden secundario por
