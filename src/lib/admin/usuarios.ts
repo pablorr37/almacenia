@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { AppError } from "@/lib/errors";
 import { requireAdmin, type Usuario } from "@/lib/auth/auth";
 import type { Plan } from "@/generated-prisma/client";
 
@@ -24,6 +25,45 @@ const CAMPO_POR_ROL: Record<RolUsuario, "esComprador" | "esVendedor" | "esAdmin"
   vendedor: "esVendedor",
   admin: "esAdmin",
 };
+
+type UsuarioConTienda = Awaited<ReturnType<typeof buscarConTienda>>;
+
+function buscarConTienda(id: string) {
+  return prisma.usuario.findUniqueOrThrow({
+    where: { id },
+    include: { tienda: { select: { id: true, nombre: true, plan: true, verificada: true } } },
+  });
+}
+
+async function aUsuarioAdmin(u: UsuarioConTienda): Promise<UsuarioAdmin> {
+  const cantidadVentas = u.tienda
+    ? await prisma.venta.count({ where: { tiendaId: u.tienda.id } })
+    : await prisma.venta.count({ where: { compradorId: u.id } });
+  return {
+    id: u.id,
+    email: u.email,
+    nombre: u.nombre,
+    esComprador: u.esComprador,
+    esVendedor: u.esVendedor,
+    esAdmin: u.esAdmin,
+    esTester: u.esTester,
+    avatarUrl: u.avatarUrl,
+    tienda: u.tienda,
+    cantidadVentas,
+  };
+}
+
+// Única escritura sobre usuarios desde el admin (11-admin.md): el flag esTester.
+export async function marcarTester(admin: Usuario, usuarioId: string, esTester: boolean): Promise<UsuarioAdmin> {
+  requireAdmin(admin);
+  if (typeof esTester !== "boolean") {
+    throw new AppError("ES_TESTER_INVALIDO", "esTester tiene que ser true o false.");
+  }
+  const existe = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { id: true } });
+  if (!existe) throw new AppError("USUARIO_NO_ENCONTRADO", "El usuario no existe.");
+  await prisma.usuario.update({ where: { id: usuarioId }, data: { esTester } });
+  return aUsuarioAdmin(await buscarConTienda(usuarioId));
+}
 
 export async function listarUsuarios(
   admin: Usuario,
@@ -53,24 +93,7 @@ export async function listarUsuarios(
     prisma.usuario.count({ where }),
   ]);
 
-  const conVentas = await Promise.all(
-    usuarios.map(async (u) => {
-      const cantidadVentas = u.tienda
-        ? await prisma.venta.count({ where: { tiendaId: u.tienda.id } })
-        : await prisma.venta.count({ where: { compradorId: u.id } });
-      return {
-        id: u.id,
-        email: u.email,
-        nombre: u.nombre,
-        esComprador: u.esComprador,
-        esVendedor: u.esVendedor,
-        esAdmin: u.esAdmin,
-        avatarUrl: u.avatarUrl,
-        tienda: u.tienda,
-        cantidadVentas,
-      };
-    })
-  );
+  const conVentas = await Promise.all(usuarios.map(aUsuarioAdmin));
 
   return { data: conVentas, page, pageSize, total };
 }

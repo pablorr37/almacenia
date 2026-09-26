@@ -186,6 +186,7 @@ describe("requireAdmin", () => {
     esComprador: true,
     esVendedor: false,
     esAdmin: false,
+    esTester: false,
     avatarUrl: null,
   };
 

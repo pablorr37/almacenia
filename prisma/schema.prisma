@@ -33,6 +33,7 @@ model Usuario {
   esComprador  Boolean  @default(true) @map("es_comprador")
   esVendedor   Boolean  @default(false) @map("es_vendedor")
   esAdmin      Boolean  @default(false) @map("es_admin")
+  esTester     Boolean  @default(false) @map("es_tester")
   avatarUrl    String?  @map("avatar_url")
   creadoEn     DateTime @default(now()) @map("creado_en")
 
@@ -47,6 +48,8 @@ model Usuario {
   checkIns               CheckInTienda[]
   visitasPagina          VisitaPaginaTienda[]
   listasCompras          ListaCompras[]
+  fotosSubidas           FotoBanco[]           @relation("FotosSubidas")
+  fotosRevisadas         FotoBanco[]           @relation("FotosRevisadas")
 
   @@map("usuarios")
 }
@@ -453,4 +456,46 @@ model ItemListaCompras {
 
   @@unique([listaId, catalogoId])
   @@map("items_lista_compras")
+}
+
+// ---------------------------------------------------------------------------
+// 16-banco-fotos.md
+// ---------------------------------------------------------------------------
+
+enum FuenteFoto {
+  web
+  subida
+
+  @@map("fuente_foto")
+}
+
+enum EstadoFoto {
+  pendiente
+  aprobada
+  rechazada
+
+  @@map("estado_foto")
+}
+
+model FotoBanco {
+  id            String     @id @default(uuid())
+  url           String
+  fuente        FuenteFoto
+  estado        EstadoFoto @default(pendiente)
+  etiquetas     String[]   @default([])
+  titulo        String?
+  autor         String?
+  licencia      String?
+  origenUrl     String?    @unique @map("origen_url")
+  subidaPorId   String?    @map("subida_por_id")
+  revisadaPorId String?    @map("revisada_por_id")
+  creadaEn      DateTime   @default(now()) @map("creada_en")
+  revisadaEn    DateTime?  @map("revisada_en")
+
+  subidaPor   Usuario? @relation("FotosSubidas", fields: [subidaPorId], references: [id], onDelete: SetNull)
+  revisadaPor Usuario? @relation("FotosRevisadas", fields: [revisadaPorId], references: [id], onDelete: SetNull)
+
+  @@index([estado, fuente])
+  @@index([etiquetas], type: Gin)
+  @@map("fotos_banco")
 }

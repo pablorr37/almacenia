@@ -13,6 +13,7 @@ export interface Usuario {
   esComprador: boolean;
   esVendedor: boolean;
   esAdmin: boolean;
+  esTester: boolean;
   avatarUrl: string | null;
 }
 
@@ -30,6 +31,7 @@ function aUsuario(usuario: UsuarioDb): Usuario {
     esComprador: usuario.esComprador,
     esVendedor: usuario.esVendedor,
     esAdmin: usuario.esAdmin,
+    esTester: usuario.esTester,
     avatarUrl: usuario.avatarUrl,
   };
 }
