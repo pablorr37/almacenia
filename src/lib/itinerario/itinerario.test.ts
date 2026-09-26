@@ -97,6 +97,56 @@ describe("compararItems / compararLista (15-itinerario.md)", () => {
     expect(r.tiendas.find((t) => t.id === b.tienda.id)!.estadoApertura).toEqual({ estado: "abierta", cierraA: null });
   });
 
+  describe("motivos de faltantes (15-itinerario.md §7)", () => {
+    const extras: string[] = [];
+    afterEach(async () => {
+      const ids = extras.splice(0);
+      await prisma.producto.deleteMany({ where: { catalogoId: { in: ids } } });
+      await prisma.productoCatalogo.deleteMany({ where: { id: { in: ids } } });
+    });
+
+    it("stock_insuficiente con el máximo disponible y la tienda", async () => {
+      const r = await compararItems({ items: [{ catalogoId: fideos, cantidad: 20 }], lat: LAT, lon: LON });
+      expect(r.motivos[fideos]).toEqual({ tipo: "stock_insuficiente", stockMaximo: 10, tiendaStockMaximo: "Almacén A" });
+    });
+
+    it("solo_cerradas: con soloAbiertas, un producto que solo vende una tienda cerrada", async () => {
+      const queso = await crearProducto(b.vendedor, b.tienda.id, { nuevo: { nombre: "Queso itinerario" }, precio: 10, stock: 5 });
+      extras.push(queso.catalogoId);
+      const r = await compararItems({
+        items: [{ catalogoId: yerba, cantidad: 1 }, { catalogoId: queso.catalogoId, cantidad: 1 }],
+        lat: LAT,
+        lon: LON,
+        soloAbiertas: true,
+      });
+      expect(r.motivos[queso.catalogoId]).toEqual({ tipo: "solo_cerradas", cantidadTiendas: 1 });
+      expect(r.planes[0].faltantes[0]).toMatchObject({ catalogoId: queso.catalogoId, motivo: { tipo: "solo_cerradas" } });
+    });
+
+    it("fuera_de_radio: lo vende una tienda a ~11 km y el radio es 5 km", async () => {
+      const lejos = await vendedorConTienda("Fiambrería Lejos", LAT + 0.1, abiertaSiempre);
+      const salame = await crearProducto(lejos.vendedor, lejos.tienda.id, { nuevo: { nombre: "Salame itinerario" }, precio: 10, stock: 5 });
+      extras.push(salame.catalogoId);
+      const r = await compararItems({
+        items: [{ catalogoId: yerba, cantidad: 1 }, { catalogoId: salame.catalogoId, cantidad: 1 }],
+        lat: LAT,
+        lon: LON,
+        radioKm: 5,
+      });
+      const motivo = r.motivos[salame.catalogoId];
+      expect(motivo.tipo).toBe("fuera_de_radio");
+      expect(motivo.tipo === "fuera_de_radio" && motivo.masCercanaKm).toBeCloseTo(11.1, 0);
+    });
+
+    it("sin_oferta si nadie lo publica", async () => {
+      const cafe = await prisma.productoCatalogo.create({ data: { nombre: "Café itinerario" } });
+      extras.push(cafe.id);
+      const r = await compararItems({ items: [{ catalogoId: cafe.id, cantidad: 1 }], lat: LAT, lon: LON });
+      expect(r.motivos[cafe.id]).toEqual({ tipo: "sin_oferta" });
+      expect(r.planes).toEqual([]);
+    });
+  });
+
   it("usa el costo por km de la configuración", async () => {
     await prisma.configuracionSistema.create({ data: { clave: "itinerario.costo_km", valor: 0 } });
     const r = await compararItems({ items: ITEMS(), lat: LAT, lon: LON });
