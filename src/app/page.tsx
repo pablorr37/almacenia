@@ -77,7 +77,13 @@ function MapaAutenticado() {
           drag/tap que deberían ir al bottom sheet. */}
       <div className="absolute inset-0 z-0">
         {origen ? (
-          <TiendaMap origen={origen} tiendas={tiendas} onSelect={() => setSnap("colapsado")} />
+          <TiendaMap
+            origen={origen}
+            tiendas={tiendas}
+            onSelect={() => setSnap("colapsado")}
+            // El sheet arranca en "medio" (45% de la pantalla).
+            paddingInferior={typeof window === "undefined" ? 0 : Math.round(window.innerHeight * 0.45)}
+          />
         ) : (
           <div className="flex h-full items-center justify-center bg-primary-soft text-sm text-text-2">
             {cargando ? "Buscando tu ubicación..." : "Ubicación no disponible"}

@@ -29,6 +29,7 @@ const formatoHora = new Intl.DateTimeFormat("es-AR", {
   timeZone: "America/Argentina/San_Juan",
   hour: "2-digit",
   minute: "2-digit",
+  hourCycle: "h23",
 });
 
 // Historial de puntos (12-gamificacion.md): hora, fecha, y la tienda o el cliente

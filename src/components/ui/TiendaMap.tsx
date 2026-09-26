@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
@@ -42,14 +42,46 @@ function iconoPin(cerrada: boolean, indice: number): L.DivIcon {
   });
 }
 
+// Encuadre inicial: el usuario + las tiendas más cercanas, dejando libre la franja
+// que tapan la barra superior y el bottom sheet (si no, las tiendas quedan debajo
+// del sheet y no se pueden tocar). Solo la primera vez que llegan tiendas.
+function EncuadreInicial({
+  origen,
+  tiendas,
+  paddingInferior,
+}: {
+  origen: { lat: number; lon: number };
+  tiendas: TiendaMapa[];
+  paddingInferior: number;
+}) {
+  const map = useMap();
+  const hecho = useRef(false);
+  useEffect(() => {
+    if (hecho.current || tiendas.length === 0) return;
+    hecho.current = true;
+    const cercanas = [...tiendas].sort((a, b) => a.distanciaKm - b.distanciaKm).slice(0, 8);
+    const puntos: L.LatLngExpression[] = [[origen.lat, origen.lon], ...cercanas.map((t) => [t.lat, t.lon] as [number, number])];
+    map.fitBounds(L.latLngBounds(puntos), {
+      paddingTopLeft: [32, 140],
+      paddingBottomRight: [32, paddingInferior + 24],
+      maxZoom: 16,
+      animate: false,
+    });
+  }, [map, origen, tiendas, paddingInferior]);
+  return null;
+}
+
 export function TiendaMap({
   origen,
   tiendas,
   onSelect,
+  paddingInferior = 0,
 }: {
   origen: { lat: number; lon: number };
   tiendas: TiendaMapa[];
   onSelect?: (id: string) => void;
+  // Alto (px) que tapa el bottom sheet, para encuadrar las tiendas por encima.
+  paddingInferior?: number;
 }) {
   const ahora = useAhora();
   const estados = useMemo(() => tiendas.map((t) => estadoApertura(t.horarios, ahora)), [tiendas, ahora]);
@@ -67,8 +99,10 @@ export function TiendaMap({
       center={[origen.lat, origen.lon]}
       zoom={14}
       scrollWheelZoom={false}
+      zoomControl={false}
       style={{ width: "100%", height: "100%" }}
     >
+      <EncuadreInicial origen={origen} tiendas={tiendas} paddingInferior={paddingInferior} />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
