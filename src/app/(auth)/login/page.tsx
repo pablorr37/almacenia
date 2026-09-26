@@ -75,7 +75,7 @@ export default function LoginPage() {
 
       <p className="text-center text-sm text-text-2">
         ¿No tenés cuenta?{" "}
-        <Link href="/registro" className="font-semibold text-accent">
+        <Link href="/registro" className="font-semibold text-accent-text">
           Creá una
         </Link>
       </p>

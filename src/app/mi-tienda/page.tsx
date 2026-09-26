@@ -291,7 +291,7 @@ export default function MiTiendaPage() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-text-2">Necesitás iniciar sesión para gestionar tu tienda.</p>
-        <Link href="/login" className="font-semibold text-accent">
+        <Link href="/login" className="font-semibold text-accent-text">
           Iniciar sesión
         </Link>
       </div>
@@ -328,7 +328,7 @@ export default function MiTiendaPage() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-bg">
       <div className="flex items-center justify-between px-5 pb-1 pt-5">
         <span className="font-display text-[20px] font-bold text-primary-dark">Mi tienda</span>
-        <Link href="/" className="text-[13px] font-semibold text-accent">
+        <Link href="/" className="text-[13px] font-semibold text-accent-text">
           Ver como comprador
         </Link>
       </div>

@@ -48,7 +48,7 @@ export default function AdminVentasPage() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-text-2">Necesitás iniciar sesión.</p>
-        <Link href="/login" className="font-semibold text-accent">
+        <Link href="/login" className="font-semibold text-accent-text">
           Iniciar sesión
         </Link>
       </div>
@@ -59,7 +59,7 @@ export default function AdminVentasPage() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 px-6 text-center">
         <p className="text-text-2">Esta sección es solo para administradores.</p>
-        <Link href="/" className="font-semibold text-accent">
+        <Link href="/" className="font-semibold text-accent-text">
           Volver al mapa
         </Link>
       </div>

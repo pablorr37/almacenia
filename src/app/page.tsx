@@ -138,7 +138,7 @@ function MapaAutenticado() {
           {!error && !cargando && tiendas.length === 0 && (
             <p className="text-[13px] text-text-2">
               No encontramos tiendas cerca. Si tenés un comercio,{" "}
-              <Link href="/mi-tienda" className="font-semibold text-accent">
+              <Link href="/mi-tienda" className="font-semibold text-accent-text">
                 publicá tu tienda
               </Link>
               .

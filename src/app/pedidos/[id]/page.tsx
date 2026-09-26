@@ -38,7 +38,7 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-5 bg-bg px-5 py-6">
-      <Link href="/" className="text-[13px] font-semibold text-accent">
+      <Link href="/" className="text-[13px] font-semibold text-accent-text">
         ← Volver al mapa
       </Link>
 

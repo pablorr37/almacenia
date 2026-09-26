@@ -28,9 +28,13 @@
   --color-estado-cancelado-bg: #efebe4;
   --color-estado-cancelado-text: #6b6058;
 
-  /* Tipografía — next/font inyecta --font-fraunces / --font-plus-jakarta en <html> */
-  --font-display: var(--font-fraunces), serif;
-  --font-sans: var(--font-plus-jakarta), sans-serif;
+  /* Tipografía — next/font inyecta --font-bricolage / --font-plus-jakarta en <html>
+     (auditoría UI/UX §3). */
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-sans: var(--font-plus-jakarta), system-ui, sans-serif;
+
+  /* Texto de link sobre fondo claro: accent-dark cumple 4.5:1 (auditoría G1) */
+  --color-accent-text: #b85423;
 
   /* Radios */
   --radius-control: 12px;

@@ -76,7 +76,7 @@ export default function PerfilPage() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-text-2">Necesitás iniciar sesión para ver tu perfil.</p>
-        <Link href="/login" className="font-semibold text-accent">
+        <Link href="/login" className="font-semibold text-accent-text">
           Iniciar sesión
         </Link>
       </div>
