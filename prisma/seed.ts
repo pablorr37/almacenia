@@ -7,7 +7,13 @@
 // inserts a mano (geografía, transacciones, etc. quedan cubiertos por esa capa).
 //
 // Uso: npx prisma db seed (contra la base local, nunca contra producción sin
-// pedido explícito).
+// pedido explícito). Variables (docs/deploy-coolify.md, "Seed de demo"):
+//   SEED_TIENDAS=20        cantidad de tiendas
+//   SEED_FUENTE=local|osm  osm: ubicaciones reales de OpenStreetMap con nombres de
+//                          fantasía (src/lib/seed/tiendas-seed.ts); si falla, local
+//   SEED_COMPRADORES=12    0 = sin compradores ni lista demo
+//   SEED_FOTOS_WEB=1       busca fotos libres para el catálogo sin foto y las deja
+//                          pendientes en el banco (16-banco-fotos.md)
 
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
@@ -15,6 +21,15 @@ import { registrarUsuario } from "../src/lib/auth/auth";
 import { crearTienda, actualizarTienda, type HorarioTienda, type MedioPago } from "../src/lib/tiendas/tiendas";
 import { crearProducto } from "../src/lib/productos/productos";
 import { crearLista } from "../src/lib/listas/listas";
+import { mejorFotoDelBanco, guardarFotoWeb } from "../src/lib/fotos/banco";
+import { buscarWeb, consultaWeb, palabrasClave } from "../src/lib/fotos/buscador-web";
+import {
+  consultarOverpass,
+  seleccionarTiendas,
+  tiendasLocales,
+  type Rubro,
+  type TiendaSeed,
+} from "../src/lib/seed/tiendas-seed";
 import type { Categoria } from "../src/generated-prisma/client";
 
 const DOMINIO_SEED = "seed.almacenia.test";
@@ -99,72 +114,6 @@ const NOMBRES_COMPRADORES = [
 ];
 
 // ---------------------------------------------------------------------------
-// Tiendas: nombre, rubro, vendedor, departamento (con coordenadas reales del
-// Gran San Juan) y variantes de horario/medios de pago.
-// ---------------------------------------------------------------------------
-
-type Rubro = "almacen" | "verduleria" | "kiosco" | "panaderia" | "fiambreria";
-
-interface DefinicionTienda {
-  nombre: string;
-  descripcion: string;
-  rubro: Rubro;
-  vendedorNombre: string;
-  departamento: string;
-  lat: number;
-  lon: number;
-}
-
-// Coordenadas aproximadas de cada departamento del Gran San Juan (centro).
-const DEPARTAMENTOS: Record<string, { lat: number; lon: number }> = {
-  Capital: { lat: -31.5375, lon: -68.5364 },
-  Rivadavia: { lat: -31.525, lon: -68.585 },
-  Chimbas: { lat: -31.4917, lon: -68.545 },
-  Rawson: { lat: -31.585, lon: -68.535 },
-  "Santa Lucía": { lat: -31.535, lon: -68.47 },
-  Pocito: { lat: -31.67, lon: -68.585 },
-  Concepción: { lat: -31.545, lon: -68.525 },
-  Trinidad: { lat: -31.55, lon: -68.5 },
-  Desamparados: { lat: -31.56, lon: -68.545 },
-};
-
-// Jitter chico para que no queden todas las tiendas de un mismo departamento
-// exactamente en el mismo punto.
-function conJitter(base: { lat: number; lon: number }, semilla: number) {
-  const delta = ((semilla % 7) - 3) * 0.004;
-  return { lat: base.lat + delta, lon: base.lon - delta * 0.6 };
-}
-
-const DEFINICIONES: Omit<DefinicionTienda, "lat" | "lon">[] = [
-  { nombre: "Almacén Don Cuyano", descripcion: "Almacén de barrio de toda la vida.", rubro: "almacen", vendedorNombre: "José Quiroga", departamento: "Capital" },
-  { nombre: "Despensa La Parral", descripcion: "Despensa familiar, productos frescos.", rubro: "almacen", vendedorNombre: "Herminia Ávila", departamento: "Rivadavia" },
-  { nombre: "Kiosco El Zondino", descripcion: "Golosinas, bebidas y lo que haga falta.", rubro: "kiosco", vendedorNombre: "Aldo Bazán", departamento: "Chimbas" },
-  { nombre: "Verdulería Bermejo", descripcion: "Verdura y fruta fresca todos los días.", rubro: "verduleria", vendedorNombre: "Encarnación Videla", departamento: "Rawson" },
-  { nombre: "Panadería Doña Encarnación", descripcion: "Pan casero y facturas recién horneadas.", rubro: "panaderia", vendedorNombre: "Ramón Funes", departamento: "Santa Lucía" },
-  { nombre: "Fiambrería Rivadavia", descripcion: "Fiambres y quesos, cortados al momento.", rubro: "fiambreria", vendedorNombre: "Marisa Godoy", departamento: "Rivadavia" },
-  { nombre: "Almacén La Ramada", descripcion: "Almacén completo, ofertas todas las semanas.", rubro: "almacen", vendedorNombre: "Oscar Moya", departamento: "Pocito" },
-  { nombre: "Kiosco 24hs San Martín", descripcion: "Abierto siempre, sobre la avenida.", rubro: "kiosco", vendedorNombre: "Patricia Achem", departamento: "Capital" },
-  { nombre: "Verdulería El Pedernal", descripcion: "Directo del productor a tu mesa.", rubro: "verduleria", vendedorNombre: "Luis Castro", departamento: "Concepción" },
-  { nombre: "Despensa Doña Herminia", descripcion: "La despensa de siempre, atención de barrio.", rubro: "almacen", vendedorNombre: "Silvia Salinas", departamento: "Trinidad" },
-  { nombre: "Almacén El Chañaral", descripcion: "Todo lo que necesitás, cerca de casa.", rubro: "almacen", vendedorNombre: "Roberto Vega", departamento: "Desamparados" },
-  { nombre: "Kiosco El Zonda", descripcion: "Kiosco de esquina, siempre con hielo frío.", rubro: "kiosco", vendedorNombre: "Gabriela Ontiveros", departamento: "Rawson" },
-  { nombre: "Panadería El Trapiche", descripcion: "Pan de campo y tortas por encargue.", rubro: "panaderia", vendedorNombre: "Néstor Correa", departamento: "Pocito" },
-  { nombre: "Fiambrería Don Aldo", descripcion: "Fiambres finos, atención personalizada.", rubro: "fiambreria", vendedorNombre: "Claudia Guiñazú", departamento: "Chimbas" },
-  { nombre: "Almacén La Costanera", descripcion: "Almacén de ruta, parada obligada.", rubro: "almacen", vendedorNombre: "Hugo Páez", departamento: "Santa Lucía" },
-  { nombre: "Verdulería Rawson", descripcion: "Verdura fresca, precios de mercado.", rubro: "verduleria", vendedorNombre: "Mónica Lucero", departamento: "Rawson" },
-  { nombre: "Kiosco Punta de Rieles", descripcion: "El kiosco de la estación.", rubro: "kiosco", vendedorNombre: "Diego Rearte", departamento: "Trinidad" },
-  { nombre: "Despensa La Viña", descripcion: "Despensa de campo, productos de la zona.", rubro: "almacen", vendedorNombre: "Andrea Escudero", departamento: "Concepción" },
-  { nombre: "Almacén Calle Vieja", descripcion: "Almacén tradicional, fiado de confianza.", rubro: "almacen", vendedorNombre: "Carlos Tello", departamento: "Desamparados" },
-  { nombre: "Panadería La Superiora", descripcion: "Facturas, pan dulce y masas finas.", rubro: "panaderia", vendedorNombre: "Beatriz Quiroga", departamento: "Capital" },
-];
-
-const DEFINICIONES_TIENDA: DefinicionTienda[] = DEFINICIONES.map((def, i) => {
-  const base = DEPARTAMENTOS[def.departamento];
-  const { lat, lon } = conJitter(base, i);
-  return { ...def, lat, lon };
-});
-
-// ---------------------------------------------------------------------------
 // Productos por rubro (precios ARS estimados ago/sep 2026)
 // ---------------------------------------------------------------------------
 
@@ -210,7 +159,9 @@ const PRODUCTOS_POR_RUBRO: Record<Rubro, Array<{ nombre: string; precio: number;
 
 // ---------------------------------------------------------------------------
 // Limpieza (idempotencia): borra solo lo que este script haya creado antes,
-// identificado por el dominio de email @seed.almacenia.test.
+// identificado por el dominio de email @seed.almacenia.test. No toca el catálogo
+// (lo pueden usar tiendas reales: se reutiliza por nombre), ni fotos_banco, ni
+// cuentas fuera del dominio seed.
 // ---------------------------------------------------------------------------
 
 async function limpiarSeedAnterior() {
@@ -223,24 +174,65 @@ async function limpiarSeedAnterior() {
 
   const tiendas = await prisma.tienda.findMany({ where: { vendedorId: { in: ids } }, select: { id: true } });
   const tiendaIds = tiendas.map((t) => t.id);
+  const deSeed = { OR: [{ compradorId: { in: ids } }, { tiendaId: { in: tiendaIds } }] };
 
-  await prisma.resena.deleteMany({ where: { OR: [{ compradorId: { in: ids } }, { tiendaId: { in: tiendaIds } }] } });
+  await prisma.resena.deleteMany({ where: deSeed });
+  await prisma.valoracionCliente.deleteMany({ where: deSeed });
   await prisma.solicitudVerificacion.deleteMany({ where: { tiendaId: { in: tiendaIds } } });
-  await prisma.itemVenta.deleteMany({ where: { venta: { tiendaId: { in: tiendaIds } } } });
-  await prisma.venta.deleteMany({ where: { tiendaId: { in: tiendaIds } } });
-  await prisma.itemPedido.deleteMany({ where: { pedido: { tiendaId: { in: tiendaIds } } } });
-  await prisma.pedido.deleteMany({ where: { tiendaId: { in: tiendaIds } } });
+  await prisma.itemVenta.deleteMany({ where: { venta: deSeed } });
+  await prisma.venta.deleteMany({ where: deSeed });
+  await prisma.itemPedido.deleteMany({ where: { pedido: deSeed } });
+  await prisma.pedido.deleteMany({ where: deSeed });
+  // Ítems de ventas/pedidos de otros que apunten a productos de tiendas seed.
+  await prisma.itemVenta.deleteMany({ where: { producto: { tiendaId: { in: tiendaIds } } } });
+  await prisma.itemPedido.deleteMany({ where: { producto: { tiendaId: { in: tiendaIds } } } });
   await prisma.horarioTienda.deleteMany({ where: { tiendaId: { in: tiendaIds } } });
   await prisma.producto.deleteMany({ where: { tiendaId: { in: tiendaIds } } });
+  // Eventos de puntos, visitas, check-ins y listas se borran en cascada.
   await prisma.tienda.deleteMany({ where: { id: { in: tiendaIds } } });
   await prisma.usuario.deleteMany({ where: { id: { in: ids } } });
-  // Entradas de catálogo que este mismo seed da de alta (ver PRODUCTOS_POR_RUBRO) —
-  // se recrean en cada corrida, identificadas por nombre fijo. No se tocan entradas
-  // de catálogo creadas por vendedores reales fuera del seed.
-  const nombresSeed = Object.values(PRODUCTOS_POR_RUBRO).flat().map((p) => p.nombre);
-  await prisma.productoCatalogo.deleteMany({ where: { nombre: { in: nombresSeed } } });
 
-  console.log(`Limpieza: se borraron ${ids.length} usuarios de un seed anterior.`);
+  console.log(`Limpieza: se borraron ${ids.length} usuarios y ${tiendaIds.length} tiendas de un seed anterior.`);
+}
+
+// Fotos al azar de versiones viejas del seed: se sacan (mejor sin foto que una
+// foto que no corresponde al producto).
+async function quitarFotosAlAzar() {
+  const catalogo = await prisma.productoCatalogo.updateMany({
+    where: { imagenUrl: { contains: "picsum.photos" } },
+    data: { imagenUrl: null },
+  });
+  const tiendas = await prisma.tienda.updateMany({
+    where: { imagenUrl: { contains: "picsum.photos" } },
+    data: { imagenUrl: null },
+  });
+  if (catalogo.count + tiendas.count > 0) {
+    console.log(`Fotos al azar quitadas: ${catalogo.count} de catálogo, ${tiendas.count} de tiendas.`);
+  }
+}
+
+function entero(nombre: string, porDefecto: number): number {
+  const valor = Number(process.env[nombre]);
+  return Number.isInteger(valor) && valor >= 0 ? valor : porDefecto;
+}
+
+async function definirTiendas(cantidad: number): Promise<TiendaSeed[]> {
+  if (process.env.SEED_FUENTE !== "osm") return tiendasLocales(cantidad);
+  try {
+    const elementos = await consultarOverpass();
+    const deOsm = seleccionarTiendas(elementos, cantidad);
+    const faltan = cantidad - deOsm.length;
+    console.log(
+      `OpenStreetMap: ${elementos.length} comercios encontrados, ${deOsm.length} usados` +
+        (faltan > 0 ? `; se generan ${faltan} localmente.` : ".")
+    );
+    const nombres = new Set(deOsm.map((t) => t.nombre));
+    const locales = faltan > 0 ? tiendasLocales(faltan + deOsm.length).filter((t) => !nombres.has(t.nombre)) : [];
+    return [...deOsm, ...locales.slice(0, faltan)];
+  } catch (error) {
+    console.warn(`OpenStreetMap no disponible (${(error as Error).message}); se usan ${cantidad} tiendas locales.`);
+    return tiendasLocales(cantidad);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -253,27 +245,32 @@ function aCategoria(rubro: Rubro): Categoria {
   return rubro as Categoria;
 }
 
-function imagenPlaceholder(nombre: string): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug(nombre))}/400/300`;
-}
-
 async function main() {
   await limpiarSeedAnterior();
+  await quitarFotosAlAzar();
 
-  console.log(`Creando ${NOMBRES_COMPRADORES.length} compradores...`);
-  for (const [i, nombre] of NOMBRES_COMPRADORES.entries()) {
+  const cantidadCompradores = Math.min(entero("SEED_COMPRADORES", NOMBRES_COMPRADORES.length), NOMBRES_COMPRADORES.length);
+  console.log(`Creando ${cantidadCompradores} compradores...`);
+  for (const [i, nombre] of NOMBRES_COMPRADORES.slice(0, cantidadCompradores).entries()) {
     const email = `comprador${i + 1}.${slug(nombre)}@${DOMINIO_SEED}`;
     await registrarUsuario({ email, password: "password123", nombre });
   }
 
-  console.log(`Creando ${DEFINICIONES_TIENDA.length} tiendas...`);
-  // Catálogo compartido entre vendedores (06-catalogo.md): la primera tienda que
-  // carga un producto lo da de alta en productos_catalogo; las siguientes tiendas
-  // del mismo rubro adoptan ese mismo catalogoId con su propio precio/stock, en vez
-  // de duplicar la carga (ítem 2 del pedido del usuario).
+  const definiciones = await definirTiendas(entero("SEED_TIENDAS", 20));
+  console.log(`Creando ${definiciones.length} tiendas...`);
+  // Catálogo compartido entre vendedores (06-catalogo.md): si la entrada ya existe
+  // (de una corrida anterior o de una tienda real) se reutiliza; si no, la primera
+  // tienda que carga el producto la da de alta y las siguientes la adoptan.
+  const nombresProductos = Object.values(PRODUCTOS_POR_RUBRO).flat().map((p) => p.nombre);
+  const existentes = await prisma.productoCatalogo.findMany({
+    where: { nombre: { in: nombresProductos } },
+    select: { id: true, nombre: true },
+    orderBy: { creadoEn: "asc" },
+  });
   const catalogoIdPorNombre = new Map<string, string>();
+  for (const e of existentes) if (!catalogoIdPorNombre.has(e.nombre)) catalogoIdPorNombre.set(e.nombre, e.id);
 
-  for (const [i, def] of DEFINICIONES_TIENDA.entries()) {
+  for (const [i, def] of definiciones.entries()) {
     const email = `vendedor${i + 1}.${slug(def.vendedorNombre)}@${DOMINIO_SEED}`;
     const vendedor = await registrarUsuario({
       email,
@@ -284,7 +281,7 @@ async function main() {
     const tiendaCreada = await crearTienda(vendedor, {
       nombre: def.nombre,
       descripcion: def.descripcion,
-      direccion: `${def.departamento}, San Juan`,
+      direccion: def.direccion,
       lat: def.lat,
       lon: def.lon,
       mediosDePago: elegir(COMBOS_MEDIOS_DE_PAGO, i),
@@ -292,13 +289,9 @@ async function main() {
       abierto24hs: es24hs(def, i),
     });
 
-    // rubro/imagenUrl no son parte del alta (CrearTiendaInput), se completan con
-    // el mismo PATCH que usaría el vendedor desde el panel (02-tiendas.md).
-    await actualizarTienda(vendedor, tiendaCreada.id, {
-      rubro: aCategoria(def.rubro),
-      imagenUrl: imagenPlaceholder(def.nombre),
-    });
-
+    // rubro no es parte del alta (CrearTiendaInput), se completa con el mismo
+    // PATCH que usaría el vendedor desde el panel (02-tiendas.md).
+    await actualizarTienda(vendedor, tiendaCreada.id, { rubro: aCategoria(def.rubro) });
     // ~30% de las tiendas nacen verificadas y un par en plan premium, para tener
     // datos de ejemplo de ambos casos en el panel admin (11-admin.md) y en los
     // tabs de destacados del storefront (10-planes.md) sin pasar por el flujo
@@ -337,16 +330,7 @@ async function main() {
             stock: producto.stock,
           });
 
-      if (!catalogoIdExistente) {
-        catalogoIdPorNombre.set(producto.nombre, productoCreado.catalogoId);
-        // La foto es del producto de catálogo, compartida por todas las tiendas
-        // (06-catalogo.md). El seed la carga directo, como lo haría un admin:
-        // por la regla de fotos, una tienda free no puede subirla.
-        await prisma.productoCatalogo.update({
-          where: { id: productoCreado.catalogoId },
-          data: { imagenUrl: imagenPlaceholder(producto.nombre) },
-        });
-      }
+      if (!catalogoIdExistente) catalogoIdPorNombre.set(producto.nombre, productoCreado.catalogoId);
 
       // Algunos productos quedan en oferta, para poblar el tab "ofertas" del
       // storefront (03-productos.md).
@@ -359,19 +343,60 @@ async function main() {
     }
   }
 
+  await fotosDelCatalogo([...catalogoIdPorNombre.values()]);
+
   // Lista de compras de ejemplo para el primer comprador (14-listas-compras.md),
   // con productos que venden varias tiendas para que "Buscar y comparar" tenga
   // qué comparar.
-  const comprador = await prisma.usuario.findFirstOrThrow({
-    where: { email: { startsWith: "comprador1.", endsWith: `@${DOMINIO_SEED}` } },
-  });
-  const paraLista = [...catalogoIdPorNombre.entries()].slice(0, 5);
-  await crearLista(comprador, {
-    nombre: "Compra de la semana",
-    items: paraLista.map(([, catalogoId], i) => ({ catalogoId, cantidad: (i % 3) + 1 })),
-  });
+  if (cantidadCompradores > 0) {
+    const comprador = await prisma.usuario.findFirstOrThrow({
+      where: { email: { startsWith: "comprador1.", endsWith: `@${DOMINIO_SEED}` } },
+    });
+    const paraLista = [...catalogoIdPorNombre.entries()].slice(0, 5);
+    await crearLista(comprador, {
+      nombre: "Compra de la semana",
+      items: paraLista.map(([, catalogoId], i) => ({ catalogoId, cantidad: (i % 3) + 1 })),
+    });
+  }
 
   console.log("Seed completo.");
+}
+
+// Fotos del catálogo desde el banco curado (16-banco-fotos.md), con la misma
+// búsqueda que usa la app. Nunca una foto al azar: sin coincidencia, sin foto.
+// Con SEED_FOTOS_WEB=1 además busca en la web y deja la primera foto libre de
+// cada producto sin foto como pendiente, para que un curador la revise.
+async function fotosDelCatalogo(catalogoIds: string[]) {
+  const sinFoto = await prisma.productoCatalogo.findMany({
+    where: { id: { in: catalogoIds }, imagenUrl: null },
+    select: { id: true, nombre: true },
+  });
+  let desdeBanco = 0;
+  let pendientes = 0;
+  for (const entrada of sinFoto) {
+    const foto = await mejorFotoDelBanco(entrada.nombre);
+    if (foto) {
+      await prisma.productoCatalogo.update({ where: { id: entrada.id }, data: { imagenUrl: foto.url } });
+      desdeBanco += 1;
+      continue;
+    }
+    if (process.env.SEED_FOTOS_WEB === "1") {
+      try {
+        const [primero] = await buscarWeb(entrada.nombre);
+        if (primero) {
+          const etiquetas = [...palabrasClave(entrada.nombre), consultaWeb(entrada.nombre)].filter(Boolean);
+          await guardarFotoWeb(primero, etiquetas, { estado: "pendiente" });
+          pendientes += 1;
+        }
+      } catch (error) {
+        console.warn(`Foto web para "${entrada.nombre}": ${(error as Error).message}`);
+      }
+    }
+  }
+  console.log(
+    `Fotos del catálogo: ${desdeBanco} desde el banco, ${sinFoto.length - desdeBanco} sin foto` +
+      (process.env.SEED_FOTOS_WEB === "1" ? `, ${pendientes} fotos web pendientes de revisión en /admin/fotos.` : ".")
+  );
 }
 
 function slug(nombre: string): string {
