@@ -114,14 +114,15 @@ async function buscar(
   pageSize: number
 ): Promise<{ data: FotoBanco[]; total: number }> {
   const raices = [...new Set(palabrasClave(texto).map(raiz))];
-  // Puntaje = cantidad de palabras de la consulta que aparecen en alguna etiqueta o
-  // en el título. Sin palabras, se lista todo lo visible.
+  // Puntaje = cantidad de palabras de la consulta con las que empieza alguna palabra
+  // de una etiqueta o del título ("mate" no encuentra "tomate"). Sin palabras, se lista todo lo visible.
   const puntaje =
     raices.length === 0
       ? Prisma.sql`1`
       : Prisma.sql`(SELECT COUNT(*) FROM unnest(${raices}::text[]) AS w
-          WHERE EXISTS (SELECT 1 FROM unnest(f.etiquetas) AS e WHERE e LIKE '%' || w || '%')
-             OR lower(coalesce(f.titulo, '')) LIKE '%' || w || '%')`;
+          WHERE EXISTS (SELECT 1 FROM unnest(f.etiquetas) AS e WHERE e LIKE w || '%' OR e LIKE '% ' || w || '%')
+             OR lower(coalesce(f.titulo, '')) LIKE w || '%'
+             OR lower(coalesce(f.titulo, '')) LIKE '% ' || w || '%')`;
 
   const filas = await prisma.$queryRaw<Array<{ id: string; puntaje: bigint; total: bigint }>>`
     SELECT id, puntaje, COUNT(*) OVER () AS total FROM (

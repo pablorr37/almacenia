@@ -98,11 +98,13 @@ export function BuscadorFotos({
 
   if (!abierto) return null;
 
+  // Sin etiquetas escritas, se usan las palabras de la búsqueda actual.
   function listaEtiquetas(): string[] {
-    return etiquetas
+    const escritas = etiquetas
       .split(",")
       .map((e) => e.trim())
       .filter((e) => e.length > 0);
+    return escritas.length > 0 ? escritas : palabrasClave(texto);
   }
 
   function enviarBusqueda(e: FormEvent) {
@@ -114,6 +116,7 @@ export function BuscadorFotos({
 
   function cambiarPestania(p: Pestania) {
     setPestania(p);
+    if (!etiquetas.trim()) setEtiquetas(palabrasClave(texto).join(", "));
     setError(null);
     if (p === "web" && web === null) buscarWeb(texto);
     if (p === "banco") buscarBanco(texto);

@@ -89,8 +89,9 @@ Los curadores ven también las fotos pendientes y rechazadas (para revisarlas).
 
 ### Búsqueda en el banco
 
-- Texto normalizado (minúsculas, sin tildes). Coincide si alguna etiqueta o el
-  título contiene alguna palabra significativa de la consulta (mismas palabras
+- Texto normalizado (minúsculas, sin tildes). Coincide si alguna palabra de una
+  etiqueta o del título **empieza con** alguna palabra significativa de la consulta
+  ("mate" no encuentra "tomate") (mismas palabras
   descartadas que en la web). Además se prueba la palabra en singular ("tomates" →
   "tomate").
 - Orden: cantidad de palabras que coinciden (desc), luego `creada_en` desc. Paginado.

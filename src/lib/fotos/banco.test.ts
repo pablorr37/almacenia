@@ -237,6 +237,15 @@ describe("banco de fotos (DB)", () => {
       expect(r.total).toBe(2);
     });
 
+    it("coincide al inicio de palabra: 'mate' no encuentra 'tomate'", async () => {
+      const tester = await usuario({ esTester: true });
+      const tag = `pal${Date.now()}`;
+      const tomate = await aprobarFotoWeb(tester, resultadoWeb(25), [`${tag} tomate`], { fetch: fetchImagen });
+      const r = await buscarEnBanco(tester, `mate ${tag}x`, {});
+      expect(r.data.map((f) => f.id)).not.toContain(tomate.id);
+      expect((await buscarEnBanco(tester, "tomates", {})).data.map((f) => f.id)).toContain(tomate.id);
+    });
+
     it("mejorFotoDelBanco devuelve la mejor aprobada o null", async () => {
       const tester = await usuario({ esTester: true });
       const tag = `mfb${Date.now()}`;
