@@ -110,6 +110,18 @@ function MapaAutenticado() {
         </div>
       </div>
 
+      {/* Acceso a listas de compras sin entrar a una tienda (14-listas-compras.md) */}
+      <Link
+        href="/listas"
+        className="press absolute left-5 top-[76px] z-20 flex h-11 animate-fade-in-down items-center gap-2 rounded-pill bg-primary px-4 text-[14px] font-semibold text-white shadow-cta"
+        style={{ animationDelay: "80ms" }}
+      >
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
+        </svg>
+        Lista de compras
+      </Link>
+
       <BottomSheet
         snap={snap}
         onSnapChange={setSnap}

@@ -41,7 +41,8 @@ Entrada: ítems `{ catalogoId, cantidad }[]`, origen `{ lat, lon }`, `radioKm`
 (default 5, máx 50), `soloAbiertas` (default `false`), `maxTiendas` (1–3, default 3).
 
 1. **Tiendas en radio**: `buscarTiendasCercanas` (`02-tiendas.md`, sólo activas).
-   Si `soloAbiertas`, se filtran con `estadoApertura(...).estado === 'abierta'`.
+   Si `soloAbiertas`, se filtran con `estadoApertura(...).estado === 'abierta'` (una
+   tienda sin horario cargado, estado `desconocido`, también queda afuera).
 2. **Ofertas**: una sola query de `Producto` con `tiendaId IN (tiendas)`,
    `catalogoId IN (ítems)`, `disponible = true` y `stock >= cantidad pedida` de ese
    ítem (una tienda con stock parcial no cuenta como oferta del ítem en la fase 1).

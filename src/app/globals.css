@@ -185,6 +185,26 @@ button:active {
   transform: scale(1.12);
 }
 
+/* --- Mapa del plan de compra: paradas numeradas --- */
+.pin-parada {
+  background: none;
+  border: none;
+}
+.pin-parada__num {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 3px solid #fff;
+  background: var(--color-primary);
+  color: #fff;
+  font: 700 14px/1 var(--font-sans);
+  box-shadow: 0 2px 6px rgb(32 26 21 / 0.3);
+  animation: var(--animate-scale-in);
+}
+
 /* --- Mapa: recuadro de información de la tienda (popup de Leaflet sin el
    globo blanco por defecto, estilizado según el manual) --- */
 .popup-tienda .leaflet-popup-content-wrapper {

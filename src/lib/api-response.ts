@@ -32,6 +32,7 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   USUARIO_NO_ENCONTRADO: 404,
   CHECKIN_FUERA_DE_RANGO: 409,
   CHECKIN_TIENDA_PROPIA: 409,
+  LISTA_NO_ENCONTRADA: 404,
 };
 
 export function respuestaExitosa<T>(
