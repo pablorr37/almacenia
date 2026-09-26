@@ -38,6 +38,9 @@ CREATE TYPE medio_pago AS ENUM (
 
 ALTER TABLE tiendas ADD COLUMN medios_de_pago medio_pago[] NOT NULL DEFAULT '{}';
 
+-- Locales 24 hs (ver reglas de horarios).
+ALTER TABLE tiendas ADD COLUMN abierto_24hs BOOLEAN NOT NULL DEFAULT false;
+
 CREATE TABLE horarios_tienda (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tienda_id   UUID NOT NULL REFERENCES tiendas(id),
@@ -117,10 +120,17 @@ CREATE INDEX solicitudes_verificacion_tienda_id_idx ON solicitudes_verificacion 
   es `{ diaSemana, abre, cierra }`; si el día está cerrado, `abre` y `cierra` son
   ambos `null`; si está abierto, ambos son un string `"HH:mm"` válido y `abre` tiene
   que ser estrictamente anterior a `cierra` (no se contemplan horarios que cruzan la
-  medianoche, ej. locales 24hs se modelan con `abre`/`cierra` ambos `null` — "no
-  tiene horario de cierre" en la práctica se representa igual que "cerrado" a nivel
-  de dato; es la UI la que distingue "24 horas" de "cerrado" con un campo aparte si
-  hiciera falta más adelante, no forma parte de este MVP).
+  medianoche).
+- **Locales 24 hs**: se marcan con `abierto24hs = true` (campo propio, editable
+  en `POST`/`PATCH`). Con el flag activo la tienda está **siempre abierta**: los
+  `horarios` se ignoran para el estado de apertura (se conservan por si el vendedor
+  desactiva el flag) y siguen siendo opcionales. Los 7 días en `null` sin el flag
+  significan "cerrado todos los días", no 24 hs.
+- **Aviso de horarios sin configurar**: si una tienda no tiene horarios cargados
+  (0 filas) y no es 24 hs, el panel del vendedor muestra un aviso persistente (no se
+  puede cerrar) en todas sus pestañas: la tienda no aparece en "Solo abiertas ahora"
+  (`15-itinerario.md`) y los compradores ven "Horario no informado". El aviso
+  desaparece recién al guardar horarios o activar 24 hs.
 - Al actualizar `horarios`, se reemplazan las 7 filas existentes por las nuevas (no
   hay edición parcial de un solo día vía API — el cliente manda el estado completo
   de la semana).
@@ -149,6 +159,7 @@ Request:
   lon: number;
   mediosDePago?: MedioPago[];
   horarios?: Array<{ diaSemana: number; abre: string | null; cierra: string | null }>;
+  abierto24hs?: boolean; // default false
 }
 ```
 
@@ -238,6 +249,7 @@ interface Tienda {
   plan: Plan;
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[]; // 0 o 7 entradas
+  abierto24hs: boolean;
 }
 
 type EstadoVerificacion = 'pendiente' | 'aprobada' | 'rechazada';
@@ -260,6 +272,7 @@ interface CrearTiendaInput {
   lon: number;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[]; // si se manda, deben ser exactamente 7
+  abierto24hs?: boolean;
 }
 
 // Valida la forma de `horarios`: exactamente 7 entradas, diaSemana 0-6 sin
@@ -296,6 +309,7 @@ interface ActualizarTiendaInput {
   rubro?: Categoria;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[]; // si se manda, reemplaza las 7 filas existentes
+  abierto24hs?: boolean;
 }
 
 async function actualizarTienda(
@@ -328,6 +342,7 @@ async function revisarSolicitudVerificacion(
 | `NO_ES_DUENO_DE_TIENDA`      | El usuario autenticado intenta editar una tienda que no es la suya. |
 | `RADIO_INVALIDO`             | `radioKm` <= 0 o > 50 en la búsqueda por cercanía.              |
 | `HORARIO_INVALIDO`           | `horarios` no trae exactamente 7 entradas, `diaSemana` repetido o fuera de 0-6, formato de hora inválido, o `abre >= cierra` en un día abierto. |
+| `ABIERTO_24HS_INVALIDO`      | `abierto24hs` viene y no es boolean. |
 | `MEDIO_PAGO_INVALIDO`        | Algún valor de `mediosDePago` no es uno de los valores del enum `MedioPago` (el request llega como JSON sin tipar, hay que validarlo en runtime). |
 | `SOLICITUD_YA_PENDIENTE`     | La tienda ya tiene una `SolicitudVerificacion` en estado `pendiente`. |
 | `TIENDA_YA_VERIFICADA`       | La tienda ya tiene `verificada = true` al pedir una nueva solicitud. |
@@ -341,6 +356,9 @@ Regla derivada (no hay columna): se calcula a partir de `horarios` y de la hora
 actual **en la zona horaria del negocio**, `America/Argentina/San_Juan` (constante
 `ZONA_HORARIA_NEGOCIO`, compartida con `12-gamificacion.md`).
 
+- Si la tienda es 24 hs (`abierto24hs`), el estado es `abierta` con
+  `cierraA = null`, a cualquier hora y sin mirar `horarios`; la UI muestra
+  "Abierto las 24 hs".
 - Si la tienda no tiene horarios cargados (0 filas), el estado es `desconocido`
   (la UI no muestra pill de abierto/cerrado, solo "Horario no informado").
 - Está **abierta** si hoy es un día abierto y `abre <= horaActual < cierra`. En ese
@@ -403,12 +421,16 @@ const ZONA_HORARIA_NEGOCIO = 'America/Argentina/San_Juan';
 
 type EstadoApertura =
   | { estado: 'desconocido' }
-  | { estado: 'abierta'; cierraA: string }
+  | { estado: 'abierta'; cierraA: string | null } // null = 24 hs
   | { estado: 'cerrada'; proximaApertura: { diaSemana: number; hora: string; enDias: number } | null };
 
 // Pura. `ahora` es un Date absoluto; se convierte a día/hora local de `zona`.
 // `enDias`: 0 = hoy, 1 = mañana, etc.
-function estadoApertura(horarios: HorarioTienda[], ahora: Date, zona?: string): EstadoApertura;
+function estadoApertura(
+  horarios: HorarioTienda[],
+  ahora: Date,
+  opciones?: { abierto24hs?: boolean; zona?: string }
+): EstadoApertura;
 
 // Texto para la UI ("Abierto · Cierra a las 21:00", "Cerrado · Abre mañana 09:00").
 function textoEstadoApertura(estado: EstadoApertura): string;
