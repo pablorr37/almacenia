@@ -58,6 +58,11 @@ CREATE INDEX items_venta_venta_id_idx ON items_venta (venta_id);
 
 ## Reglas de negocio
 
+- **Gamificación**: después de confirmar una venta (cualquier origen) se otorgan
+  puntos al vendedor (`venta_realizada`) y, si hay `compradorId`, al comprador
+  (`compra_realizada`, `visita_compra`) — ver `12-gamificacion.md`. Un error de
+  gamificación nunca hace fallar la venta.
+
 - **Débito de stock atómico**: crear una venta (por cualquier origen) y debitar el
   stock de cada producto involucrado ocurre en una única transacción de base de
   datos. Si el stock de algún producto no alcanza para la cantidad pedida, **toda**

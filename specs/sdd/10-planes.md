@@ -21,11 +21,13 @@ en este MVP no hay UI de admin para editarlas dinámicamente.
   requerido) mientras no exista integración de cobro — no hay endpoint de
   self-service para que un vendedor se pase a premium solo.
 - **Features gateadas en este MVP** (primera aplicación concreta del mecanismo):
-  - `fotos_ilimitadas`: una tienda `free` puede tener foto propia (`imagenUrl`) en
-    como máximo 3 productos distintos a la vez; `premium` no tiene límite. No
-    aplica a la foto de portada de la tienda ni al avatar de usuario, solo a fotos
-    de producto (ver `08-archivos.md`). Reemplazar la foto de un producto que ya
-    tiene una no cuenta como una foto nueva contra el límite.
+  - `fotos_personalizadas`: solo una tienda `premium` puede subir fotos de
+    producto — tanto la foto personalizada de su `Producto` (`imagenUrl`, visible
+    solo en su tienda) como la foto compartida de un `ProductoCatalogo` que todavía
+    no tenga foto. Las tiendas `free` usan la foto del catálogo. Detalle en
+    `03-productos.md`, `06-catalogo.md` y `08-archivos.md`. No aplica a la foto de
+    portada de la tienda ni al avatar de usuario. (Reemplaza a la feature anterior
+    `fotos_ilimitadas`, que limitaba a 3 fotos propias en plan free.)
   - `destacado_prioritario`: en `GET /api/tiendas/cercanas` (`02-tiendas.md`), las
     tiendas con `plan = premium` se listan antes que las `free` dentro del mismo
     radio de búsqueda (orden primario por plan, orden secundario por
@@ -50,7 +52,7 @@ Ubicación: `src/lib/planes/`.
 ```ts
 type Plan = 'free' | 'premium';
 
-type Feature = 'fotos_ilimitadas' | 'destacado_prioritario';
+type Feature = 'fotos_personalizadas' | 'destacado_prioritario';
 
 // true si el plan de la tienda habilita esa feature.
 function tienePermiso(tienda: { plan: Plan }, feature: Feature): boolean;

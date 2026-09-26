@@ -12,9 +12,23 @@ todo lo que está acá.
 4. [`04-pedidos.md`](04-pedidos.md) — pedido a distancia, confirmación, retiro en local.
 5. [`05-ventas.md`](05-ventas.md) — venta (presencial o a distancia), débito de stock.
 
-Fuera de este MVP (a especificar después, ver `agents/memory/decisiones/stack-app.md`):
-promociones, balance/reportes, itinerario óptimo multi-tienda, listas de pendientes del
-comprador, chat in-app.
+Módulos agregados después del MVP inicial:
+
+6. [`06-catalogo.md`](06-catalogo.md) — catálogo compartido de productos y su foto.
+7. [`07-resenas.md`](07-resenas.md) — reseñas de comprador a tienda/producto.
+8. [`08-archivos.md`](08-archivos.md) — subida de imágenes a S3.
+9. [`10-planes.md`](10-planes.md) — planes free/premium y gating de features.
+10. [`11-admin.md`](11-admin.md) — panel admin y configuración del sistema.
+11. [`12-gamificacion.md`](12-gamificacion.md) — puntos por acciones de vendedores y compradores.
+12. [`13-valoraciones-clientes.md`](13-valoraciones-clientes.md) — el dueño de la tienda valora a sus clientes.
+13. [`14-listas-compras.md`](14-listas-compras.md) — listas de compras del comprador.
+14. [`15-itinerario.md`](15-itinerario.md) — "Buscar y comparar": planes de compra
+    multi-tienda por precio + distancia. **Se implementa por fases según la
+    infraestructura disponible** (fase 1 hecha; ver la spec y
+    [`docs/roadmap-itinerario.md`](../../docs/roadmap-itinerario.md)).
+
+Todavía fuera de alcance (a especificar después): promociones, balance/reportes,
+entrega a domicilio (delivery), chat in-app, y las fases 2 a 6 del itinerario.
 
 ## Diagrama de entidades (MVP)
 
