@@ -43,7 +43,7 @@ export async function listarProductosAdmin(
       where,
       include: {
         tienda: { select: { nombre: true, plan: true, vendedor: { select: { nombre: true } } } },
-        catalogo: { select: { imagenUrl: true } },
+        catalogo: { select: { imagenUrl: true, unidad: true } },
       },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -65,7 +65,8 @@ export async function listarProductosAdmin(
     precio: Number(p.precio),
     precioOferta: p.precioOferta === null ? null : Number(p.precioOferta),
     destacado: p.destacado,
-    stock: p.stock,
+    stock: Number(p.stock),
+    unidad: p.catalogo.unidad,
     disponible: p.disponible,
     tiendaNombre: p.tienda.nombre,
     vendedorNombre: p.tienda.vendedor.nombre,

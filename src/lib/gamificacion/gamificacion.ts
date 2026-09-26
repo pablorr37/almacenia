@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { obtenerConfig } from "@/lib/config/config";
 import { ZONA_HORARIA_NEGOCIO } from "@/lib/tiendas/horarios";
+import type { UnidadMedida } from "@/lib/productos/unidades";
 import type { EventoPuntos as EventoPuntosDb, Prisma } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
@@ -41,6 +42,9 @@ export interface MovimientoPuntos {
 export interface LineaVenta {
   productoId: string;
   cantidad: number;
+  // Productos por kg cuentan como producto distinto, pero sus kilos no suman a los
+  // bonus por unidades (12-gamificacion.md).
+  unidad?: UnidadMedida;
 }
 
 export interface EstadoVisitaPagina {
@@ -70,7 +74,9 @@ function redondear1(n: number): number {
 function agruparPorProducto(items: LineaVenta[]): Map<string, number> {
   const porProducto = new Map<string, number>();
   for (const item of items) {
-    porProducto.set(item.productoId, (porProducto.get(item.productoId) ?? 0) + item.cantidad);
+    // Los kg no cuentan como unidades: la línea queda con 0 unidades para los bonus.
+    const unidades = item.unidad === "kg" ? 0 : Number(item.cantidad);
+    porProducto.set(item.productoId, (porProducto.get(item.productoId) ?? 0) + unidades);
   }
   return porProducto;
 }
@@ -274,7 +280,7 @@ async function acreditarVisitasCompra(compradorId: string, tiendaId: string, fec
   const umbral = await obtenerConfig("gamificacion.umbral_items_compra_extra");
   let otorgados = 0;
   for (const [i, venta] of ventas.entries()) {
-    const elegible = i === 0 || productosDistintos(venta.items) > umbral;
+    const elegible = i === 0 || productosDistintos(venta.items.map((i) => ({ productoId: i.productoId, cantidad: Number(i.cantidad) }))) > umbral;
     if (!elegible) continue;
     const evento = await registrarEvento(compradorId, "visita_compra", 1, {
       tiendaId,
@@ -289,11 +295,19 @@ async function acreditarVisitasCompra(compradorId: string, tiendaId: string, fec
 export async function otorgarPorVenta(ventaId: string): Promise<void> {
   const venta = await prisma.venta.findUnique({
     where: { id: ventaId },
-    include: { items: true, tienda: { select: { id: true, vendedorId: true } } },
+    include: {
+      items: { include: { producto: { select: { catalogo: { select: { unidad: true } } } } } },
+      tienda: { select: { id: true, vendedorId: true } },
+    },
   });
   if (!venta) return;
+  const lineas: LineaVenta[] = venta.items.map((i) => ({
+    productoId: i.productoId,
+    cantidad: Number(i.cantidad),
+    unidad: i.producto.catalogo.unidad,
+  }));
 
-  await registrarEvento(venta.tienda.vendedorId, "venta_realizada", puntosVentaVendedor(venta.items), {
+  await registrarEvento(venta.tienda.vendedorId, "venta_realizada", puntosVentaVendedor(lineas), {
     tiendaId: venta.tiendaId,
     contraparteUsuarioId: venta.compradorId,
     claveUnica: `venta_realizada:${venta.id}`,
@@ -303,7 +317,7 @@ export async function otorgarPorVenta(ventaId: string): Promise<void> {
   const compradorId = venta.compradorId;
   if (!compradorId || compradorId === venta.tienda.vendedorId) return;
 
-  if (compraPuntua(venta.items)) {
+  if (compraPuntua(lineas)) {
     await registrarEvento(compradorId, "compra_realizada", 1, {
       tiendaId: venta.tiendaId,
       claveUnica: `compra_realizada:${venta.id}`,

@@ -72,6 +72,7 @@ describe("esComprable", () => {
     precioOferta: null,
     destacado: false,
     stock: 1,
+    unidad: "unidad",
     disponible: true,
   };
 

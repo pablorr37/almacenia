@@ -84,7 +84,7 @@ export async function compararItems(input: CompararInput, ahora = new Date()): P
             disponible: true,
           },
           select: { id: true, tiendaId: true, catalogoId: true, precio: true, precioOferta: true, stock: true },
-        });
+        }).then((ps) => ps.map((p) => ({ ...p, stock: Number(p.stock) })));
   const idsFiltradas = new Set(tiendas.map((t) => t.id));
   const productos = productosEnRadio.filter((p) => idsFiltradas.has(p.tiendaId));
   // Fase 1: una tienda con stock parcial no cuenta como oferta del ítem.

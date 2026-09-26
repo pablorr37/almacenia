@@ -3,6 +3,7 @@ import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { crearProductoNuevoEnCatalogo } from "@/lib/catalogo/catalogo";
 import { tienePermiso, type Plan } from "@/lib/planes/planes";
+import { validarCantidad, type UnidadMedida } from "./unidades";
 import { sinRomper, otorgarPorProductoCargado, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
 import type { Categoria, Producto as ProductoDb } from "@/generated-prisma/client";
 
@@ -22,7 +23,8 @@ export interface Producto {
   precio: number;
   precioOferta: number | null;
   destacado: boolean;
-  stock: number;
+  stock: number; // unidades o kg según `unidad`
+  unidad: UnidadMedida; // del producto de catálogo (03-productos.md)
   disponible: boolean;
 }
 
@@ -40,12 +42,12 @@ export function imagenEfectiva(
 // Relaciones que hacen falta para resolver la imagen efectiva de un Producto.
 const INCLUDE_IMAGEN = {
   tienda: { select: { plan: true } },
-  catalogo: { select: { imagenUrl: true } },
+  catalogo: { select: { imagenUrl: true, unidad: true } },
 } as const;
 
 type ProductoConImagen = ProductoDb & {
   tienda: { plan: Plan };
-  catalogo: { imagenUrl: string | null };
+  catalogo: { imagenUrl: string | null; unidad: UnidadMedida };
 };
 
 function exigirFotosPremium(tienda: { plan: Plan }): void {
@@ -71,7 +73,8 @@ function aProducto(producto: ProductoConImagen): Producto {
     precio: Number(producto.precio),
     precioOferta: producto.precioOferta === null ? null : Number(producto.precioOferta),
     destacado: producto.destacado,
-    stock: producto.stock,
+    stock: Number(producto.stock),
+    unidad: producto.catalogo.unidad,
     disponible: producto.disponible,
   };
 }
@@ -97,6 +100,12 @@ function validarPrecio(precio: number): void {
   }
 }
 
+// El stock respeta la unidad del producto de catálogo (entero, o kg de a 50 g).
+function validarStockDe(unidad: UnidadMedida, stock: number): number {
+  validarCantidad(unidad, stock, { permitirCero: true });
+  return stock;
+}
+
 function validarStock(stock: number): void {
   if (typeof stock !== "number" || Number.isNaN(stock) || stock < 0) {
     throw new AppError("STOCK_INVALIDO", "El stock no puede ser negativo.");
@@ -118,6 +127,7 @@ interface CrearProductoNuevoInput {
     codigoBarras?: string;
     categoria?: Categoria;
     imagenUrl?: string;
+    unidad?: UnidadMedida;
   };
   precio: number;
   stock: number;
@@ -135,6 +145,7 @@ export async function crearProducto(
   validarPrecio(input.precio);
   validarStock(input.stock);
   if ("catalogoId" in input ? input.imagenUrl : input.nuevo.imagenUrl) exigirFotosPremium(tienda);
+  if (!("catalogoId" in input)) validarCantidad(input.nuevo.unidad ?? "unidad", input.stock, { permitirCero: true });
 
   const catalogo =
     "catalogoId" in input
@@ -160,7 +171,7 @@ export async function crearProducto(
       // columna es solo la foto personalizada (premium).
       imagenUrl: "catalogoId" in input ? (input.imagenUrl ?? null) : null,
       precio: input.precio,
-      stock: input.stock,
+      stock: validarStockDe(catalogo.unidad, input.stock),
     },
     include: INCLUDE_IMAGEN,
   });
@@ -208,7 +219,7 @@ async function ordenarPorAgregacion(
       where: { productoId: { in: productoIds } },
       _sum: { cantidad: true },
     });
-    const cantidadPorId = new Map(agregados.map((a) => [a.productoId, a._sum.cantidad ?? 0]));
+    const cantidadPorId = new Map(agregados.map((a) => [a.productoId, Number(a._sum.cantidad ?? 0)]));
     return [...productoIds].sort((a, b) => (cantidadPorId.get(b) ?? 0) - (cantidadPorId.get(a) ?? 0));
   }
 
@@ -308,7 +319,14 @@ export async function actualizarProducto(
   }
 
   if (input.precio !== undefined) validarPrecio(input.precio);
-  if (input.stock !== undefined) validarStock(input.stock);
+  if (input.stock !== undefined) {
+    validarStock(input.stock);
+    const { unidad } = await prisma.productoCatalogo.findUniqueOrThrow({
+      where: { id: actual.catalogoId },
+      select: { unidad: true },
+    });
+    validarStockDe(unidad, input.stock);
+  }
   const precioFinal = input.precio ?? Number(actual.precio);
   validarPrecioOferta(input.precioOferta, precioFinal);
   if (input.imagenUrl) exigirFotosPremium(actual.tienda);
@@ -357,7 +375,7 @@ export async function debitarStock(productoId: string, cantidad: number): Promis
   if (!producto) {
     throw new AppError("PRODUCTO_NO_ENCONTRADO", "El producto no existe.");
   }
-  if (producto.stock < cantidad) {
+  if (Number(producto.stock) < cantidad) {
     throw new AppError("STOCK_INSUFICIENTE", "No hay stock suficiente para debitar.");
   }
 

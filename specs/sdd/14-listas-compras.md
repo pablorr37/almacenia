@@ -130,6 +130,7 @@ function normalizarItems(items: unknown): ItemListaInput[];
 | Código                     | Cuándo                                                      |
 | --------------------------- | -------------------------------------------------------------|
 | `NOMBRE_LISTA_INVALIDO`     | `nombre` vacío o de más de 80 caracteres.                   |
-| `ITEMS_LISTA_INVALIDOS`     | `items` no es un array, `cantidad` no es entero ≥ 1, falta `catalogoId`, o más de 100 ítems. |
+| `ITEMS_LISTA_INVALIDOS`     | `items` no es un array, `cantidad` no es un número mayor a 0, falta `catalogoId`, o más de 100 ítems. |
 | `CATALOGO_NO_ENCONTRADO`    | Algún `catalogoId` no existe (`404`).                        |
+| `CANTIDAD_INVALIDA`         | La cantidad no respeta la unidad del producto (`03-productos.md`). |
 | `LISTA_NO_ENCONTRADA`       | La lista no existe o no es del usuario (`404`).              |

@@ -132,6 +132,7 @@ async function asignarFotoCatalogo(
 | ------------------------------ | -------------------------------------------------------------------|
 | `BUSQUEDA_CATALOGO_INVALIDA`   | `buscarEnCatalogo` sin `q` ni `codigoBarras`.                    |
 | `CODIGO_BARRAS_DUPLICADO`      | `crearProductoNuevoEnCatalogo` con un `codigoBarras` que ya existe. |
+| `UNIDAD_INVALIDA`              | `unidad` no es `'unidad'` ni `'kg'` al crear una entrada.         |
 | `CATALOGO_YA_TIENE_FOTO`       | Un vendedor premium (no admin) intenta reemplazar una foto de catálogo existente (`409`). |
 | `FOTOS_SOLO_PREMIUM`           | Un vendedor `free` (o un usuario sin tienda que no es admin) intenta asignar foto de catálogo (`403`). |
 | `CATALOGO_NO_ENCONTRADO`       | `obtenerProductoCatalogo`/`adoptarProductoDeCatalogo` con `id` inexistente (usado desde `03-productos.md`). |

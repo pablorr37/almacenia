@@ -109,6 +109,26 @@ describe("crearPedido", () => {
     expect(pedido.items[0].precioUnitario).toBe(100);
   });
 
+  it("venta por peso: pedido de 250 g de un producto por kg (precio por kg)", async () => {
+    await prisma.productoCatalogo.update({ where: { id: producto.catalogoId }, data: { unidad: "kg" } });
+    const pedido = await crearPedido(comprador, {
+      tiendaId: tienda.id,
+      items: [{ productoId: producto.id, cantidad: 0.25 }],
+    });
+    expect(pedido.items[0].cantidad).toBe(0.25);
+    expect(pedido.total).toBe(25);
+  });
+
+  it("CANTIDAD_INVALIDA: fracción en producto por unidad o menos de 50 g en uno por kg", async () => {
+    await expect(
+      crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 1.5 }] })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "CANTIDAD_INVALIDA" });
+    await prisma.productoCatalogo.update({ where: { id: producto.catalogoId }, data: { unidad: "kg" } });
+    await expect(
+      crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 0.03 }] })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "CANTIDAD_INVALIDA" });
+  });
+
   it("el precioUnitario copiado no cambia si el producto cambia de precio después", async () => {
     const pedido = await crearPedido(comprador, {
       tiendaId: tienda.id,

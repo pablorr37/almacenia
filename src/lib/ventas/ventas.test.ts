@@ -64,6 +64,17 @@ describe("crearVentaPresencial", () => {
 
   afterEach(() => limpiar([vendedor.id, otro.id, comprador.id]));
 
+  it("venta por peso: debita 1,25 kg del stock y calcula el total por kg", async () => {
+    await prisma.productoCatalogo.update({ where: { id: producto.catalogoId }, data: { unidad: "kg" } });
+    const venta = await crearVentaPresencial(vendedor, tienda.id, {
+      items: [{ productoId: producto.id, cantidad: 1.25 }],
+    });
+    expect(venta.total).toBe(125);
+    expect(venta.items[0].cantidad).toBe(1.25);
+    const actualizado = await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } });
+    expect(Number(actualizado.stock)).toBe(8.75);
+  });
+
   it("crea la venta, debita el stock y calcula el total", async () => {
     const venta = await crearVentaPresencial(vendedor, tienda.id, {
       items: [{ productoId: producto.id, cantidad: 3 }],
@@ -78,7 +89,7 @@ describe("crearVentaPresencial", () => {
     expect(venta.items[0].precioUnitario).toBe(100);
 
     const productoActualizado = await prisma.producto.findUnique({ where: { id: producto.id } });
-    expect(productoActualizado?.stock).toBe(7);
+    expect(Number(productoActualizado?.stock)).toBe(7);
   });
 
   it("acepta un compradorId opcional de un usuario existente", async () => {
@@ -148,7 +159,7 @@ describe("crearVentaPresencial", () => {
     ).rejects.toMatchObject<Partial<AppError>>({ code: "STOCK_INSUFICIENTE" });
 
     const productoIntacto = await prisma.producto.findUnique({ where: { id: producto.id } });
-    expect(productoIntacto?.stock).toBe(10);
+    expect(Number(productoIntacto?.stock)).toBe(10);
   });
 });
 
@@ -231,7 +242,7 @@ describe("crearVentaDesdePedido (vía transicionarPedido 'entregar')", () => {
     expect(venta?.total).toBe(200);
 
     const productoActualizado = await prisma.producto.findUnique({ where: { id: producto.id } });
-    expect(productoActualizado?.stock).toBe(8);
+    expect(Number(productoActualizado?.stock)).toBe(8);
   });
 
   it("si el stock no alcanza al entregar, la transición falla con STOCK_INSUFICIENTE y el pedido queda en listo_para_retirar", async () => {

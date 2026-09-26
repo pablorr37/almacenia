@@ -24,11 +24,11 @@ describe("normalizarItems", () => {
     ]);
   });
 
-  it("ITEMS_LISTA_INVALIDOS: no array, cantidad no entera o < 1, sin catalogoId, más de 100", () => {
+  it("ITEMS_LISTA_INVALIDOS: no array, cantidad ≤ 0, sin catalogoId, más de 100", () => {
     const invalidos: unknown[] = [
       "x",
       [{ catalogoId: "a", cantidad: 0 }],
-      [{ catalogoId: "a", cantidad: 1.5 }],
+      [{ catalogoId: "a", cantidad: -1 }],
       [{ cantidad: 1 }],
       Array.from({ length: 101 }, (_, i) => ({ catalogoId: `c${i}`, cantidad: 1 })),
     ];
@@ -68,6 +68,19 @@ describe("listas de compras (14-listas-compras.md)", () => {
       cantidad: 2,
       producto: { nombre: "Yerba test listas", marca: "Playadito" },
     });
+  });
+
+  it("venta por peso: acepta 0,25 kg en productos por kg y rechaza fracciones en productos por unidad", async () => {
+    await prisma.productoCatalogo.update({ where: { id: fideos }, data: { unidad: "kg" } });
+    const lista = await crearLista(comprador, { nombre: "Fiambre", items: [{ catalogoId: fideos, cantidad: 0.25 }] });
+    expect(lista.items[0]).toMatchObject({ cantidad: 0.25, producto: { unidad: "kg" } });
+
+    await expect(
+      crearLista(comprador, { nombre: "X", items: [{ catalogoId: yerba, cantidad: 1.5 }] })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "CANTIDAD_INVALIDA" });
+    await expect(
+      crearLista(comprador, { nombre: "X", items: [{ catalogoId: fideos, cantidad: 0.03 }] })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "CANTIDAD_INVALIDA" });
   });
 
   it("NOMBRE_LISTA_INVALIDO vacío o de más de 80 caracteres", async () => {

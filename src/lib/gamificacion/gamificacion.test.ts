@@ -64,6 +64,22 @@ describe("reglas puras", () => {
     });
   });
 
+  describe("productos por kg (12-gamificacion.md)", () => {
+    it("cuentan como producto distinto pero sus kilos no suman al bonus de unidades", () => {
+      expect(puntosVentaVendedor([{ productoId: "papa", cantidad: 3.5, unidad: "kg" }])).toBe(1.1);
+      expect(
+        puntosVentaVendedor([
+          { productoId: "papa", cantidad: 6, unidad: "kg" },
+          { productoId: "gaseosa", cantidad: 6 },
+        ])
+      ).toBe(1.8);
+    });
+    it("una compra de un único producto por kg no puntúa, aunque sean muchos kilos", () => {
+      expect(compraPuntua([{ productoId: "papa", cantidad: 10, unidad: "kg" }])).toBe(false);
+      expect(compraPuntua([{ productoId: "papa", cantidad: 1, unidad: "kg" }, { productoId: "pan", cantidad: 1 }])).toBe(true);
+    });
+  });
+
   describe("compraPuntua: ≥2 productos distintos o alguna línea con más de 5 unidades", () => {
     it("1 caramelo no puntúa", () => {
       expect(compraPuntua([{ productoId: "caramelo", cantidad: 1 }])).toBe(false);

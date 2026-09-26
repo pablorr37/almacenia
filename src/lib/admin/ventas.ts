@@ -66,7 +66,7 @@ export async function listarVentasAdmin(
       id: item.id,
       productoId: item.productoId,
       productoNombre: item.producto.nombre,
-      cantidad: item.cantidad,
+      cantidad: Number(item.cantidad),
       precioUnitario: Number(item.precioUnitario),
     })),
     tiendaNombre: v.tienda.nombre,

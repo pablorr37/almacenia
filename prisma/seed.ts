@@ -330,6 +330,8 @@ async function main() {
             nuevo: {
               nombre: producto.nombre,
               categoria: aCategoria(def.rubro),
+              // Venta por peso (03-productos.md): lo que dice "(kg)" se vende por kg.
+              unidad: producto.nombre.includes("(kg)") ? "kg" : "unidad",
             },
             precio: precioTienda,
             stock: producto.stock,
