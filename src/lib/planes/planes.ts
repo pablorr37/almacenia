@@ -5,9 +5,9 @@ import type { Plan as PlanDb } from "@/generated-prisma/client";
 
 export type Plan = PlanDb;
 
-export type Feature = "fotos_ilimitadas" | "destacado_prioritario";
+export type Feature = "fotos_personalizadas" | "destacado_prioritario";
 
-const FEATURES_PREMIUM: readonly Feature[] = ["fotos_ilimitadas", "destacado_prioritario"];
+const FEATURES_PREMIUM: readonly Feature[] = ["fotos_personalizadas", "destacado_prioritario"];
 
 export function tienePermiso(tienda: { plan: Plan }, feature: Feature): boolean {
   if (tienda.plan === "premium") return true;

@@ -89,7 +89,18 @@ describe("POST /api/archivos/upload", () => {
     expect(body.error.code).toBe("NO_ES_DUENO_DE_TIENDA");
   });
 
-  it("201 sube la foto de un producto propio", async () => {
+  it("403 FOTOS_SOLO_PREMIUM al subir foto propia de un producto con tienda free", async () => {
+    obtenerUsuarioActualMock.mockResolvedValue(dueno);
+    const res = await POST(
+      reqConArchivo(`http://localhost/api/archivos/upload?tipo=producto&entidadId=${producto.id}`)
+    );
+    const body = await res.json();
+    expect(res.status).toBe(403);
+    expect(body.error.code).toBe("FOTOS_SOLO_PREMIUM");
+  });
+
+  it("201 sube la foto propia de un producto con tienda premium", async () => {
+    await prisma.tienda.update({ where: { id: tienda.id }, data: { plan: "premium" } });
     obtenerUsuarioActualMock.mockResolvedValue(dueno);
     const res = await POST(
       reqConArchivo(`http://localhost/api/archivos/upload?tipo=producto&entidadId=${producto.id}`)
@@ -105,69 +116,37 @@ describe("POST /api/archivos/upload", () => {
     expect(body.error.code).toBe("TIPO_ARCHIVO_INVALIDO");
   });
 
-  describe("límite de fotos del plan free", () => {
-    let productosExtra: Producto[];
-
-    beforeEach(async () => {
-      // La tienda ya tiene 1 producto ("producto", sin foto) del beforeEach de
-      // arriba. Se agregan 2 más y se les asigna foto directo en la DB (no importa
-      // el mecanismo de subida acá, solo que imagenUrl quede no nulo) para llegar
-      // a las 3 fotos que permite el plan free antes de la prueba.
-      productosExtra = await Promise.all(
-        [1, 2].map((i) =>
-          crearProducto(dueno, tienda.id, { nuevo: { nombre: `Extra ${i}` }, precio: 10, stock: 1 })
-        )
-      );
-      await prisma.producto.updateMany({
-        where: { id: { in: productosExtra.map((p) => p.id) } },
-        data: { imagenUrl: "http://localhost:9000/x.jpg" },
-      });
-      await prisma.producto.update({ where: { id: producto.id }, data: { imagenUrl: "http://localhost:9000/x.jpg" } });
-    });
-
-    afterEach(async () => {
-      // Se borran los productos extra antes que su catálogo (FK) — el afterEach
-      // del describe exterior, que borra el resto de los productos de la tienda,
-      // corre después de este (los hooks anidados corren de adentro hacia afuera).
-      await prisma.producto.deleteMany({ where: { id: { in: productosExtra.map((p) => p.id) } } });
-      await prisma.productoCatalogo.deleteMany({ where: { id: { in: productosExtra.map((p) => p.catalogoId) } } });
-    });
-
-    it("409 LIMITE_FOTOS_PLAN_FREE al querer poner foto a un 4to producto", async () => {
-      const cuarto = await crearProducto(dueno, tienda.id, { nuevo: { nombre: "Cuarto" }, precio: 10, stock: 1 });
-
+  describe("tipo=catalogo (foto compartida del producto)", () => {
+    it("403 FOTOS_SOLO_PREMIUM con tienda free", async () => {
       obtenerUsuarioActualMock.mockResolvedValue(dueno);
       const res = await POST(
-        reqConArchivo(`http://localhost/api/archivos/upload?tipo=producto&entidadId=${cuarto.id}`)
+        reqConArchivo(`http://localhost/api/archivos/upload?tipo=catalogo&entidadId=${producto.catalogoId}`)
+      );
+      const body = await res.json();
+      expect(res.status).toBe(403);
+      expect(body.error.code).toBe("FOTOS_SOLO_PREMIUM");
+    });
+
+    it("201 con tienda premium si el catálogo no tiene foto", async () => {
+      await prisma.tienda.update({ where: { id: tienda.id }, data: { plan: "premium" } });
+      obtenerUsuarioActualMock.mockResolvedValue(dueno);
+      const res = await POST(
+        reqConArchivo(`http://localhost/api/archivos/upload?tipo=catalogo&entidadId=${producto.catalogoId}`)
+      );
+      expect(res.status).toBe(201);
+      expect(subirArchivoMock).toHaveBeenCalledWith(expect.objectContaining({ tipo: "catalogo", entidadId: producto.catalogoId }));
+    });
+
+    it("409 CATALOGO_YA_TIENE_FOTO con tienda premium si el catálogo ya tiene foto", async () => {
+      await prisma.tienda.update({ where: { id: tienda.id }, data: { plan: "premium" } });
+      await prisma.productoCatalogo.update({ where: { id: producto.catalogoId }, data: { imagenUrl: "http://s3/x.jpg" } });
+      obtenerUsuarioActualMock.mockResolvedValue(dueno);
+      const res = await POST(
+        reqConArchivo(`http://localhost/api/archivos/upload?tipo=catalogo&entidadId=${producto.catalogoId}`)
       );
       const body = await res.json();
       expect(res.status).toBe(409);
-      expect(body.error.code).toBe("LIMITE_FOTOS_PLAN_FREE");
-
-      await prisma.producto.deleteMany({ where: { id: cuarto.id } });
-      await prisma.productoCatalogo.deleteMany({ where: { id: cuarto.catalogoId } });
-    });
-
-    it("permite reemplazar la foto de un producto que ya tenía, sin contar contra el límite", async () => {
-      obtenerUsuarioActualMock.mockResolvedValue(dueno);
-      const res = await POST(
-        reqConArchivo(`http://localhost/api/archivos/upload?tipo=producto&entidadId=${producto.id}`)
-      );
-      expect(res.status).toBe(201);
-    });
-
-    it("no aplica el límite si la tienda es premium", async () => {
-      await prisma.tienda.update({ where: { id: tienda.id }, data: { plan: "premium" } });
-      const cuarto = await crearProducto(dueno, tienda.id, { nuevo: { nombre: "Cuarto premium" }, precio: 10, stock: 1 });
-
-      obtenerUsuarioActualMock.mockResolvedValue(dueno);
-      const res = await POST(
-        reqConArchivo(`http://localhost/api/archivos/upload?tipo=producto&entidadId=${cuarto.id}`)
-      );
-      expect(res.status).toBe(201);
-
-      await prisma.producto.deleteMany({ where: { id: cuarto.id } });
-      await prisma.productoCatalogo.deleteMany({ where: { id: cuarto.catalogoId } });
+      expect(body.error.code).toBe("CATALOGO_YA_TIENE_FOTO");
     });
   });
 });

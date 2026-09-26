@@ -24,23 +24,25 @@ llamador guarda en el campo `imagenUrl`/`avatarUrl` que corresponda (`Usuario`,
 - Solo puede subir una foto de tienda/producto quien es dueño de esa tienda; solo
   el propio usuario puede subir su avatar — la autorización la hace el endpoint
   antes de llamar a este módulo, según el tipo de entidad.
-- **Límite por plan** (ver `10-planes.md`, feature `fotos_ilimitadas`): una tienda
-  `free` puede tener foto propia (`Producto.imagenUrl` no nulo) en como máximo 3
-  productos a la vez; `premium` no tiene límite. Este módulo no conoce el concepto
-  de plan — el límite lo valida el endpoint `POST /api/archivos/upload` con
-  `tipo=producto` antes de llamar a `subirArchivo`: cuenta los productos de esa
-  tienda con `imagenUrl IS NOT NULL` (sin contar el producto que se está subiendo,
-  si ya tenía foto — reemplazar no cuenta como una foto nueva) y compara contra el
-  límite si el plan es `free`. `409 LIMITE_FOTOS_PLAN_FREE` si se supera (conflicto
-  con el estado del plan actual, mismo status que otros límites de negocio — ver
-  `00-overview.md`).
+- **Gating por plan** (ver `10-planes.md`, feature `fotos_personalizadas`, y la
+  regla de fotos de `03-productos.md` / `06-catalogo.md`). Este módulo no conoce el
+  concepto de plan — lo valida el endpoint `POST /api/archivos/upload` antes de
+  llamar a `subirArchivo`:
+  - `tipo=producto` (foto personalizada de un producto de la tienda): la tienda debe
+    ser `premium`; si no, `403 FOTOS_SOLO_PREMIUM`.
+  - `tipo=catalogo` (`entidadId` = id de `ProductoCatalogo`): el usuario debe ser
+    admin, o dueño de una tienda `premium` y la entrada no tener foto todavía
+    (`403 FOTOS_SOLO_PREMIUM` / `409 CATALOGO_YA_TIENE_FOTO`). Key en el bucket:
+    `catalogo/<catalogoId>/<uuid>.<ext>`.
+  El límite anterior de 3 fotos para tiendas free (`LIMITE_FOTOS_PLAN_FREE`) queda
+  reemplazado por esta regla.
 
 ## Endpoints REST
 
 ### `POST /api/archivos/upload`
 
 Requiere sesión válida. `Content-Type: multipart/form-data` con un único campo
-`archivo`. Query param `?tipo=tienda|producto|avatar&entidadId=<id>` para que el
+`archivo`. Query param `?tipo=tienda|producto|catalogo|avatar&entidadId=<id>` para que el
 endpoint valide ownership antes de subir (`entidadId` no aplica para `avatar`, es
 siempre el propio usuario).
 
@@ -51,7 +53,7 @@ Response `201`: `{ data: { url: string } }`.
 Ubicación: `src/lib/archivos/`.
 
 ```ts
-type TipoArchivo = 'tienda' | 'producto' | 'avatar';
+type TipoArchivo = 'tienda' | 'producto' | 'catalogo' | 'avatar';
 
 interface SubirArchivoInput {
   tipo: TipoArchivo;
@@ -72,4 +74,5 @@ function validarImagen(contentType: string, tamanioBytes: number): void;
 | `TIPO_ARCHIVO_INVALIDO`    | `contentType` no es `image/jpeg`, `image/png` ni `image/webp`.    |
 | `ARCHIVO_DEMASIADO_GRANDE` | El archivo supera 5 MB.                                           |
 | `ARCHIVO_FALTANTE`         | El request no trae el campo `archivo`.                            |
-| `LIMITE_FOTOS_PLAN_FREE`   | La tienda es `plan=free` y ya tiene 3 productos con foto propia (`10-planes.md`). |
+| `FOTOS_SOLO_PREMIUM`       | Subida de foto de producto/catálogo sin plan premium (`403`, ver `10-planes.md`). |
+| `CATALOGO_YA_TIENE_FOTO`   | `tipo=catalogo`, la entrada ya tiene foto y el usuario no es admin (`409`). |

@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
+import type { Usuario } from "@/lib/auth/auth";
+import { tienePermiso } from "@/lib/planes/planes";
+import { sinRomper, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
 import type { Categoria, ProductoCatalogo as ProductoCatalogoDb } from "@/generated-prisma/client";
 
 export interface ProductoCatalogo {
@@ -83,4 +86,41 @@ export async function crearProductoNuevoEnCatalogo(
   });
 
   return aProductoCatalogo(producto);
+}
+
+// Foto del catálogo (06-catalogo.md): admin siempre; vendedor premium solo si la
+// entrada todavía no tiene foto. Devuelve también la tienda del vendedor (null si
+// es admin sin tienda) para que el llamador otorgue puntos (12-gamificacion.md).
+export async function verificarPermisoFotoCatalogo(
+  usuario: Usuario,
+  catalogoId: string
+): Promise<{ tiendaId: string | null }> {
+  const entrada = await prisma.productoCatalogo.findUnique({ where: { id: catalogoId } });
+  if (!entrada) {
+    throw new AppError("CATALOGO_NO_ENCONTRADO", "El producto de catálogo no existe.");
+  }
+  const tienda = await prisma.tienda.findUnique({ where: { vendedorId: usuario.id }, select: { id: true, plan: true } });
+  if (usuario.esAdmin) return { tiendaId: tienda?.id ?? null };
+
+  if (!tienda || !tienePermiso(tienda, "fotos_personalizadas")) {
+    throw new AppError("FOTOS_SOLO_PREMIUM", "Subir fotos de productos es una función del plan premium.");
+  }
+  if (entrada.imagenUrl) {
+    throw new AppError("CATALOGO_YA_TIENE_FOTO", "Este producto ya tiene foto en el catálogo.");
+  }
+  return { tiendaId: tienda.id };
+}
+
+export async function asignarFotoCatalogo(
+  usuario: Usuario,
+  catalogoId: string,
+  imagenUrl: string
+): Promise<ProductoCatalogo> {
+  const { tiendaId } = await verificarPermisoFotoCatalogo(usuario, catalogoId);
+  const actualizado = await prisma.productoCatalogo.update({ where: { id: catalogoId }, data: { imagenUrl } });
+  // foto_cargada es para vendedores (12-gamificacion.md); un admin no suma.
+  if (tiendaId && !usuario.esAdmin) {
+    await sinRomper(() => otorgarPorFotoCargada(usuario.id, tiendaId, catalogoId));
+  }
+  return aProductoCatalogo(actualizado);
 }

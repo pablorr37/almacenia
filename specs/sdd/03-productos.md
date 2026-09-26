@@ -33,12 +33,21 @@ CREATE INDEX productos_catalogo_id_idx ON productos (catalogo_id);
 CREATE INDEX productos_categoria_idx ON productos (categoria);
 ```
 
-- `nombre`, `descripcion`, `imagen_url` y `categoria` nacen copiados del
-  `ProductoCatalogo` elegido al crear el producto (denormalizados para no pagar un
-  join en cada listado del storefront) pero son editables por tienda después — cada
-  vendedor puede ajustar su propia descripción o foto sin afectar el catálogo
-  compartido ni a otras tiendas que adoptaron el mismo `catalogoId`. `precio` nunca
-  viene del catálogo: es siempre propio de cada tienda (ver `06-catalogo.md`).
+- `nombre`, `descripcion` y `categoria` nacen copiados del `ProductoCatalogo`
+  elegido al crear el producto (denormalizados para no pagar un join en cada listado
+  del storefront) pero son editables por tienda después — cada vendedor puede
+  ajustar su propia descripción sin afectar el catálogo compartido ni a otras
+  tiendas que adoptaron el mismo `catalogoId`. `precio` nunca viene del catálogo: es
+  siempre propio de cada tienda (ver `06-catalogo.md`).
+- **Fotos.** La foto de un producto está asociada al producto de catálogo
+  (`ProductoCatalogo.imagenUrl`, ver `06-catalogo.md`) y la comparten todas las
+  tiendas que lo venden. `productos.imagen_url` es la **foto personalizada** de una
+  tienda, feature exclusiva del plan premium (`fotos_personalizadas`,
+  `10-planes.md`); `crearProducto` ya no copia la foto del catálogo a esta columna
+  (nace `null`). La foto que se muestra es la **imagen efectiva**:
+  `imagenEfectiva = (tienda.plan === 'premium' && producto.imagenUrl) || catalogo.imagenUrl || null`.
+  Una tienda free que tenía fotos propias de antes de esta regla no las pierde (no
+  se borra nada), simplemente no se muestran mientras sea free.
 - `precio_oferta`, cuando no es `null`, es el precio promocional vigente — debe ser
   menor a `precio`. Un producto "en oferta" (tab de storefront) es el que tiene
   `precio_oferta` no nulo.
@@ -68,6 +77,8 @@ CREATE INDEX productos_categoria_idx ON productos (categoria);
 - No hay borrado físico de productos con historial de ventas asociado: `DELETE`
   marca `disponible = false` y `stock = 0` en lugar de borrar la fila, para no romper
   la referencia desde `ItemVenta`/`ItemPedido` de ventas pasadas.
+- Crear un producto otorga puntos de gamificación al vendedor (`producto_cargado`,
+  una vez por tienda y producto de catálogo — ver `12-gamificacion.md`).
 - Crear un producto requiere elegir un `catalogoId` existente o proveer los datos de
   un producto nuevo para darlo de alta en el catálogo compartido de una — ver el
   flujo completo (buscar/adoptar/crear) en `06-catalogo.md`. `POST` acepta
@@ -103,6 +114,9 @@ o dando de alta un producto nuevo en el catálogo compartido en la misma operaci
 
 Response `201`: `{ data: Producto }`. `disponible` nace en `true`.
 
+`imagenUrl` (foto personalizada) y `nuevo.imagenUrl` (foto del catálogo) siguen la
+regla de fotos: ambos requieren tienda `premium` — `403 FOTOS_SOLO_PREMIUM` si no.
+
 ### `GET /api/tiendas/:tiendaId/productos`
 
 Público. Query params opcionales:
@@ -122,7 +136,9 @@ Response `200`: `{ data: Producto[]; page; pageSize; total }`.
 
 ### `PATCH /api/productos/:id`
 
-Requiere ser el dueño de la tienda del producto.
+Requiere ser el dueño de la tienda del producto. Setear `imagenUrl` (foto
+personalizada) requiere `plan = premium` — `403 FOTOS_SOLO_PREMIUM` si no (poner
+`imagenUrl: null` para quitarla está permitido en cualquier plan).
 
 Request (todos opcionales):
 `{ nombre?; descripcion?; imagenUrl?; precio?; precioOferta?; destacado?; stock?; disponible? }`.
@@ -149,13 +165,22 @@ interface Producto {
   nombre: string;
   descripcion: string | null;
   categoria: Categoria | null;
-  imagenUrl: string | null;
+  imagenUrl: string | null; // foto personalizada de la tienda (premium)
+  imagenCatalogoUrl: string | null; // foto compartida del catálogo
+  imagenEfectiva: string | null; // la que se muestra (ver regla de fotos)
   precio: number;
   precioOferta: number | null;
   destacado: boolean;
   stock: number;
   disponible: boolean;
 }
+
+// Pura. Ver regla de fotos arriba.
+function imagenEfectiva(
+  tienda: { plan: Plan },
+  producto: { imagenUrl: string | null },
+  catalogo: { imagenUrl: string | null }
+): string | null;
 
 function esComprable(producto: Producto): boolean; // disponible && stock > 0
 
@@ -227,3 +252,4 @@ async function debitarStock(productoId: string, cantidad: number): Promise<Produ
 | `STOCK_INSUFICIENTE`        | `debitarStock` pide debitar más de lo disponible (usado por `ventas`). |
 | `PRECIO_OFERTA_INVALIDO`    | `precioOferta` negativo o mayor/igual a `precio`.                  |
 | `CATALOGO_NO_ENCONTRADO`    | `catalogoId` no existe (ver `06-catalogo.md`).                     |
+| `FOTOS_SOLO_PREMIUM`        | Tienda `free` intenta setear una foto personalizada (`403`, ver `10-planes.md`). |

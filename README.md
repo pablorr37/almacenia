@@ -6,7 +6,12 @@ Gestión de almacenes, kioscos y verdulerías. Dos features principales:
   promociones, gestión interna (ventas, bajas, pedidos, balance), recepción de pedidos
   para retiro en el local.
 - **Comprador**: mapa de tiendas cercanas con precios y promociones, pedidos y contacto
-  con el vendedor, listas de pendientes e itinerario de compra optimizado entre tiendas.
+  con el vendedor, listas de compras y "Buscar y comparar": planes de compra entre
+  tiendas cercanas por precio + distancia (se completa por fases según la
+  infraestructura disponible — ver [`docs/roadmap-itinerario.md`](docs/roadmap-itinerario.md)).
+- **Gamificación**: puntos para vendedores y compradores (`specs/sdd/12-gamificacion.md`).
+
+La spec técnica completa está en [`specs/sdd/`](specs/sdd/00-overview.md).
 
 ## Stack
 

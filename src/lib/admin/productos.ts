@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, type Usuario } from "@/lib/auth/auth";
-import type { Producto } from "@/lib/productos/productos";
+import { imagenEfectiva, type Producto } from "@/lib/productos/productos";
 import type { Categoria } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
@@ -41,7 +41,10 @@ export async function listarProductosAdmin(
   const [productos, total] = await Promise.all([
     prisma.producto.findMany({
       where,
-      include: { tienda: { select: { nombre: true, vendedor: { select: { nombre: true } } } } },
+      include: {
+        tienda: { select: { nombre: true, plan: true, vendedor: { select: { nombre: true } } } },
+        catalogo: { select: { imagenUrl: true } },
+      },
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy: { creadoEn: "desc" },
@@ -57,6 +60,8 @@ export async function listarProductosAdmin(
     descripcion: p.descripcion,
     categoria: p.categoria,
     imagenUrl: p.imagenUrl,
+    imagenCatalogoUrl: p.catalogo.imagenUrl,
+    imagenEfectiva: imagenEfectiva(p.tienda, p, p.catalogo),
     precio: Number(p.precio),
     precioOferta: p.precioOferta === null ? null : Number(p.precioOferta),
     destacado: p.destacado,

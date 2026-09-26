@@ -146,6 +146,31 @@ describe("crearTienda", () => {
 
     expect(tienda.mediosDePago).toEqual([]);
     expect(tienda.horarios).toEqual([]);
+    expect(tienda.abierto24hs).toBe(false);
+  });
+
+  it("crea una tienda 24 hs sin horarios (abierto24hs)", async () => {
+    const tienda = await crearTienda(usuario, {
+      nombre: "Kiosco 24 hs",
+      direccion: "Dirección",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+      abierto24hs: true,
+    });
+    expect(tienda.abierto24hs).toBe(true);
+    expect((await obtenerTienda(tienda.id))?.abierto24hs).toBe(true);
+  });
+
+  it("lanza ABIERTO_24HS_INVALIDO si abierto24hs no es boolean", async () => {
+    await expect(
+      crearTienda(usuario, {
+        nombre: "Inválida",
+        direccion: "Dirección",
+        lat: LAT_BASE,
+        lon: LON_BASE,
+        abierto24hs: "si" as unknown as boolean,
+      })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "ABIERTO_24HS_INVALIDO" });
   });
 
   it("lanza HORARIO_INVALIDO si horarios no trae las 7 entradas", async () => {
@@ -388,6 +413,25 @@ describe("actualizarTienda", () => {
   });
 
   afterEach(() => limpiar([dueno.id, otro.id]));
+
+  it("activa y desactiva abierto24hs conservando los horarios", async () => {
+    const tienda = await crearTienda(dueno, {
+      nombre: "Kiosco",
+      direccion: "D",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+      horarios: semanaCompleta(),
+    });
+    const activada = await actualizarTienda(dueno, tienda.id, { abierto24hs: true });
+    expect(activada.abierto24hs).toBe(true);
+    expect(activada.horarios).toHaveLength(7);
+
+    const otroCambio = await actualizarTienda(dueno, tienda.id, { nombre: "Kiosco 2" });
+    expect(otroCambio.abierto24hs).toBe(true);
+
+    const desactivada = await actualizarTienda(dueno, tienda.id, { abierto24hs: false });
+    expect(desactivada.abierto24hs).toBe(false);
+  });
 
   it("permite al dueño actualizar sus datos", async () => {
     const tienda = await crearTienda(dueno, {

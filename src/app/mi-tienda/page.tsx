@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
+import { ValoracionCliente } from "@/components/ui/ValoracionCliente";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { useCodigoBarras } from "@/lib/scanner/useCodigoBarras";
 
@@ -39,6 +40,7 @@ type Tienda = {
   plan: "free" | "premium";
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[];
+  abierto24hs: boolean;
 };
 
 const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -61,8 +63,11 @@ function horarioPorDefecto(): HorarioTienda[] {
 
 type Producto = {
   id: string;
+  catalogoId: string;
   nombre: string;
   imagenUrl: string | null;
+  imagenCatalogoUrl: string | null;
+  imagenEfectiva: string | null;
   precio: number;
   stock: number;
   disponible: boolean;
@@ -78,6 +83,7 @@ type EstadoPedido =
 
 type Pedido = {
   id: string;
+  compradorId: string;
   estado: EstadoPedido;
   items: Array<{ productoId: string; cantidad: number; precioUnitario: number }>;
 };
@@ -113,6 +119,7 @@ export default function MiTiendaPage() {
   const [descripcionForm, setDescripcionForm] = useState("");
   const [mediosForm, setMediosForm] = useState<MedioPago[]>([]);
   const [horariosForm, setHorariosForm] = useState<HorarioTienda[]>(horarioPorDefecto());
+  const [abierto24hsForm, setAbierto24hsForm] = useState(false);
   const [guardandoTienda, setGuardandoTienda] = useState(false);
   const [tiendaGuardada, setTiendaGuardada] = useState(false);
   const [solicitandoVerificacion, setSolicitandoVerificacion] = useState(false);
@@ -186,7 +193,15 @@ export default function MiTiendaPage() {
     setDescripcionForm(tienda.descripcion ?? "");
     setMediosForm(tienda.mediosDePago);
     setHorariosForm(tienda.horarios.length === 7 ? tienda.horarios : horarioPorDefecto());
+    setAbierto24hsForm(tienda.abierto24hs);
   }, [tienda]);
+
+  // Sin horarios ni 24 hs la tienda no aparece en "Solo abiertas ahora" y los
+  // compradores ven "Horario no informado" (02-tiendas.md): aviso persistente.
+  function irAHorarios() {
+    setTab("tienda");
+    setTimeout(() => document.getElementById("horarios")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
 
   function toggleMedioPago(medio: MedioPago) {
     setMediosForm((actual) =>
@@ -224,6 +239,7 @@ export default function MiTiendaPage() {
         descripcion: descripcionForm || undefined,
         mediosDePago: mediosForm,
         horarios: horariosForm,
+        abierto24hs: abierto24hsForm,
       });
       setTienda(actualizada);
       setTiendaGuardada(true);
@@ -286,7 +302,7 @@ export default function MiTiendaPage() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-text-2">Necesitás iniciar sesión para gestionar tu tienda.</p>
-        <Link href="/login" className="font-semibold text-accent">
+        <Link href="/login" className="font-semibold text-accent-text">
           Iniciar sesión
         </Link>
       </div>
@@ -323,7 +339,7 @@ export default function MiTiendaPage() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-bg">
       <div className="flex items-center justify-between px-5 pb-1 pt-5">
         <span className="font-display text-[20px] font-bold text-primary-dark">Mi tienda</span>
-        <Link href="/" className="text-[13px] font-semibold text-accent">
+        <Link href="/" className="text-[13px] font-semibold text-accent-text">
           Ver como comprador
         </Link>
       </div>
@@ -341,6 +357,25 @@ export default function MiTiendaPage() {
           </button>
         ))}
       </div>
+
+      {tienda.horarios.length === 0 && !tienda.abierto24hs && (
+        <div
+          role="status"
+          className="mx-5 mb-3 flex animate-fade-up flex-col gap-2 rounded-card border border-estado-pendiente-text/30 bg-estado-pendiente-bg p-3.5 text-estado-pendiente-text"
+        >
+          <p className="text-[13px] leading-snug">
+            <strong>Tu tienda no tiene horarios cargados:</strong> no aparece en &quot;Solo abiertas ahora&quot; y los
+            compradores ven &quot;Horario no informado&quot;.
+          </p>
+          <button
+            type="button"
+            onClick={irAHorarios}
+            className="press self-start rounded-pill bg-estado-pendiente-text px-3.5 py-2 text-[13px] font-semibold text-white"
+          >
+            Configurar horarios
+          </button>
+        </div>
+      )}
 
       <div className="flex-grow overflow-y-auto px-5 pb-6">
         {tab === "tienda" && (
@@ -394,9 +429,22 @@ export default function MiTiendaPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div id="horarios" className="flex scroll-mt-4 flex-col gap-2">
               <div className="text-[13px] font-semibold text-text">Horario de atención</div>
-              <div className="flex flex-col gap-2">
+              <label className="flex items-center justify-between gap-3 rounded-control border border-border bg-surface p-3">
+                <span className="flex flex-col">
+                  <span className="text-[14px] font-semibold text-text">Abierto las 24 hs</span>
+                  <span className="text-[12px] text-text-2">Todos los días, sin horario de cierre</span>
+                </span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={abierto24hsForm}
+                  onChange={(e) => setAbierto24hsForm(e.target.checked)}
+                  className="h-5 w-5 accent-[#0e6b5c]"
+                />
+              </label>
+              <div className={`flex flex-col gap-2 ${abierto24hsForm ? "hidden" : ""}`}>
                 {horariosForm
                   .slice()
                   .sort((a, b) => a.diaSemana - b.diaSemana)
@@ -628,10 +676,10 @@ export default function MiTiendaPage() {
                 key={p.id}
                 className="flex items-center gap-3 rounded-card border border-border bg-surface p-3.5"
               >
-                {p.imagenUrl ? (
+                {p.imagenEfectiva ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={p.imagenUrl}
+                    src={p.imagenEfectiva}
                     alt=""
                     style={{ width: 44, height: 44 }}
                     className="flex-shrink-0 rounded-control object-cover"
@@ -639,20 +687,50 @@ export default function MiTiendaPage() {
                 ) : (
                   <div style={{ width: 44, height: 44 }} className="flex-shrink-0 rounded-control bg-placeholder" />
                 )}
-                <div className="flex min-w-0 flex-grow flex-col gap-0.5">
+                <div className="flex min-w-0 flex-grow flex-col gap-1">
                   <div className="text-[14px] font-semibold">{p.nombre}</div>
                   <div className="text-xs text-text-2">
                     {formatoARS(p.precio)} · stock {p.stock}
                   </div>
-                  <ImageUploadField
-                    tipo="producto"
-                    entidadId={p.id}
-                    valorActual={null}
-                    onSubido={async (url) => {
-                      const actualizado = await apiPatch<Producto>(`/api/productos/${p.id}`, { imagenUrl: url });
-                      setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
-                    }}
-                  />
+                  {tienda?.plan === "premium" ? (
+                    <div className="flex flex-wrap gap-2">
+                      {/* Foto compartida del catálogo: premium puede cargarla si falta (06-catalogo.md). */}
+                      {!p.imagenCatalogoUrl && (
+                        <ImageUploadField
+                          tipo="catalogo"
+                          entidadId={p.catalogoId}
+                          valorActual={null}
+                          textoSubir="Foto del catálogo"
+                          onSubido={async (url) => {
+                            await apiPatch(`/api/catalogo/${p.catalogoId}/foto`, { imagenUrl: url });
+                            setProductos((prev) =>
+                              prev.map((x) =>
+                                x.catalogoId === p.catalogoId
+                                  ? { ...x, imagenCatalogoUrl: url, imagenEfectiva: x.imagenUrl ?? url }
+                                  : x,
+                              ),
+                            );
+                          }}
+                        />
+                      )}
+                      {/* Foto personalizada, visible solo en esta tienda (10-planes.md). */}
+                      <ImageUploadField
+                        tipo="producto"
+                        entidadId={p.id}
+                        valorActual={p.imagenUrl}
+                        textoSubir="Foto propia"
+                        onSubido={async (url) => {
+                          const actualizado = await apiPatch<Producto>(`/api/productos/${p.id}`, { imagenUrl: url });
+                          setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-text-2">
+                      {p.imagenCatalogoUrl ? "Foto del catálogo compartido" : "Sin foto en el catálogo"} · Fotos
+                      propias con <span className="font-semibold text-primary-dark">Premium</span>
+                    </span>
+                  )}
                 </div>
                 <span
                   className={`rounded-pill px-2.5 py-1 text-[11px] font-bold ${
@@ -685,6 +763,7 @@ export default function MiTiendaPage() {
                   <div className="text-[13px] text-text-2">
                     {p.items.length} producto(s) · {formatoARS(total)}
                   </div>
+                  <ValoracionCliente compradorId={p.compradorId} puedeValorar={p.estado === "entregado"} />
                   {acciones.length > 0 && (
                     <div className="mt-1 flex gap-2">
                       {acciones.map((accion) => (

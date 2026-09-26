@@ -38,6 +38,9 @@ CREATE TYPE medio_pago AS ENUM (
 
 ALTER TABLE tiendas ADD COLUMN medios_de_pago medio_pago[] NOT NULL DEFAULT '{}';
 
+-- Locales 24 hs (ver reglas de horarios).
+ALTER TABLE tiendas ADD COLUMN abierto_24hs BOOLEAN NOT NULL DEFAULT false;
+
 CREATE TABLE horarios_tienda (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tienda_id   UUID NOT NULL REFERENCES tiendas(id),
@@ -117,10 +120,17 @@ CREATE INDEX solicitudes_verificacion_tienda_id_idx ON solicitudes_verificacion 
   es `{ diaSemana, abre, cierra }`; si el día está cerrado, `abre` y `cierra` son
   ambos `null`; si está abierto, ambos son un string `"HH:mm"` válido y `abre` tiene
   que ser estrictamente anterior a `cierra` (no se contemplan horarios que cruzan la
-  medianoche, ej. locales 24hs se modelan con `abre`/`cierra` ambos `null` — "no
-  tiene horario de cierre" en la práctica se representa igual que "cerrado" a nivel
-  de dato; es la UI la que distingue "24 horas" de "cerrado" con un campo aparte si
-  hiciera falta más adelante, no forma parte de este MVP).
+  medianoche).
+- **Locales 24 hs**: se marcan con `abierto24hs = true` (campo propio, editable
+  en `POST`/`PATCH`). Con el flag activo la tienda está **siempre abierta**: los
+  `horarios` se ignoran para el estado de apertura (se conservan por si el vendedor
+  desactiva el flag) y siguen siendo opcionales. Los 7 días en `null` sin el flag
+  significan "cerrado todos los días", no 24 hs.
+- **Aviso de horarios sin configurar**: si una tienda no tiene horarios cargados
+  (0 filas) y no es 24 hs, el panel del vendedor muestra un aviso persistente (no se
+  puede cerrar) en todas sus pestañas: la tienda no aparece en "Solo abiertas ahora"
+  (`15-itinerario.md`) y los compradores ven "Horario no informado". El aviso
+  desaparece recién al guardar horarios o activar 24 hs.
 - Al actualizar `horarios`, se reemplazan las 7 filas existentes por las nuevas (no
   hay edición parcial de un solo día vía API — el cliente manda el estado completo
   de la semana).
@@ -149,6 +159,7 @@ Request:
   lon: number;
   mediosDePago?: MedioPago[];
   horarios?: Array<{ diaSemana: number; abre: string | null; cierra: string | null }>;
+  abierto24hs?: boolean; // default false
 }
 ```
 
@@ -238,6 +249,7 @@ interface Tienda {
   plan: Plan;
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[]; // 0 o 7 entradas
+  abierto24hs: boolean;
 }
 
 type EstadoVerificacion = 'pendiente' | 'aprobada' | 'rechazada';
@@ -260,6 +272,7 @@ interface CrearTiendaInput {
   lon: number;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[]; // si se manda, deben ser exactamente 7
+  abierto24hs?: boolean;
 }
 
 // Valida la forma de `horarios`: exactamente 7 entradas, diaSemana 0-6 sin
@@ -296,6 +309,7 @@ interface ActualizarTiendaInput {
   rubro?: Categoria;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[]; // si se manda, reemplaza las 7 filas existentes
+  abierto24hs?: boolean;
 }
 
 async function actualizarTienda(
@@ -328,7 +342,111 @@ async function revisarSolicitudVerificacion(
 | `NO_ES_DUENO_DE_TIENDA`      | El usuario autenticado intenta editar una tienda que no es la suya. |
 | `RADIO_INVALIDO`             | `radioKm` <= 0 o > 50 en la búsqueda por cercanía.              |
 | `HORARIO_INVALIDO`           | `horarios` no trae exactamente 7 entradas, `diaSemana` repetido o fuera de 0-6, formato de hora inválido, o `abre >= cierra` en un día abierto. |
+| `ABIERTO_24HS_INVALIDO`      | `abierto24hs` viene y no es boolean. |
 | `MEDIO_PAGO_INVALIDO`        | Algún valor de `mediosDePago` no es uno de los valores del enum `MedioPago` (el request llega como JSON sin tipar, hay que validarlo en runtime). |
 | `SOLICITUD_YA_PENDIENTE`     | La tienda ya tiene una `SolicitudVerificacion` en estado `pendiente`. |
 | `TIENDA_YA_VERIFICADA`       | La tienda ya tiene `verificada = true` al pedir una nueva solicitud. |
 | `SOLICITUD_NO_ENCONTRADA`    | `:id` de `SolicitudVerificacion` no existe (`revisarSolicitudVerificacion`). |
+
+## Extensión: estado de apertura, check-in GPS y visita a la página
+
+### Estado de apertura (abierta / cerrada)
+
+Regla derivada (no hay columna): se calcula a partir de `horarios` y de la hora
+actual **en la zona horaria del negocio**, `America/Argentina/San_Juan` (constante
+`ZONA_HORARIA_NEGOCIO`, compartida con `12-gamificacion.md`).
+
+- Si la tienda es 24 hs (`abierto24hs`), el estado es `abierta` con
+  `cierraA = null`, a cualquier hora y sin mirar `horarios`; la UI muestra
+  "Abierto las 24 hs".
+- Si la tienda no tiene horarios cargados (0 filas), el estado es `desconocido`
+  (la UI no muestra pill de abierto/cerrado, solo "Horario no informado").
+- Está **abierta** si hoy es un día abierto y `abre <= horaActual < cierra`. En ese
+  caso se informa `cierraA` (`"HH:mm"` de hoy).
+- Está **cerrada** en cualquier otro caso. Se informa `proximaApertura`: el primer
+  `{ diaSemana, hora }` a partir de "ahora" en que abre (hoy más tarde si todavía no
+  abrió, si no el siguiente día abierto, dando la vuelta a la semana). Si los 7 días
+  están cerrados, `proximaApertura = null`.
+- La UI lo muestra así: abierta → "Abierto · Cierra a las 21:00"; cerrada →
+  "Cerrado · Abre a las 09:00" (hoy), "Cerrado · Abre mañana 09:00" (mañana) o
+  "Cerrado · Abre el lunes 09:00" (otro día).
+
+Se calcula en el cliente (el mapa ya recibe `horarios` en
+`GET /api/tiendas/cercanas`) y en el servidor (filtro "solo abiertas ahora" de
+`15-itinerario.md`) con la misma función pura.
+
+### `POST /api/tiendas/:id/checkin`
+
+Requiere sesión válida (`esComprador`). Request: `{ lat: number; lon: number }` (la
+ubicación GPS actual del navegador del comprador).
+
+Valida que el comprador esté a **≤ 100 m** de la tienda (`ST_Distance` sobre
+`geography`, constante `RADIO_CHECKIN_METROS = 100`). Si está dentro, guarda un
+`CheckInTienda` y delega en `12-gamificacion.md` (`checkin_gps`, crédito
+retroactivo de `visita_compra`). El dueño de la tienda no puede hacer check-in en
+su propia tienda.
+
+Response `201`: `{ data: { checkIn: CheckInTienda; puntosOtorgados: number } }`
+(`puntosOtorgados` puede ser 0 si ya hizo check-in hoy en esa tienda).
+
+```sql
+CREATE TABLE checkins_tienda (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  comprador_id  UUID NOT NULL REFERENCES usuarios(id),
+  tienda_id     UUID NOT NULL REFERENCES tiendas(id),
+  distancia_m   NUMERIC(8, 1) NOT NULL,
+  creado_en     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX checkins_tienda_comprador_tienda_idx ON checkins_tienda (comprador_id, tienda_id, creado_en);
+```
+
+No se guardan las coordenadas crudas del comprador (solo la distancia calculada),
+por privacidad. Limitación conocida: la ubicación del navegador puede falsearse;
+la mitigación (antifraude, reglas de velocidad entre check-ins) queda para una
+fase futura.
+
+### `POST /api/tiendas/:id/visita`
+
+Requiere sesión válida. Lo llama la página de la tienda al abrirse (comprador
+logueado). Delegado a `12-gamificacion.md` (`visita_pagina`). Response `200`:
+`{ data: { puntosOtorgados: number } }` (0 si ya puntuó este mes, o si el usuario es
+el dueño de la tienda).
+
+### Firmas adicionales
+
+Ubicación: `src/lib/tiendas/horarios.ts` y `src/lib/tiendas/checkin.ts`.
+
+```ts
+const ZONA_HORARIA_NEGOCIO = 'America/Argentina/San_Juan';
+
+type EstadoApertura =
+  | { estado: 'desconocido' }
+  | { estado: 'abierta'; cierraA: string | null } // null = 24 hs
+  | { estado: 'cerrada'; proximaApertura: { diaSemana: number; hora: string; enDias: number } | null };
+
+// Pura. `ahora` es un Date absoluto; se convierte a día/hora local de `zona`.
+// `enDias`: 0 = hoy, 1 = mañana, etc.
+function estadoApertura(
+  horarios: HorarioTienda[],
+  ahora: Date,
+  opciones?: { abierto24hs?: boolean; zona?: string }
+): EstadoApertura;
+
+// Texto para la UI ("Abierto · Cierra a las 21:00", "Cerrado · Abre mañana 09:00").
+function textoEstadoApertura(estado: EstadoApertura): string;
+
+interface CheckInTienda { id: string; compradorId: string; tiendaId: string; distanciaM: number; creadoEn: string }
+
+async function hacerCheckIn(
+  comprador: Usuario,
+  tiendaId: string,
+  ubicacion: { lat: number; lon: number }
+): Promise<{ checkIn: CheckInTienda; puntosOtorgados: number }>;
+```
+
+### Errores adicionales
+
+| Código                    | Cuándo                                                        |
+| -------------------------- | ---------------------------------------------------------------|
+| `CHECKIN_FUERA_DE_RANGO`   | El comprador está a más de `RADIO_CHECKIN_METROS` de la tienda (`409`). |
+| `CHECKIN_TIENDA_PROPIA`    | El dueño intenta hacer check-in en su propia tienda (`409`).   |

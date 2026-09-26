@@ -14,6 +14,7 @@ import { prisma } from "../src/lib/prisma";
 import { registrarUsuario } from "../src/lib/auth/auth";
 import { crearTienda, actualizarTienda, type HorarioTienda, type MedioPago } from "../src/lib/tiendas/tiendas";
 import { crearProducto } from "../src/lib/productos/productos";
+import { crearLista } from "../src/lib/listas/listas";
 import type { Categoria } from "../src/generated-prisma/client";
 
 const DOMINIO_SEED = "seed.almacenia.test";
@@ -49,12 +50,22 @@ function horarioCierraTemprano(): HorarioTienda[] {
 }
 
 function horario24hs(): HorarioTienda[] {
-  // Convención documentada en la spec: abre/cierra null también representa
-  // "abierto siempre" para un kiosco 24hs — se distingue en la UI, no en el dato.
-  return Array.from({ length: 7 }, (_, diaSemana) => ({ diaSemana, abre: null, cierra: null }));
+  // Los locales 24 hs se marcan con abierto24hs = true (02-tiendas.md), no con
+  // horarios: no se cargan filas de horario.
+  return [];
 }
 
 const HORARIOS = [horarioNormal, horarioConDomingoMedioDia, horarioCierraTemprano, horario24hs];
+
+// Solo los kioscos a los que les toca horario24hs son 24 hs; el resto de los rubros
+// que caen en ese turno del ciclo usan el horario normal.
+function es24hs(def: { rubro: string }, i: number): boolean {
+  return def.rubro === "kiosco" && elegir(HORARIOS, i) === horario24hs;
+}
+function horarioDeTienda(i: number): () => HorarioTienda[] {
+  const h = elegir(HORARIOS, i);
+  return h === horario24hs ? horarioNormal : h;
+}
 
 const COMBOS_MEDIOS_DE_PAGO: MedioPago[][] = [
   ["efectivo"],
@@ -277,7 +288,8 @@ async function main() {
       lat: def.lat,
       lon: def.lon,
       mediosDePago: elegir(COMBOS_MEDIOS_DE_PAGO, i),
-      horarios: elegir(HORARIOS, i)(),
+      horarios: es24hs(def, i) ? undefined : horarioDeTienda(i)(),
+      abierto24hs: es24hs(def, i),
     });
 
     // rubro/imagenUrl no son parte del alta (CrearTiendaInput), se completan con
@@ -318,7 +330,6 @@ async function main() {
             nuevo: {
               nombre: producto.nombre,
               categoria: aCategoria(def.rubro),
-              imagenUrl: imagenPlaceholder(producto.nombre),
             },
             precio: precioTienda,
             stock: producto.stock,
@@ -326,6 +337,13 @@ async function main() {
 
       if (!catalogoIdExistente) {
         catalogoIdPorNombre.set(producto.nombre, productoCreado.catalogoId);
+        // La foto es del producto de catálogo, compartida por todas las tiendas
+        // (06-catalogo.md). El seed la carga directo, como lo haría un admin:
+        // por la regla de fotos, una tienda free no puede subirla.
+        await prisma.productoCatalogo.update({
+          where: { id: productoCreado.catalogoId },
+          data: { imagenUrl: imagenPlaceholder(producto.nombre) },
+        });
       }
 
       // Algunos productos quedan en oferta, para poblar el tab "ofertas" del
@@ -338,6 +356,18 @@ async function main() {
       }
     }
   }
+
+  // Lista de compras de ejemplo para el primer comprador (14-listas-compras.md),
+  // con productos que venden varias tiendas para que "Buscar y comparar" tenga
+  // qué comparar.
+  const comprador = await prisma.usuario.findFirstOrThrow({
+    where: { email: { startsWith: "comprador1.", endsWith: `@${DOMINIO_SEED}` } },
+  });
+  const paraLista = [...catalogoIdPorNombre.entries()].slice(0, 5);
+  await crearLista(comprador, {
+    nombre: "Compra de la semana",
+    items: paraLista.map(([, catalogoId], i) => ({ catalogoId, cantidad: (i % 3) + 1 })),
+  });
 
   console.log("Seed completo.");
 }

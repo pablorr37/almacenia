@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { apiGet, ApiError } from "@/lib/api-client";
+import { ConfigSistema } from "@/components/ui/ConfigSistema";
 
 type Metricas = {
   ventas: { cantidad: number; totalFacturado: number };
@@ -48,7 +49,7 @@ export default function AdminPage() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-text-2">Necesitás iniciar sesión.</p>
-        <Link href="/login" className="font-semibold text-accent">
+        <Link href="/login" className="font-semibold text-accent-text">
           Iniciar sesión
         </Link>
       </div>
@@ -59,7 +60,7 @@ export default function AdminPage() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 px-6 text-center">
         <p className="text-text-2">Esta sección es solo para administradores.</p>
-        <Link href="/" className="font-semibold text-accent">
+        <Link href="/" className="font-semibold text-accent-text">
           Volver al mapa
         </Link>
       </div>
@@ -71,16 +72,16 @@ export default function AdminPage() {
       <h1 className="font-display text-[20px] font-bold text-primary-dark">Panel admin</h1>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-        <Link href="/admin/verificaciones" className="text-[13px] font-semibold text-accent">
+        <Link href="/admin/verificaciones" className="text-[13px] font-semibold text-accent-text">
           Verificaciones →
         </Link>
-        <Link href="/admin/usuarios" className="text-[13px] font-semibold text-accent">
+        <Link href="/admin/usuarios" className="text-[13px] font-semibold text-accent-text">
           Usuarios →
         </Link>
-        <Link href="/admin/productos" className="text-[13px] font-semibold text-accent">
+        <Link href="/admin/productos" className="text-[13px] font-semibold text-accent-text">
           Productos →
         </Link>
-        <Link href="/admin/ventas" className="text-[13px] font-semibold text-accent">
+        <Link href="/admin/ventas" className="text-[13px] font-semibold text-accent-text">
           Ventas →
         </Link>
       </div>
@@ -124,6 +125,8 @@ export default function AdminPage() {
           <p className="text-[11px] text-text-2">Últimos 30 días.</p>
         </div>
       )}
+
+      {metricas && <ConfigSistema />}
     </div>
   );
 }

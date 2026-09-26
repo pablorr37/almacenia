@@ -170,9 +170,49 @@ async function listarVentasAdmin(
 ): Promise<{ data: VentaAdmin[]; page: number; pageSize: number; total: number }>;
 ```
 
+## Configuración del sistema
+
+Parámetros de negocio editables por un admin sin redeploy (ej. umbrales de
+gamificación, costo por km del itinerario). No tienen UI de alta libre: el código
+define qué claves existen y su valor por defecto (`CLAVES_CONFIG` en
+`src/lib/config/config.ts`); la tabla solo guarda los valores sobrescritos.
+
+```sql
+CREATE TABLE configuracion_sistema (
+  clave          TEXT PRIMARY KEY,
+  valor          JSONB NOT NULL,
+  actualizada_en TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+Claves actuales:
+
+| Clave | Tipo | Default | Usada por |
+|---|---|---|---|
+| `gamificacion.umbral_items_compra_extra` | entero ≥ 0 | `5` | `12-gamificacion.md` (`visita_compra`) |
+| `itinerario.costo_km` | número ≥ 0 (ARS por km) | `300` | `15-itinerario.md` |
+
+### `GET /api/admin/config`
+
+Response `200`: `{ data: Array<{ clave: string; valor: number; porDefecto: number; descripcion: string }> }`.
+
+### `PATCH /api/admin/config`
+
+Request: `{ clave: string; valor: number }`. Response `200`: el mismo item actualizado.
+
+```ts
+// Ubicación: src/lib/config/config.ts
+type ClaveConfig = 'gamificacion.umbral_items_compra_extra' | 'itinerario.costo_km';
+async function obtenerConfig(clave: ClaveConfig): Promise<number>; // valor guardado o default
+async function listarConfig(admin: Usuario): Promise<ItemConfig[]>;
+async function actualizarConfig(admin: Usuario, clave: string, valor: number): Promise<ItemConfig>;
+```
+
 ## Casos de error a contemplar
 
 | Código             | Cuándo                                                    |
 | -------------------- | --------------------------------------------------------------|
 | `FORBIDDEN`          | Usuario autenticado sin `esAdmin = true`.                    |
 | `RANGO_INVALIDO`     | `desde` > `hasta` en `obtenerMetricas`.                      |
+| `CLAVE_CONFIG_INVALIDA` | `clave` no es una de `CLAVES_CONFIG`.                      |
+| `VALOR_CONFIG_INVALIDO` | `valor` no es numérico, es negativo, o no es entero cuando la clave lo exige. |

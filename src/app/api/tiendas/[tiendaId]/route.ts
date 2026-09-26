@@ -36,6 +36,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       imagenUrl: body.imagenUrl,
       rubro: body.rubro,
       mediosDePago: body.mediosDePago,
+      abierto24hs: body.abierto24hs,
       horarios: body.horarios,
     });
     return respuestaExitosa(tienda);

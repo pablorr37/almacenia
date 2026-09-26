@@ -12,7 +12,7 @@ const EXTENSION_POR_TIPO: Record<ContentTypeValido, string> = {
   "image/webp": "webp",
 };
 
-export type TipoArchivo = "tienda" | "producto" | "avatar";
+export type TipoArchivo = "tienda" | "producto" | "catalogo" | "avatar";
 
 export function validarImagen(contentType: string, tamanioBytes: number): void {
   if (!(TIPOS_VALIDOS as readonly string[]).includes(contentType)) {
@@ -48,8 +48,15 @@ export interface SubirArchivoInput {
   buffer: Buffer;
 }
 
+const CARPETA_POR_TIPO: Record<TipoArchivo, string> = {
+  tienda: "tiendas",
+  producto: "productos",
+  catalogo: "catalogo",
+  avatar: "usuarios",
+};
+
 function construirKey(input: SubirArchivoInput, extension: string): string {
-  const carpeta = input.tipo === "tienda" ? "tiendas" : input.tipo === "producto" ? "productos" : "usuarios";
+  const carpeta = CARPETA_POR_TIPO[input.tipo];
   const nombre = input.tipo === "avatar" ? `avatar-${crypto.randomUUID()}` : crypto.randomUUID();
   return `${carpeta}/${input.entidadId}/${nombre}.${extension}`;
 }

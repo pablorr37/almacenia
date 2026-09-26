@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
       lat: body.lat,
       lon: body.lon,
       mediosDePago: body.mediosDePago,
+      abierto24hs: body.abierto24hs,
       horarios: body.horarios,
     });
     return respuestaExitosa(tienda, 201);

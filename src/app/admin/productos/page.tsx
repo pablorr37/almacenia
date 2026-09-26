@@ -52,7 +52,7 @@ function AdminProductosContent() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-text-2">Necesitás iniciar sesión.</p>
-        <Link href="/login" className="font-semibold text-accent">
+        <Link href="/login" className="font-semibold text-accent-text">
           Iniciar sesión
         </Link>
       </div>
@@ -63,7 +63,7 @@ function AdminProductosContent() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 px-6 text-center">
         <p className="text-text-2">Esta sección es solo para administradores.</p>
-        <Link href="/" className="font-semibold text-accent">
+        <Link href="/" className="font-semibold text-accent-text">
           Volver al mapa
         </Link>
       </div>
@@ -91,7 +91,7 @@ function AdminProductosContent() {
       {tiendaId && (
         <div className="flex items-center justify-between rounded-control bg-placeholder px-3 py-2 text-[12px] text-text-2">
           <span>Filtrando por una tienda</span>
-          <button onClick={() => setTiendaId("")} className="font-semibold text-accent">
+          <button onClick={() => setTiendaId("")} className="font-semibold text-accent-text">
             Quitar filtro
           </button>
         </div>
