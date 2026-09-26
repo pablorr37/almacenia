@@ -5,9 +5,10 @@
 // Los CHECK constraints documentados en cada spec (precio_no_negativo,
 // stock_no_negativo, cantidad_positiva, total_no_negativo,
 // pedido_id_solo_si_origen_pedido, precio_oferta_no_negativo, precio_oferta_menor,
-// puntuacion_valida) y el índice GIST de Tienda.ubicacion no se pueden declarar en
-// este DSL de forma estable en esta versión de Prisma — se agregan a mano en la
-// migración SQL generada (ver prisma/migrations/, comentario ahí).
+// puntuacion_valida, ...) no se pueden declarar en este DSL — se agregan a mano en
+// la migración SQL generada (ver prisma/migrations/, comentario ahí). El índice
+// GIST de Tienda.ubicacion sí está declarado acá (@@index type: Gist), así el diff
+// de Prisma no lo vuelve a borrar en cada migración nueva.
 
 generator client {
   provider        = "prisma-client"
@@ -62,7 +63,7 @@ model Tienda {
   direccion      String
   // PostGIS no tiene tipo nativo en Prisma: se declara Unsupported y se accede vía
   // $queryRaw para operaciones espaciales (ST_DWithin, ST_Distance, etc.). El índice
-  // GIST se agrega a mano en la migración generada (Prisma no lo declara solo).
+  // GIST está declarado abajo (@@index ... type: Gist).
   ubicacion      Unsupported("geography(Point, 4326)")
   activa         Boolean   @default(true)
   desactivadaEn  DateTime? @map("desactivada_en")
@@ -87,6 +88,7 @@ model Tienda {
   checkIns                CheckInTienda[]
   visitasPagina           VisitaPaginaTienda[]
 
+  @@index([ubicacion], map: "tiendas_ubicacion_gist_idx", type: Gist)
   @@map("tiendas")
 }
 
