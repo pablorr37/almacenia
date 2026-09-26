@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
+import { ValoracionCliente } from "@/components/ui/ValoracionCliente";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { useCodigoBarras } from "@/lib/scanner/useCodigoBarras";
 
@@ -81,6 +82,7 @@ type EstadoPedido =
 
 type Pedido = {
   id: string;
+  compradorId: string;
   estado: EstadoPedido;
   items: Array<{ productoId: string; cantidad: number; precioUnitario: number }>;
 };
@@ -718,6 +720,7 @@ export default function MiTiendaPage() {
                   <div className="text-[13px] text-text-2">
                     {p.items.length} producto(s) · {formatoARS(total)}
                   </div>
+                  <ValoracionCliente compradorId={p.compradorId} puedeValorar={p.estado === "entregado"} />
                   {acciones.length > 0 && (
                     <div className="mt-1 flex gap-2">
                       {acciones.map((accion) => (

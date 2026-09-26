@@ -41,6 +41,8 @@ model Usuario {
   resenas       Resena[]
   eventosPuntos EventoPuntos[]
 
+  valoracionesRecibidas ValoracionCliente[]
+
   @@map("usuarios")
 }
 
@@ -75,6 +77,7 @@ model Tienda {
   horarios               HorarioTienda[]
   resenas                Resena[]
   solicitudesVerificacion SolicitudVerificacion[]
+  valoracionesClientes    ValoracionCliente[]
 
   @@map("tiendas")
 }
@@ -219,6 +222,27 @@ model Resena {
   @@index([tiendaId])
   @@index([productoId])
   @@map("resenas")
+}
+
+// ---------------------------------------------------------------------------
+// 13-valoraciones-clientes.md
+// ---------------------------------------------------------------------------
+
+model ValoracionCliente {
+  id            String   @id @default(uuid())
+  tiendaId      String   @map("tienda_id")
+  compradorId   String   @map("comprador_id")
+  puntuacion    Int      @db.SmallInt
+  comentario    String?
+  creadaEn      DateTime @default(now()) @map("creada_en")
+  actualizadaEn DateTime @default(now()) @updatedAt @map("actualizada_en")
+
+  tienda    Tienda  @relation(fields: [tiendaId], references: [id])
+  comprador Usuario @relation(fields: [compradorId], references: [id])
+
+  @@unique([tiendaId, compradorId])
+  @@index([compradorId])
+  @@map("valoraciones_clientes")
 }
 
 // ---------------------------------------------------------------------------
