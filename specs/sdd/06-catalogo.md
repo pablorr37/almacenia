@@ -14,11 +14,17 @@ CREATE TABLE productos_catalogo (
   categoria     categoria,
   codigo_barras TEXT UNIQUE,
   imagen_url    TEXT,
+  unidad        unidad_medida NOT NULL DEFAULT 'unidad', -- 'unidad' | 'kg' 
   creado_en     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX productos_catalogo_nombre_idx ON productos_catalogo (nombre);
 ```
+
+`unidad` dice cómo se vende el producto en **todas** las tiendas (es identidad del
+producto, no decisión de cada tienda): `'unidad'` (se cuenta: 1, 2, 3…) o `'kg'`
+(se pesa: fiambre, queso, verdura suelta, pan; precio por kg y cantidades con
+fracción). Ver "Cantidades y unidades" en `03-productos.md`.
 
 `productos_catalogo` es una entidad **global, compartida entre todos los
 vendedores** — no pertenece a ninguna tienda. Guarda la identidad de un producto

@@ -25,7 +25,7 @@ CREATE TABLE items_lista_compras (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   lista_id     UUID NOT NULL REFERENCES listas_compras(id) ON DELETE CASCADE,
   catalogo_id  UUID NOT NULL REFERENCES productos_catalogo(id),
-  cantidad     INTEGER NOT NULL,
+  cantidad     NUMERIC(10, 3) NOT NULL, -- unidades o kg según el producto
   CONSTRAINT item_lista_cantidad_positiva CHECK (cantidad > 0),
   CONSTRAINT items_lista_compras_lista_catalogo_key UNIQUE (lista_id, catalogo_id)
 );
@@ -50,7 +50,7 @@ CREATE TABLE items_lista_compras (
   **Guardar** o **Buscar y comparar** el nombre sigue siendo ese automático, la UI
   pide uno en un diálogo (se puede dejar el automático). Desde "Mis listas" se
   puede renombrar (`PATCH` con `nombre`).
-- Ítems: cada `catalogoId` debe existir; `cantidad` entero ≥ 1; sin `catalogoId`
+- Ítems: cada `catalogoId` debe existir; `cantidad` válida según la unidad del producto (entero ≥ 1, o kg en pasos de 50 g — `03-productos.md`); sin `catalogoId`
   repetidos en la misma lista (si vienen repetidos en el request, se suman las
   cantidades). Máximo 100 ítems por lista.
 - Actualizar ítems **reemplaza** la lista completa de ítems (como `horarios` en

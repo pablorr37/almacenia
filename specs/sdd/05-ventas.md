@@ -36,7 +36,7 @@ CREATE TABLE items_venta (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   venta_id        UUID NOT NULL REFERENCES ventas(id),
   producto_id     UUID NOT NULL REFERENCES productos(id),
-  cantidad        INTEGER NOT NULL,
+  cantidad        NUMERIC(10, 3) NOT NULL, -- unidades o kg (ver 03-productos.md, "Cantidades y unidades")
   precio_unitario NUMERIC(12, 2) NOT NULL, -- precio del producto al momento de la venta
   CONSTRAINT cantidad_positiva CHECK (cantidad > 0)
 );
