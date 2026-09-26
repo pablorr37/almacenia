@@ -25,7 +25,7 @@ type Categoria =
 type Producto = {
   id: string;
   nombre: string;
-  imagenUrl: string | null;
+  imagenEfectiva: string | null;
   categoria: Categoria | null;
   precio: number;
   precioOferta: number | null;
@@ -227,10 +227,10 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
               key={p.id}
               className="flex items-center gap-3 rounded-card border border-border bg-surface p-3.5 shadow-[0_1px_3px_rgba(32,26,21,0.05)]"
             >
-              {p.imagenUrl ? (
+              {p.imagenEfectiva ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={p.imagenUrl}
+                  src={p.imagenEfectiva}
                   alt=""
                   style={{ width: 52, height: 52 }}
                   className="flex-shrink-0 rounded-control object-cover"

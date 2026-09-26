@@ -4,12 +4,12 @@ import { subirArchivo, type TipoArchivo } from "@/lib/archivos/archivos";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { respuestaExitosa, respuestaError } from "@/lib/api-response";
 import { AppError } from "@/lib/errors";
+import type { Usuario } from "@/lib/auth/auth";
+import { tienePermiso } from "@/lib/planes/planes";
+import { verificarPermisoFotoCatalogo } from "@/lib/catalogo/catalogo";
 
-// Feature "fotos_ilimitadas" (10-planes.md): una tienda free puede tener foto
-// propia en como máximo esta cantidad de productos a la vez.
-const LIMITE_FOTOS_PLAN_FREE = 3;
-
-async function verificarOwnership(usuarioId: string, tipo: TipoArchivo, entidadId: string): Promise<void> {
+async function verificarOwnership(usuario: Usuario, tipo: TipoArchivo, entidadId: string): Promise<void> {
+  const usuarioId = usuario.id;
   if (tipo === "avatar") {
     if (entidadId !== usuarioId) {
       throw new AppError("FORBIDDEN", "Solo podés subir tu propio avatar.");
@@ -26,26 +26,25 @@ async function verificarOwnership(usuarioId: string, tipo: TipoArchivo, entidadI
     return;
   }
 
+  if (tipo === "catalogo") {
+    // Foto compartida del catálogo (06-catalogo.md): admin, o premium si no tiene foto.
+    await verificarPermisoFotoCatalogo(usuario, entidadId);
+    return;
+  }
+
+  // Foto personalizada de un producto de la tienda: feature fotos_personalizadas
+  // (10-planes.md), solo premium.
   const producto = await prisma.producto.findUnique({ where: { id: entidadId }, include: { tienda: true } });
   if (!producto) throw new AppError("PRODUCTO_NO_ENCONTRADO", "El producto no existe.");
   if (producto.tienda.vendedorId !== usuarioId) {
     throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
   }
-
-  if (producto.tienda.plan === "free" && producto.imagenUrl === null) {
-    const productosConFoto = await prisma.producto.count({
-      where: { tiendaId: producto.tiendaId, imagenUrl: { not: null } },
-    });
-    if (productosConFoto >= LIMITE_FOTOS_PLAN_FREE) {
-      throw new AppError(
-        "LIMITE_FOTOS_PLAN_FREE",
-        `Tu plan permite fotos en hasta ${LIMITE_FOTOS_PLAN_FREE} productos. Pasate a premium para fotos ilimitadas.`
-      );
-    }
+  if (!tienePermiso(producto.tienda, "fotos_personalizadas")) {
+    throw new AppError("FOTOS_SOLO_PREMIUM", "Las fotos propias de productos son del plan premium.");
   }
 }
 
-const TIPOS_VALIDOS: TipoArchivo[] = ["tienda", "producto", "avatar"];
+const TIPOS_VALIDOS: TipoArchivo[] = ["tienda", "producto", "catalogo", "avatar"];
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,7 +60,7 @@ export async function POST(request: NextRequest) {
       throw new AppError("TIPO_ARCHIVO_INVALIDO", "Faltan o son inválidos los parámetros tipo/entidadId.");
     }
 
-    await verificarOwnership(usuario.id, tipo, entidadId);
+    await verificarOwnership(usuario, tipo, entidadId);
 
     const formData = await request.formData();
     const archivo = formData.get("archivo");

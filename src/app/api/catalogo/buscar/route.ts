@@ -10,9 +10,6 @@ export async function GET(request: NextRequest) {
     if (!usuario) {
       throw new AppError("NO_AUTENTICADO", "Necesitás iniciar sesión.");
     }
-    if (!usuario.esVendedor) {
-      throw new AppError("FORBIDDEN", "Solo los vendedores pueden buscar en el catálogo.");
-    }
 
     const sp = request.nextUrl.searchParams;
     const resultado = await buscarEnCatalogo({

@@ -27,13 +27,13 @@ async function limpiar(usuarioIds: string[]) {
 }
 
 describe("tienePermiso", () => {
-  it("free no tiene fotos_ilimitadas ni destacado_prioritario", () => {
-    expect(tienePermiso({ plan: "free" }, "fotos_ilimitadas")).toBe(false);
+  it("free no tiene fotos_personalizadas ni destacado_prioritario", () => {
+    expect(tienePermiso({ plan: "free" }, "fotos_personalizadas")).toBe(false);
     expect(tienePermiso({ plan: "free" }, "destacado_prioritario")).toBe(false);
   });
 
   it("premium tiene todas las features", () => {
-    expect(tienePermiso({ plan: "premium" }, "fotos_ilimitadas")).toBe(true);
+    expect(tienePermiso({ plan: "premium" }, "fotos_personalizadas")).toBe(true);
     expect(tienePermiso({ plan: "premium" }, "destacado_prioritario")).toBe(true);
   });
 });

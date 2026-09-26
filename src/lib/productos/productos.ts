@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { crearProductoNuevoEnCatalogo } from "@/lib/catalogo/catalogo";
+import { tienePermiso, type Plan } from "@/lib/planes/planes";
 import type { Categoria, Producto as ProductoDb } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
@@ -14,7 +15,9 @@ export interface Producto {
   nombre: string;
   descripcion: string | null;
   categoria: Categoria | null;
-  imagenUrl: string | null;
+  imagenUrl: string | null; // foto personalizada de la tienda (premium)
+  imagenCatalogoUrl: string | null; // foto compartida del catálogo
+  imagenEfectiva: string | null; // la que se muestra (03-productos.md, regla de fotos)
   precio: number;
   precioOferta: number | null;
   destacado: boolean;
@@ -22,7 +25,38 @@ export interface Producto {
   disponible: boolean;
 }
 
-function aProducto(producto: ProductoDb): Producto {
+// Regla de fotos (03-productos.md): la foto propia solo se muestra si la tienda es
+// premium; si no, la del catálogo compartido.
+export function imagenEfectiva(
+  tienda: { plan: Plan },
+  producto: { imagenUrl: string | null },
+  catalogo: { imagenUrl: string | null }
+): string | null {
+  if (producto.imagenUrl && tienePermiso(tienda, "fotos_personalizadas")) return producto.imagenUrl;
+  return catalogo.imagenUrl ?? null;
+}
+
+// Relaciones que hacen falta para resolver la imagen efectiva de un Producto.
+const INCLUDE_IMAGEN = {
+  tienda: { select: { plan: true } },
+  catalogo: { select: { imagenUrl: true } },
+} as const;
+
+type ProductoConImagen = ProductoDb & {
+  tienda: { plan: Plan };
+  catalogo: { imagenUrl: string | null };
+};
+
+function exigirFotosPremium(tienda: { plan: Plan }): void {
+  if (!tienePermiso(tienda, "fotos_personalizadas")) {
+    throw new AppError(
+      "FOTOS_SOLO_PREMIUM",
+      "Las fotos propias de productos son del plan premium. Tu producto usa la foto del catálogo."
+    );
+  }
+}
+
+function aProducto(producto: ProductoConImagen): Producto {
   return {
     id: producto.id,
     tiendaId: producto.tiendaId,
@@ -31,6 +65,8 @@ function aProducto(producto: ProductoDb): Producto {
     descripcion: producto.descripcion,
     categoria: producto.categoria,
     imagenUrl: producto.imagenUrl,
+    imagenCatalogoUrl: producto.catalogo.imagenUrl,
+    imagenEfectiva: imagenEfectiva(producto.tienda, producto, producto.catalogo),
     precio: Number(producto.precio),
     precioOferta: producto.precioOferta === null ? null : Number(producto.precioOferta),
     destacado: producto.destacado,
@@ -43,7 +79,7 @@ export function esComprable(producto: Pick<Producto, "disponible" | "stock">): b
   return producto.disponible && producto.stock > 0;
 }
 
-async function verificarPropiedad(vendedor: Usuario, tiendaId: string): Promise<void> {
+async function verificarPropiedad(vendedor: Usuario, tiendaId: string): Promise<{ plan: Plan }> {
   const tienda = await prisma.tienda.findUnique({ where: { id: tiendaId } });
   if (!tienda) {
     throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
@@ -51,6 +87,7 @@ async function verificarPropiedad(vendedor: Usuario, tiendaId: string): Promise<
   if (tienda.vendedorId !== vendedor.id) {
     throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
   }
+  return tienda;
 }
 
 function validarPrecio(precio: number): void {
@@ -93,9 +130,10 @@ export async function crearProducto(
   tiendaId: string,
   input: CrearProductoInput
 ): Promise<Producto> {
-  await verificarPropiedad(vendedor, tiendaId);
+  const tienda = await verificarPropiedad(vendedor, tiendaId);
   validarPrecio(input.precio);
   validarStock(input.stock);
+  if ("catalogoId" in input ? input.imagenUrl : input.nuevo.imagenUrl) exigirFotosPremium(tienda);
 
   const catalogo =
     "catalogoId" in input
@@ -117,10 +155,13 @@ export async function crearProducto(
       nombre: catalogo.nombre,
       descripcion: input.descripcion ?? null,
       categoria: catalogo.categoria,
-      imagenUrl: "imagenUrl" in input ? (input.imagenUrl ?? catalogo.imagenUrl) : catalogo.imagenUrl,
+      // La foto del catálogo NO se copia: se resuelve en imagenEfectiva. Esta
+      // columna es solo la foto personalizada (premium).
+      imagenUrl: "catalogoId" in input ? (input.imagenUrl ?? null) : null,
       precio: input.precio,
       stock: input.stock,
     },
+    include: INCLUDE_IMAGEN,
   });
 
   return aProducto(producto);
@@ -204,7 +245,7 @@ export async function listarProductos(
     const todos = await prisma.producto.findMany({ where, select: { id: true } });
     const idsOrdenados = await ordenarPorAgregacion(todos.map((p) => p.id), input.sort);
     const idsPagina = idsOrdenados.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
-    const productos = await prisma.producto.findMany({ where: { id: { in: idsPagina } } });
+    const productos = await prisma.producto.findMany({ where: { id: { in: idsPagina } }, include: INCLUDE_IMAGEN });
     const porId = new Map(productos.map((p) => [p.id, p]));
     const ordenados = idsPagina.map((id) => porId.get(id)!).filter(Boolean);
     return { data: ordenados.map(aProducto), page, pageSize, total };
@@ -216,6 +257,7 @@ export async function listarProductos(
     skip: (page - 1) * pageSize,
     take: pageSize,
     orderBy: input.tab === "nuevos" ? { creadoEn: "desc" } : orderBy,
+    include: INCLUDE_IMAGEN,
   });
 
   return { data: productos.map(aProducto), page, pageSize, total };
@@ -224,7 +266,7 @@ export async function listarProductos(
 export interface ActualizarProductoInput {
   nombre?: string;
   descripcion?: string;
-  imagenUrl?: string;
+  imagenUrl?: string | null;
   precio?: number;
   precioOferta?: number | null;
   destacado?: boolean;
@@ -264,6 +306,7 @@ export async function actualizarProducto(
   if (input.stock !== undefined) validarStock(input.stock);
   const precioFinal = input.precio ?? Number(actual.precio);
   validarPrecioOferta(input.precioOferta, precioFinal);
+  if (input.imagenUrl) exigirFotosPremium(actual.tienda);
 
   const producto = await prisma.producto.update({
     where: { id: productoId },
@@ -277,6 +320,7 @@ export async function actualizarProducto(
       stock: input.stock,
       disponible: input.disponible,
     },
+    include: INCLUDE_IMAGEN,
   });
 
   return aProducto(producto);
@@ -291,6 +335,7 @@ export async function eliminarProducto(vendedor: Usuario, productoId: string): P
   const producto = await prisma.producto.update({
     where: { id: productoId },
     data: { disponible: false, stock: 0 },
+    include: INCLUDE_IMAGEN,
   });
 
   return aProducto(producto);
@@ -310,6 +355,7 @@ export async function debitarStock(productoId: string, cantidad: number): Promis
   const actualizado = await prisma.producto.update({
     where: { id: productoId },
     data: { stock: { decrement: cantidad } },
+    include: INCLUDE_IMAGEN,
   });
 
   return aProducto(actualizado);

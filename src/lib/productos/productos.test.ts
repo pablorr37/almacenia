@@ -9,6 +9,7 @@ import {
   actualizarProducto,
   eliminarProducto,
   debitarStock,
+  imagenEfectiva,
   type Producto,
 } from "./productos";
 
@@ -65,6 +66,8 @@ describe("esComprable", () => {
     descripcion: null,
     categoria: null,
     imagenUrl: null,
+    imagenCatalogoUrl: null,
+    imagenEfectiva: null,
     precio: 10,
     precioOferta: null,
     destacado: false,
@@ -383,5 +386,104 @@ describe("debitarStock", () => {
     await expect(debitarStock(producto.id, 11)).rejects.toMatchObject<Partial<AppError>>({
       code: "STOCK_INSUFICIENTE",
     });
+  });
+});
+
+describe("imagenEfectiva", () => {
+  const FOTO_CATALOGO = "http://s3/catalogo.jpg";
+  const FOTO_PROPIA = "http://s3/propia.jpg";
+
+  it("premium con foto propia: usa la foto propia", () => {
+    expect(imagenEfectiva({ plan: "premium" }, { imagenUrl: FOTO_PROPIA }, { imagenUrl: FOTO_CATALOGO })).toBe(FOTO_PROPIA);
+  });
+
+  it("premium sin foto propia: usa la del catálogo", () => {
+    expect(imagenEfectiva({ plan: "premium" }, { imagenUrl: null }, { imagenUrl: FOTO_CATALOGO })).toBe(FOTO_CATALOGO);
+  });
+
+  it("free con foto propia heredada: se ignora y usa la del catálogo", () => {
+    expect(imagenEfectiva({ plan: "free" }, { imagenUrl: FOTO_PROPIA }, { imagenUrl: FOTO_CATALOGO })).toBe(FOTO_CATALOGO);
+  });
+
+  it("sin ninguna foto: null", () => {
+    expect(imagenEfectiva({ plan: "free" }, { imagenUrl: FOTO_PROPIA }, { imagenUrl: null })).toBeNull();
+  });
+});
+
+describe("fotos de producto (catálogo compartido + personalizadas premium)", () => {
+  let vendedor: Usuario;
+  let tienda: Tienda;
+  const FOTO_CATALOGO = "http://s3/catalogo.jpg";
+  const FOTO_PROPIA = "http://s3/propia.jpg";
+
+  beforeEach(async () => {
+    ({ vendedor, tienda } = await crearVendedorConTienda());
+  });
+
+  afterEach(() => limpiar([vendedor.id]));
+
+  async function catalogoConFoto() {
+    contadorNombre += 1;
+    return prisma.productoCatalogo.create({
+      data: { nombre: `Con foto ${contadorNombre}`, imagenUrl: FOTO_CATALOGO },
+    });
+  }
+
+  it("adoptar un producto de catálogo con foto: no copia la foto, la muestra como efectiva", async () => {
+    const catalogo = await catalogoConFoto();
+    const producto = await crearProducto(vendedor, tienda.id, { catalogoId: catalogo.id, precio: 10, stock: 1 });
+
+    expect(producto.imagenUrl).toBeNull();
+    expect(producto.imagenCatalogoUrl).toBe(FOTO_CATALOGO);
+    expect(producto.imagenEfectiva).toBe(FOTO_CATALOGO);
+
+    const listado = await listarProductos({ tiendaId: tienda.id });
+    expect(listado.data[0].imagenEfectiva).toBe(FOTO_CATALOGO);
+  });
+
+  it("tienda free no puede crear un producto con foto propia (FOTOS_SOLO_PREMIUM)", async () => {
+    const catalogo = await catalogoConFoto();
+    await expect(
+      crearProducto(vendedor, tienda.id, { catalogoId: catalogo.id, precio: 10, stock: 1, imagenUrl: FOTO_PROPIA })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "FOTOS_SOLO_PREMIUM" });
+  });
+
+  it("tienda free no puede dar de alta un producto nuevo con foto de catálogo (FOTOS_SOLO_PREMIUM)", async () => {
+    await expect(
+      crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Con foto", imagenUrl: FOTO_CATALOGO }, precio: 10, stock: 1 })
+    ).rejects.toMatchObject<Partial<AppError>>({ code: "FOTOS_SOLO_PREMIUM" });
+  });
+
+  it("tienda free no puede setear foto personalizada por PATCH, pero sí quitarla", async () => {
+    const producto = await crearProducto(vendedor, tienda.id, inputNuevo());
+    await expect(actualizarProducto(vendedor, producto.id, { imagenUrl: FOTO_PROPIA })).rejects.toMatchObject<
+      Partial<AppError>
+    >({ code: "FOTOS_SOLO_PREMIUM" });
+
+    const sinFoto = await actualizarProducto(vendedor, producto.id, { imagenUrl: null });
+    expect(sinFoto.imagenUrl).toBeNull();
+  });
+
+  it("tienda premium: la foto personalizada pasa a ser la efectiva", async () => {
+    await prisma.tienda.update({ where: { id: tienda.id }, data: { plan: "premium" } });
+    const catalogo = await catalogoConFoto();
+    const producto = await crearProducto(vendedor, tienda.id, { catalogoId: catalogo.id, precio: 10, stock: 1 });
+
+    const actualizado = await actualizarProducto(vendedor, producto.id, { imagenUrl: FOTO_PROPIA });
+    expect(actualizado.imagenUrl).toBe(FOTO_PROPIA);
+    expect(actualizado.imagenEfectiva).toBe(FOTO_PROPIA);
+    expect(actualizado.imagenCatalogoUrl).toBe(FOTO_CATALOGO);
+  });
+
+  it("si la tienda vuelve a free, la foto propia deja de mostrarse (no se borra)", async () => {
+    await prisma.tienda.update({ where: { id: tienda.id }, data: { plan: "premium" } });
+    const catalogo = await catalogoConFoto();
+    const producto = await crearProducto(vendedor, tienda.id, { catalogoId: catalogo.id, precio: 10, stock: 1, imagenUrl: FOTO_PROPIA });
+    await prisma.tienda.update({ where: { id: tienda.id }, data: { plan: "free" } });
+
+    const listado = await listarProductos({ tiendaId: tienda.id });
+    expect(listado.data[0].id).toBe(producto.id);
+    expect(listado.data[0].imagenUrl).toBe(FOTO_PROPIA);
+    expect(listado.data[0].imagenEfectiva).toBe(FOTO_CATALOGO);
   });
 });

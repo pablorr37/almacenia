@@ -42,10 +42,12 @@ describe("GET /api/catalogo/buscar", () => {
     expect(res.status).toBe(401);
   });
 
-  it("403 FORBIDDEN si no es vendedor", async () => {
+  it("200 también para compradores (arman listas de compras, 14-listas-compras.md)", async () => {
     obtenerUsuarioActualMock.mockResolvedValue(comprador);
-    const res = await GET(new NextRequest("http://localhost/api/catalogo/buscar?q=fideos"));
-    expect(res.status).toBe(403);
+    const res = await GET(new NextRequest("http://localhost/api/catalogo/buscar?q=fideos test api"));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data.map((p: { nombre: string }) => p.nombre)).toContain("Fideos Test API");
   });
 
   it("200 devuelve coincidencias por nombre", async () => {

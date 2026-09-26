@@ -61,8 +61,11 @@ function horarioPorDefecto(): HorarioTienda[] {
 
 type Producto = {
   id: string;
+  catalogoId: string;
   nombre: string;
   imagenUrl: string | null;
+  imagenCatalogoUrl: string | null;
+  imagenEfectiva: string | null;
   precio: number;
   stock: number;
   disponible: boolean;
@@ -628,10 +631,10 @@ export default function MiTiendaPage() {
                 key={p.id}
                 className="flex items-center gap-3 rounded-card border border-border bg-surface p-3.5"
               >
-                {p.imagenUrl ? (
+                {p.imagenEfectiva ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={p.imagenUrl}
+                    src={p.imagenEfectiva}
                     alt=""
                     style={{ width: 44, height: 44 }}
                     className="flex-shrink-0 rounded-control object-cover"
@@ -639,20 +642,50 @@ export default function MiTiendaPage() {
                 ) : (
                   <div style={{ width: 44, height: 44 }} className="flex-shrink-0 rounded-control bg-placeholder" />
                 )}
-                <div className="flex min-w-0 flex-grow flex-col gap-0.5">
+                <div className="flex min-w-0 flex-grow flex-col gap-1">
                   <div className="text-[14px] font-semibold">{p.nombre}</div>
                   <div className="text-xs text-text-2">
                     {formatoARS(p.precio)} · stock {p.stock}
                   </div>
-                  <ImageUploadField
-                    tipo="producto"
-                    entidadId={p.id}
-                    valorActual={null}
-                    onSubido={async (url) => {
-                      const actualizado = await apiPatch<Producto>(`/api/productos/${p.id}`, { imagenUrl: url });
-                      setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
-                    }}
-                  />
+                  {tienda?.plan === "premium" ? (
+                    <div className="flex flex-wrap gap-2">
+                      {/* Foto compartida del catálogo: premium puede cargarla si falta (06-catalogo.md). */}
+                      {!p.imagenCatalogoUrl && (
+                        <ImageUploadField
+                          tipo="catalogo"
+                          entidadId={p.catalogoId}
+                          valorActual={null}
+                          textoSubir="Foto del catálogo"
+                          onSubido={async (url) => {
+                            await apiPatch(`/api/catalogo/${p.catalogoId}/foto`, { imagenUrl: url });
+                            setProductos((prev) =>
+                              prev.map((x) =>
+                                x.catalogoId === p.catalogoId
+                                  ? { ...x, imagenCatalogoUrl: url, imagenEfectiva: x.imagenUrl ?? url }
+                                  : x,
+                              ),
+                            );
+                          }}
+                        />
+                      )}
+                      {/* Foto personalizada, visible solo en esta tienda (10-planes.md). */}
+                      <ImageUploadField
+                        tipo="producto"
+                        entidadId={p.id}
+                        valorActual={p.imagenUrl}
+                        textoSubir="Foto propia"
+                        onSubido={async (url) => {
+                          const actualizado = await apiPatch<Producto>(`/api/productos/${p.id}`, { imagenUrl: url });
+                          setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-text-2">
+                      {p.imagenCatalogoUrl ? "Foto del catálogo compartido" : "Sin foto en el catálogo"} · Fotos
+                      propias con <span className="font-semibold text-primary-dark">Premium</span>
+                    </span>
+                  )}
                 </div>
                 <span
                   className={`rounded-pill px-2.5 py-1 text-[11px] font-bold ${
