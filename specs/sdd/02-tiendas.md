@@ -253,7 +253,7 @@ interface Tienda {
   verificada: boolean;
   plan: Plan;
   mediosDePago: MedioPago[];
-  horarios: HorarioTienda[]; // 0 o 7 entradas
+  horarios: HorarioTienda[]; // vacío, o los 7 días (una o más franjas por día)
   abierto24hs: boolean;
 }
 
