@@ -3,21 +3,21 @@ import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import type { Pedido } from "@/lib/pedidos/pedidos";
 import { sinRomper, otorgarPorVenta } from "@/lib/gamificacion/gamificacion";
-import { validarCantidad } from "@/lib/productos/unidades";
-import type {
-  Venta as VentaDb,
-  ItemVenta as ItemVentaDb,
-  Prisma,
-} from "@/generated-prisma/client";
+import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
+import { MEDIOS_DE_PAGO_VALIDOS, type MedioPago } from "@/lib/tiendas/tiendas";
+import type { Prisma } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAXIMO = 100;
 
 export type OrigenVenta = "presencial" | "pedido";
+export type EstadoVenta = "por_cobrar" | "cobrada" | "anulada";
 
 export interface ItemVenta {
   id: string;
   productoId: string;
+  nombre: string;
+  unidad: UnidadMedida;
   cantidad: number;
   precioUnitario: number;
 }
@@ -28,26 +28,50 @@ export interface Venta {
   compradorId: string | null;
   pedidoId: string | null;
   origen: OrigenVenta;
+  estado: EstadoVenta;
+  medioPago: MedioPago | null;
+  nota: string | null;
   total: number;
   items: ItemVenta[];
+  comprador: { nombre: string; email: string } | null;
+  creadaEn: string;
+  cobradaEn: string | null;
+  anuladaEn: string | null;
 }
 
-type VentaConItems = VentaDb & { items: ItemVentaDb[] };
+const MAX_NOTA = 200;
 
-function aVenta(venta: VentaConItems): Venta {
+// Lo que hace falta traer para armar una Venta (ítems con nombre/unidad y comprador).
+const INCLUDE_VENTA = {
+  items: { include: { producto: { select: { nombre: true, catalogo: { select: { unidad: true } } } } } },
+  comprador: { select: { nombre: true, email: true } },
+} satisfies Prisma.VentaInclude;
+
+type VentaCompleta = Prisma.VentaGetPayload<{ include: typeof INCLUDE_VENTA }>;
+
+function aVenta(venta: VentaCompleta): Venta {
   return {
     id: venta.id,
     tiendaId: venta.tiendaId,
     compradorId: venta.compradorId,
     pedidoId: venta.pedidoId,
     origen: venta.origen,
+    estado: venta.estado,
+    medioPago: venta.medioPago,
+    nota: venta.nota,
     total: Number(venta.total),
     items: venta.items.map((item) => ({
       id: item.id,
       productoId: item.productoId,
+      nombre: item.producto.nombre,
+      unidad: item.producto.catalogo.unidad,
       cantidad: Number(item.cantidad),
       precioUnitario: Number(item.precioUnitario),
     })),
+    comprador: venta.comprador,
+    creadaEn: venta.creadaEn.toISOString(),
+    cobradaEn: venta.cobradaEn ? venta.cobradaEn.toISOString() : null,
+    anuladaEn: venta.anuladaEn ? venta.anuladaEn.toISOString() : null,
   };
 }
 
@@ -73,13 +97,17 @@ async function debitarStockAtomico(
   }
 }
 
-async function crearVentaEnTransaccion(
-  tiendaId: string,
-  compradorId: string | null,
-  pedidoId: string | null,
-  origen: OrigenVenta,
-  items: ItemAProcesar[]
-): Promise<Venta> {
+interface DatosVenta {
+  tiendaId: string;
+  compradorId: string | null;
+  pedidoId: string | null;
+  origen: OrigenVenta;
+  estado: "por_cobrar" | "cobrada";
+  medioPago?: MedioPago | null;
+  nota?: string | null;
+}
+
+async function crearVentaEnTransaccion(datos: DatosVenta, items: ItemAProcesar[]): Promise<Venta> {
   const total = Math.round(items.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0) * 100) / 100;
 
   const venta = await prisma.$transaction(async (tx) => {
@@ -89,10 +117,14 @@ async function crearVentaEnTransaccion(
 
     return tx.venta.create({
       data: {
-        tiendaId,
-        compradorId,
-        pedidoId,
-        origen,
+        tiendaId: datos.tiendaId,
+        compradorId: datos.compradorId,
+        pedidoId: datos.pedidoId,
+        origen: datos.origen,
+        estado: datos.estado,
+        medioPago: datos.medioPago ?? null,
+        nota: datos.nota ?? null,
+        cobradaEn: datos.estado === "cobrada" ? new Date() : null,
         total,
         items: {
           create: items.map((item) => ({
@@ -102,19 +134,39 @@ async function crearVentaEnTransaccion(
           })),
         },
       },
-      include: { items: true },
+      include: INCLUDE_VENTA,
     });
   });
 
-  // 12-gamificacion.md: después de confirmar la venta, fuera de su transacción.
-  await sinRomper(() => otorgarPorVenta(venta.id));
+  // 12-gamificacion.md: solo las ventas cobradas puntúan, fuera de la transacción.
+  if (venta.estado === "cobrada") await sinRomper(() => otorgarPorVenta(venta.id));
 
   return aVenta(venta);
 }
 
 export interface CrearVentaPresencialInput {
-  compradorId?: string;
   items: Array<{ productoId: string; cantidad: number }>;
+  medioPago?: MedioPago;
+  cobrarAhora?: boolean; // default true (05-ventas.md)
+  compradorEmail?: string;
+  compradorId?: string;
+  nota?: string;
+}
+
+async function resolverComprador(vendedor: Usuario, input: CrearVentaPresencialInput): Promise<string | null> {
+  const email = input.compradorEmail?.trim().toLowerCase();
+  if (!email && !input.compradorId) return null;
+  const comprador = await prisma.usuario.findUnique({
+    where: email ? { email } : { id: input.compradorId },
+    select: { id: true },
+  });
+  if (!comprador) {
+    throw new AppError("COMPRADOR_INVALIDO", "No hay ningún usuario registrado con ese email.");
+  }
+  if (comprador.id === vendedor.id) {
+    throw new AppError("VENTA_PROPIA", "No podés registrarte una venta a vos mismo.");
+  }
+  return comprador.id;
 }
 
 export async function crearVentaPresencial(
@@ -122,7 +174,7 @@ export async function crearVentaPresencial(
   tiendaId: string,
   input: CrearVentaPresencialInput
 ): Promise<Venta> {
-  if (input.items.length === 0) {
+  if (!Array.isArray(input.items) || input.items.length === 0) {
     throw new AppError("ITEMS_VACIOS", "La venta debe tener al menos un producto.");
   }
 
@@ -134,12 +186,19 @@ export async function crearVentaPresencial(
     throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
   }
 
-  if (input.compradorId) {
-    const comprador = await prisma.usuario.findUnique({ where: { id: input.compradorId } });
-    if (!comprador) {
-      throw new AppError("COMPRADOR_INVALIDO", "El comprador indicado no existe.");
+  if (input.medioPago !== undefined && input.medioPago !== null) {
+    const valido = (MEDIOS_DE_PAGO_VALIDOS as readonly string[]).includes(input.medioPago);
+    const aceptado = tienda.mediosDePago.length === 0 || tienda.mediosDePago.includes(input.medioPago);
+    if (!valido || !aceptado) {
+      throw new AppError("MEDIO_PAGO_INVALIDO", "La tienda no acepta ese medio de pago.");
     }
   }
+  const nota = input.nota?.trim() || null;
+  if (nota && nota.length > MAX_NOTA) {
+    throw new AppError("NOTA_INVALIDA", `La nota puede tener hasta ${MAX_NOTA} caracteres.`);
+  }
+
+  const compradorId = await resolverComprador(vendedor, input);
 
   const productoIds = input.items.map((item) => item.productoId);
   const productos = await prisma.producto.findMany({
@@ -157,11 +216,60 @@ export async function crearVentaPresencial(
     return {
       productoId: item.productoId,
       cantidad: item.cantidad,
-      precioUnitario: Number(producto.precio),
+      // Precio vigente, el mismo que ve el comprador en la tienda.
+      precioUnitario: Number(producto.precioOferta ?? producto.precio),
     };
   });
 
-  return crearVentaEnTransaccion(tiendaId, input.compradorId ?? null, null, "presencial", items);
+  return crearVentaEnTransaccion(
+    {
+      tiendaId,
+      compradorId,
+      pedidoId: null,
+      origen: "presencial",
+      estado: input.cobrarAhora === false ? "por_cobrar" : "cobrada",
+      medioPago: input.medioPago ?? null,
+      nota,
+    },
+    items
+  );
+}
+
+// 05-ventas.md, "Máquina de estados de cobro": cobrar / anular una venta por cobrar.
+export async function transicionarVenta(
+  vendedor: Usuario,
+  ventaId: string,
+  accion: "cobrar" | "anular"
+): Promise<Venta> {
+  const venta = await prisma.venta.findUnique({
+    where: { id: ventaId },
+    include: { tienda: { select: { vendedorId: true } }, items: true },
+  });
+  if (!venta) throw new AppError("VENTA_NO_ENCONTRADA", "La venta no existe.");
+  if (venta.tienda.vendedorId !== vendedor.id) {
+    throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
+  }
+  if (venta.estado !== "por_cobrar" || (accion !== "cobrar" && accion !== "anular")) {
+    throw new AppError("TRANSICION_INVALIDA", "Esta venta ya no está por cobrar.");
+  }
+
+  // El UPDATE condicionado a estado = por_cobrar evita cobrar/anular dos veces en paralelo.
+  const actualizada = await prisma.$transaction(async (tx) => {
+    const cambio = await tx.venta.updateMany({
+      where: { id: ventaId, estado: "por_cobrar" },
+      data: accion === "cobrar" ? { estado: "cobrada", cobradaEn: new Date() } : { estado: "anulada", anuladaEn: new Date() },
+    });
+    if (cambio.count === 0) throw new AppError("TRANSICION_INVALIDA", "Esta venta ya no está por cobrar.");
+    if (accion === "anular") {
+      for (const item of venta.items) {
+        await tx.producto.update({ where: { id: item.productoId }, data: { stock: { increment: item.cantidad } } });
+      }
+    }
+    return tx.venta.findUniqueOrThrow({ where: { id: ventaId }, include: INCLUDE_VENTA });
+  });
+
+  if (actualizada.estado === "cobrada") await sinRomper(() => otorgarPorVenta(actualizada.id));
+  return aVenta(actualizada);
 }
 
 // Llamada internamente desde pedidos.transicionarPedido al ejecutar 'entregar'. No
@@ -175,13 +283,17 @@ export async function crearVentaDesdePedido(pedido: Pedido): Promise<Venta> {
     precioUnitario: item.precioUnitario,
   }));
 
-  return crearVentaEnTransaccion(pedido.tiendaId, pedido.compradorId, pedido.id, "pedido", items);
+  // Los pedidos se pagan al retirar: la venta nace cobrada.
+  return crearVentaEnTransaccion(
+    { tiendaId: pedido.tiendaId, compradorId: pedido.compradorId, pedidoId: pedido.id, origen: "pedido", estado: "cobrada" },
+    items
+  );
 }
 
 export async function obtenerVenta(usuario: Usuario, ventaId: string): Promise<Venta | null> {
   const venta = await prisma.venta.findUnique({
     where: { id: ventaId },
-    include: { items: true, tienda: true },
+    include: { ...INCLUDE_VENTA, tienda: true },
   });
   if (!venta) return null;
 
@@ -198,6 +310,7 @@ export interface ListarVentasInput {
   tiendaId: string;
   desde?: Date;
   hasta?: Date;
+  estado?: EstadoVenta;
   page?: number;
   pageSize?: number;
 }
@@ -224,12 +337,13 @@ export async function listarVentas(
     ...(input.desde || input.hasta
       ? { creadaEn: { ...(input.desde ? { gte: input.desde } : {}), ...(input.hasta ? { lte: input.hasta } : {}) } }
       : {}),
+    ...(input.estado ? { estado: input.estado } : {}),
   };
 
   const [ventas, total] = await Promise.all([
     prisma.venta.findMany({
       where,
-      include: { items: true },
+      include: INCLUDE_VENTA,
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy: { creadaEn: "desc" },

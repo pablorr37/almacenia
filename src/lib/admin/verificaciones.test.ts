@@ -81,3 +81,24 @@ describe("listarSolicitudesVerificacion", () => {
     }
   });
 });
+
+describe("listarSolicitudesVerificacion: datos de la tienda", () => {
+  it("cada solicitud trae nombre, dirección, rubro y dueño de la tienda", async () => {
+    const admin = await crearAdmin();
+    const { vendedor, tienda } = await crearVendedorConTienda();
+    const solicitud = await solicitarVerificacion(vendedor, tienda.id);
+    try {
+      const resultado = await listarSolicitudesVerificacion(admin, { pageSize: 100 });
+      const s = resultado.data.find((x) => x.id === solicitud.id)!;
+      expect(s.tienda).toEqual({
+        id: tienda.id,
+        nombre: tienda.nombre,
+        direccion: "Dirección",
+        rubro: null,
+        vendedor: { nombre: "Vendedor", email: vendedor.email },
+      });
+    } finally {
+      await limpiar([admin.id, vendedor.id]);
+    }
+  });
+});

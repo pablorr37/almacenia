@@ -9,6 +9,7 @@ import {
   crearVentaDesdePedido,
   obtenerVenta,
   listarVentas,
+  transicionarVenta,
 } from "./ventas";
 
 let contador = 0;
@@ -40,6 +41,7 @@ async function crearVendedorConTiendaYProducto(
 }
 
 async function limpiar(usuarioIds: string[]) {
+  await prisma.eventoPuntos.deleteMany({ where: { usuarioId: { in: usuarioIds } } });
   await prisma.itemVenta.deleteMany({ where: { venta: { tienda: { vendedorId: { in: usuarioIds } } } } });
   await prisma.venta.deleteMany({ where: { tienda: { vendedorId: { in: usuarioIds } } } });
   await prisma.itemPedido.deleteMany({ where: { pedido: { tienda: { vendedorId: { in: usuarioIds } } } } });
@@ -343,5 +345,131 @@ describe("listarVentas", () => {
     await expect(listarVentas(otro, { tiendaId: tienda.id })).rejects.toMatchObject<Partial<AppError>>({
       code: "NO_ES_DUENO_DE_TIENDA",
     });
+  });
+});
+
+describe("venta de mostrador: estado de cobro", () => {
+  let vendedor: Usuario;
+  let comprador: Usuario;
+  let otro: Usuario;
+  let tienda: Tienda;
+  let producto: Producto;
+
+  beforeEach(async () => {
+    ({ vendedor, tienda, producto } = await crearVendedorConTiendaYProducto(10));
+    comprador = await crearUsuarioDePrueba("Cliente");
+    otro = await crearUsuarioDePrueba("Otro");
+    await prisma.tienda.update({ where: { id: tienda.id }, data: { mediosDePago: ["efectivo", "transferencia"] } });
+  });
+
+  afterEach(() => limpiar([vendedor.id, comprador.id, otro.id]));
+
+  const stock = async () => Number((await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } })).stock);
+  const puntosVendedor = () => prisma.eventoPuntos.count({ where: { usuarioId: vendedor.id, tipo: "venta_realizada" } });
+
+  it("sin cobrarAhora (default) nace cobrada, como antes", async () => {
+    const venta = await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }] });
+    expect(venta.estado).toBe("cobrada");
+    expect(venta.cobradaEn).not.toBeNull();
+  });
+
+  it("cerrar por cobrar: descuenta stock, guarda medio y nota, y no otorga puntos todavía", async () => {
+    const venta = await crearVentaPresencial(vendedor, tienda.id, {
+      items: [{ productoId: producto.id, cantidad: 2 }],
+      cobrarAhora: false,
+      medioPago: "transferencia",
+      nota: "Paga el viernes",
+    });
+    expect(venta).toMatchObject({ estado: "por_cobrar", medioPago: "transferencia", nota: "Paga el viernes", cobradaEn: null });
+    expect(await stock()).toBe(8);
+    expect(await puntosVendedor()).toBe(0);
+  });
+
+  it("cobrar: pasa a cobrada y otorga los puntos", async () => {
+    const venta = await crearVentaPresencial(vendedor, tienda.id, {
+      items: [{ productoId: producto.id, cantidad: 2 }],
+      cobrarAhora: false,
+      medioPago: "efectivo",
+    });
+    const cobrada = await transicionarVenta(vendedor, venta.id, "cobrar");
+    expect(cobrada.estado).toBe("cobrada");
+    expect(cobrada.cobradaEn).not.toBeNull();
+    expect(await puntosVendedor()).toBe(1);
+    expect(await stock()).toBe(8);
+  });
+
+  it("anular: devuelve el stock y no otorga puntos", async () => {
+    const venta = await crearVentaPresencial(vendedor, tienda.id, {
+      items: [{ productoId: producto.id, cantidad: 3 }],
+      cobrarAhora: false,
+      medioPago: "efectivo",
+    });
+    const anulada = await transicionarVenta(vendedor, venta.id, "anular");
+    expect(anulada.estado).toBe("anulada");
+    expect(anulada.anuladaEn).not.toBeNull();
+    expect(await stock()).toBe(10);
+    expect(await puntosVendedor()).toBe(0);
+  });
+
+  it("TRANSICION_INVALIDA si no está por cobrar; NO_ES_DUENO_DE_TIENDA para otro usuario", async () => {
+    const venta = await crearVentaPresencial(vendedor, tienda.id, {
+      items: [{ productoId: producto.id, cantidad: 1 }],
+      cobrarAhora: false,
+      medioPago: "efectivo",
+    });
+    await expect(transicionarVenta(otro, venta.id, "cobrar")).rejects.toMatchObject({ code: "NO_ES_DUENO_DE_TIENDA" });
+    await transicionarVenta(vendedor, venta.id, "cobrar");
+    await expect(transicionarVenta(vendedor, venta.id, "anular")).rejects.toMatchObject({ code: "TRANSICION_INVALIDA" });
+    await expect(transicionarVenta(vendedor, venta.id, "otra" as "cobrar")).rejects.toMatchObject({ code: "TRANSICION_INVALIDA" });
+    await expect(transicionarVenta(vendedor, crypto.randomUUID(), "cobrar")).rejects.toMatchObject({ code: "VENTA_NO_ENCONTRADA" });
+  });
+
+  it("MEDIO_PAGO_INVALIDO si la tienda no acepta ese medio", async () => {
+    await expect(
+      crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }], medioPago: "qr" })
+    ).rejects.toMatchObject({ code: "MEDIO_PAGO_INVALIDO" });
+    expect(await stock()).toBe(10);
+  });
+
+  it("cliente por email: se asocia; COMPRADOR_INVALIDO si no existe; VENTA_PROPIA si es el vendedor", async () => {
+    const venta = await crearVentaPresencial(vendedor, tienda.id, {
+      items: [{ productoId: producto.id, cantidad: 1 }],
+      compradorEmail: comprador.email.toUpperCase(),
+    });
+    expect(venta.compradorId).toBe(comprador.id);
+    expect(venta.comprador).toEqual({ nombre: comprador.nombre, email: comprador.email });
+    await expect(
+      crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }], compradorEmail: "nadie@almacenia.test" })
+    ).rejects.toMatchObject({ code: "COMPRADOR_INVALIDO" });
+    await expect(
+      crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }], compradorEmail: vendedor.email })
+    ).rejects.toMatchObject({ code: "VENTA_PROPIA" });
+  });
+
+  it("NOTA_INVALIDA con más de 200 caracteres", async () => {
+    await expect(
+      crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }], nota: "x".repeat(201) })
+    ).rejects.toMatchObject({ code: "NOTA_INVALIDA" });
+  });
+
+  it("usa el precio de oferta si el producto lo tiene", async () => {
+    await prisma.producto.update({ where: { id: producto.id }, data: { precioOferta: 80 } });
+    const venta = await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 2 }] });
+    expect(venta.total).toBe(160);
+  });
+
+  it("los ítems traen nombre y unidad del producto", async () => {
+    const venta = await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }] });
+    expect(venta.items[0]).toMatchObject({ nombre: "Producto", unidad: "unidad" });
+  });
+
+  it("listarVentas filtra por estado", async () => {
+    await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }] });
+    const porCobrar = await crearVentaPresencial(vendedor, tienda.id, {
+      items: [{ productoId: producto.id, cantidad: 1 }],
+      cobrarAhora: false,
+    });
+    const r = await listarVentas(vendedor, { tiendaId: tienda.id, estado: "por_cobrar" });
+    expect(r.data.map((v) => v.id)).toEqual([porCobrar.id]);
   });
 });

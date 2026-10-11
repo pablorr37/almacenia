@@ -10,7 +10,31 @@ type SolicitudVerificacion = {
   tiendaId: string;
   estado: "pendiente" | "aprobada" | "rechazada";
   creadaEn: string;
+  tienda: {
+    id: string;
+    nombre: string;
+    direccion: string;
+    rubro: string | null;
+    vendedor: { nombre: string; email: string };
+  };
 };
+
+const RUBRO: Record<string, string> = {
+  almacen: "Almacén",
+  verduleria: "Verdulería",
+  kiosco: "Kiosco",
+  panaderia: "Panadería",
+  fiambreria: "Fiambrería",
+};
+
+const fecha = (iso: string) =>
+  new Date(iso).toLocaleString("es-AR", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Argentina/San_Juan",
+  });
 
 export default function AdminVerificacionesPage() {
   const { status } = useSession();
@@ -20,7 +44,7 @@ export default function AdminVerificacionesPage() {
   const [procesando, setProcesando] = useState<string | null>(null);
 
   function cargar() {
-    apiGet<SolicitudVerificacion[]>("/api/admin/verificaciones?estado=pendiente")
+    apiGet<SolicitudVerificacion[]>("/api/admin/verificaciones?estado=pendiente&pageSize=100")
       .then(setSolicitudes)
       .catch((err) => {
         if (err instanceof ApiError && err.code === "FORBIDDEN") {
@@ -91,7 +115,22 @@ export default function AdminVerificacionesPage() {
       <div className="flex flex-col gap-2.5">
         {solicitudes.map((s) => (
           <div key={s.id} className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5">
-            <div className="text-[13px] text-text-2">Tienda: {s.tiendaId}</div>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-col">
+                <span className="text-[15px] font-semibold">{s.tienda.nombre}</span>
+                <span className="text-[12px] text-text-2">
+                  {s.tienda.rubro ? `${RUBRO[s.tienda.rubro] ?? s.tienda.rubro} · ` : ""}
+                  {s.tienda.direccion}
+                </span>
+              </div>
+              <span className="flex-shrink-0 text-[11px] text-text-2">{fecha(s.creadaEn)}</span>
+            </div>
+            <div className="text-[13px] text-text">
+              {s.tienda.vendedor.nombre} · <span className="text-text-2">{s.tienda.vendedor.email}</span>
+            </div>
+            <Link href={`/tiendas/${s.tienda.id}`} className="text-[13px] font-semibold text-accent-text">
+              Ver tienda →
+            </Link>
             <div className="flex gap-2">
               <button
                 onClick={() => revisar(s.id, "aprobada")}

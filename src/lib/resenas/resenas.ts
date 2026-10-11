@@ -60,6 +60,7 @@ export async function crearResena(comprador: Usuario, input: CrearResenaInput): 
     where: {
       tiendaId: input.tiendaId,
       compradorId: comprador.id,
+      estado: { not: "anulada" },
       ...(input.productoId ? { items: { some: { productoId: input.productoId } } } : {}),
     },
   });

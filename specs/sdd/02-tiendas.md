@@ -47,11 +47,11 @@ CREATE TABLE horarios_tienda (
   dia_semana  SMALLINT NOT NULL, -- 0=domingo .. 6=sábado
   abre        TEXT, -- "HH:mm", NULL si cerrado ese día
   cierra      TEXT, -- "HH:mm", NULL si cerrado ese día
-  CONSTRAINT dia_semana_valido CHECK (dia_semana BETWEEN 0 AND 6),
-  CONSTRAINT horarios_tienda_tienda_dia_key UNIQUE (tienda_id, dia_semana)
+  CONSTRAINT dia_semana_valido CHECK (dia_semana BETWEEN 0 AND 6)
 );
 
-CREATE INDEX horarios_tienda_tienda_id_idx ON horarios_tienda (tienda_id);
+-- Una fila por franja: un día puede tener varias (horario partido, ej. 9-12 y 16-20).
+CREATE INDEX horarios_tienda_tienda_id_dia_semana_idx ON horarios_tienda (tienda_id, dia_semana);
 
 CREATE TYPE estado_verificacion AS ENUM ('pendiente', 'aprobada', 'rechazada');
 
@@ -93,8 +93,10 @@ CREATE INDEX solicitudes_verificacion_tienda_id_idx ON solicitudes_verificacion 
 - `plan` determina qué features premium tiene habilitadas la tienda (ver
   `10-planes.md`). Nace en `free`; el cambio a `premium` es manual por un admin
   mientras no haya cobro automatizado.
-- `horarios_tienda` guarda **una fila por día de la semana** (0 a 6, siempre las 7
-  presentes para una tienda con horario cargado) — `abre`/`cierra` en formato
+- `horarios_tienda` guarda **una fila por franja horaria**: cada día de la semana
+  (0 a 6, siempre los 7 presentes para una tienda con horario cargado) tiene una
+  fila cerrada o entre 1 y 3 franjas abiertas (horario partido: 9-12 y 16-20 son dos
+  filas del mismo día) — `abre`/`cierra` en formato
   `"HH:mm"` como texto simple (no `TIME` de Postgres, para no lidiar con
   zonas horarias/fechas ficticias del lado de la aplicación); ambos `NULL` en una
   fila significa que la tienda está cerrada ese día. Una tienda recién creada
@@ -115,12 +117,15 @@ CREATE INDEX solicitudes_verificacion_tienda_id_idx ON solicitudes_verificacion 
   (`GET /api/tiendas/cercanas`) pero sigue siendo editable por su dueño y sigue
   existiendo para el historial de ventas/pedidos ya realizados.
 - `horarios` es opcional tanto en `crearTienda` como en `actualizarTienda`; cuando
-  se manda, **tiene que traer exactamente las 7 entradas** (una por `diaSemana`,
-  0 a 6, sin repetidos) — no se permite mandar un subconjunto de días. Cada entrada
-  es `{ diaSemana, abre, cierra }`; si el día está cerrado, `abre` y `cierra` son
-  ambos `null`; si está abierto, ambos son un string `"HH:mm"` válido y `abre` tiene
-  que ser estrictamente anterior a `cierra` (no se contemplan horarios que cruzan la
-  medianoche).
+  se manda, **tiene que cubrir los 7 días** (`diaSemana` 0 a 6) — no se permite
+  mandar un subconjunto de días. Cada entrada es una franja `{ diaSemana, abre,
+  cierra }`:
+  - día cerrado: **una sola** entrada con `abre` y `cierra` en `null`;
+  - día abierto: **de 1 a 3** entradas, cada una con `abre`/`cierra` `"HH:mm"`
+    válidos y `abre` estrictamente anterior a `cierra` (no se contemplan horarios
+    que cruzan la medianoche); las franjas del mismo día **no se superponen** (una
+    puede empezar justo cuando termina otra, ej. 9-12 y 12-14 se aceptan);
+  - no se mezclan en un mismo día una entrada cerrada y franjas abiertas.
 - **Locales 24 hs**: se marcan con `abierto24hs = true` (campo propio, editable
   en `POST`/`PATCH`). Con el flag activo la tienda está **siempre abierta**: los
   `horarios` se ignoran para el estado de apertura (se conservan por si el vendedor
@@ -131,7 +136,7 @@ CREATE INDEX solicitudes_verificacion_tienda_id_idx ON solicitudes_verificacion 
   puede cerrar) en todas sus pestañas: la tienda no aparece en "Solo abiertas ahora"
   (`15-itinerario.md`) y los compradores ven "Horario no informado". El aviso
   desaparece recién al guardar horarios o activar 24 hs.
-- Al actualizar `horarios`, se reemplazan las 7 filas existentes por las nuevas (no
+- Al actualizar `horarios`, se reemplazan todas las filas existentes por las nuevas (no
   hay edición parcial de un solo día vía API — el cliente manda el estado completo
   de la semana).
 - **Verificación**: el dueño de una tienda no verificada puede crear una
@@ -248,7 +253,7 @@ interface Tienda {
   verificada: boolean;
   plan: Plan;
   mediosDePago: MedioPago[];
-  horarios: HorarioTienda[]; // 0 o 7 entradas
+  horarios: HorarioTienda[]; // vacío, o los 7 días (una o más franjas por día)
   abierto24hs: boolean;
 }
 
@@ -271,13 +276,13 @@ interface CrearTiendaInput {
   lat: number;
   lon: number;
   mediosDePago?: MedioPago[];
-  horarios?: HorarioTienda[]; // si se manda, deben ser exactamente 7
+  horarios?: HorarioTienda[]; // si se manda, cubre los 7 días (franjas)
   abierto24hs?: boolean;
 }
 
-// Valida la forma de `horarios`: exactamente 7 entradas, diaSemana 0-6 sin
-// repetidos, y por cada una: ambos null (cerrado) o ambos "HH:mm" válidos con
-// abre < cierra. Usada por crearTienda/actualizarTienda y testeada aislada.
+// Valida la forma de `horarios`: los 7 días presentes; por día, una entrada cerrada
+// (ambos null) o 1-3 franjas "HH:mm" con abre < cierra y sin superponerse.
+// Usada por crearTienda/actualizarTienda y testeada aislada.
 function horarioValido(horarios: HorarioTienda[]): boolean;
 
 // Crea la tienda y activa esVendedor=true en el usuario, en una única transacción
@@ -341,7 +346,7 @@ async function revisarSolicitudVerificacion(
 | `TIENDA_NO_ENCONTRADA`       | `:id` no existe.                                                |
 | `NO_ES_DUENO_DE_TIENDA`      | El usuario autenticado intenta editar una tienda que no es la suya. |
 | `RADIO_INVALIDO`             | `radioKm` <= 0 o > 50 en la búsqueda por cercanía.              |
-| `HORARIO_INVALIDO`           | `horarios` no trae exactamente 7 entradas, `diaSemana` repetido o fuera de 0-6, formato de hora inválido, o `abre >= cierra` en un día abierto. |
+| `HORARIO_INVALIDO`           | `horarios` no cubre los 7 días, `diaSemana` fuera de 0-6, formato de hora inválido, `abre >= cierra`, franjas superpuestas, más de 3 franjas en un día, o un día con entrada cerrada y franjas abiertas a la vez. |
 | `ABIERTO_24HS_INVALIDO`      | `abierto24hs` viene y no es boolean. |
 | `MEDIO_PAGO_INVALIDO`        | Algún valor de `mediosDePago` no es uno de los valores del enum `MedioPago` (el request llega como JSON sin tipar, hay que validarlo en runtime). |
 | `SOLICITUD_YA_PENDIENTE`     | La tienda ya tiene una `SolicitudVerificacion` en estado `pendiente`. |
@@ -361,11 +366,13 @@ actual **en la zona horaria del negocio**, `America/Argentina/San_Juan` (constan
   "Abierto las 24 hs".
 - Si la tienda no tiene horarios cargados (0 filas), el estado es `desconocido`
   (la UI no muestra pill de abierto/cerrado, solo "Horario no informado").
-- Está **abierta** si hoy es un día abierto y `abre <= horaActual < cierra`. En ese
-  caso se informa `cierraA` (`"HH:mm"` de hoy).
+- Está **abierta** si alguna franja de hoy cumple `abre <= horaActual < cierra`. En
+  ese caso se informa `cierraA` (el cierre de **esa** franja, ej. "12:00" a las 10
+  en un horario 9-12 y 16-20).
 - Está **cerrada** en cualquier otro caso. Se informa `proximaApertura`: el primer
-  `{ diaSemana, hora }` a partir de "ahora" en que abre (hoy más tarde si todavía no
-  abrió, si no el siguiente día abierto, dando la vuelta a la semana). Si los 7 días
+  `{ diaSemana, hora }` a partir de "ahora" en que abre (la próxima franja de hoy si
+  queda alguna —ej. a las 14 en un horario 9-12 y 16-20, "Abre a las 16:00"—; si
+  no, la primera franja del siguiente día abierto, dando la vuelta a la semana). Si los 7 días
   están cerrados, `proximaApertura = null`.
 - La UI lo muestra así: abierta → "Abierto · Cierra a las 21:00"; cerrada →
   "Cerrado · Abre a las 09:00" (hoy), "Cerrado · Abre mañana 09:00" (mañana) o

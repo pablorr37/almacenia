@@ -66,7 +66,7 @@ export async function valorarCliente(
   if (!comprador) {
     throw new AppError("USUARIO_NO_ENCONTRADO", "El cliente no existe.");
   }
-  const ventas = await prisma.venta.count({ where: { tiendaId: tienda.id, compradorId } });
+  const ventas = await prisma.venta.count({ where: { tiendaId: tienda.id, compradorId, estado: { not: "anulada" } } });
   if (ventas === 0) {
     throw new AppError("VALORACION_SIN_VENTA_PREVIA", "Solo podés valorar a clientes que te compraron.");
   }

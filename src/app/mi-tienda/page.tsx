@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import { BuscadorFotos, type DestinoFoto } from "@/components/fotos/BuscadorFotos";
+import { PuntoDeVenta } from "@/components/ventas/PuntoDeVenta";
+import { EditorHorarios } from "@/components/tiendas/EditorHorarios";
 import { ValoracionCliente } from "@/components/ui/ValoracionCliente";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
@@ -46,7 +48,6 @@ type Tienda = {
   abierto24hs: boolean;
 };
 
-const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 const MEDIOS_DE_PAGO: Array<{ valor: MedioPago; etiqueta: string }> = [
   { valor: "efectivo", etiqueta: "Efectivo" },
@@ -72,6 +73,7 @@ type Producto = {
   imagenCatalogoUrl: string | null;
   imagenEfectiva: string | null;
   precio: number;
+  precioOferta: number | null;
   stock: number;
   unidad: UnidadMedida;
   disponible: boolean;
@@ -112,7 +114,7 @@ const formatoARS = (n: number) =>
 
 export default function MiTiendaPage() {
   const { status } = useSession();
-  const [tab, setTab] = useState<"tienda" | "productos" | "pedidos">("pedidos");
+  const [tab, setTab] = useState<"vender" | "pedidos" | "productos" | "tienda">("vender");
   const [tienda, setTienda] = useState<Tienda | null>(null);
   const [cargandoTienda, setCargandoTienda] = useState(true);
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -197,12 +199,12 @@ export default function MiTiendaPage() {
 
   useEffect(() => {
     if (!tienda) return;
-    apiGet<Producto[]>(`/api/tiendas/${tienda.id}/productos`).then(setProductos).catch(() => {});
+    recargarProductos(tienda.id);
     apiGet<Pedido[]>(`/api/pedidos?tiendaId=${tienda.id}`).then(setPedidos).catch(() => {});
     setNombreForm(tienda.nombre);
     setDescripcionForm(tienda.descripcion ?? "");
     setMediosForm(tienda.mediosDePago);
-    setHorariosForm(tienda.horarios.length === 7 ? tienda.horarios : horarioPorDefecto());
+    setHorariosForm(tienda.horarios.length > 0 ? tienda.horarios : horarioPorDefecto());
     setAbierto24hsForm(tienda.abierto24hs);
   }, [tienda]);
 
@@ -216,24 +218,6 @@ export default function MiTiendaPage() {
   function toggleMedioPago(medio: MedioPago) {
     setMediosForm((actual) =>
       actual.includes(medio) ? actual.filter((m) => m !== medio) : [...actual, medio],
-    );
-  }
-
-  function toggleDiaCerrado(diaSemana: number) {
-    setHorariosForm((actual) =>
-      actual.map((h) =>
-        h.diaSemana === diaSemana
-          ? h.abre === null
-            ? { ...h, abre: "09:00", cierra: "21:00" }
-            : { ...h, abre: null, cierra: null }
-          : h,
-      ),
-    );
-  }
-
-  function actualizarHora(diaSemana: number, campo: "abre" | "cierra", valor: string) {
-    setHorariosForm((actual) =>
-      actual.map((h) => (h.diaSemana === diaSemana ? { ...h, [campo]: valor } : h)),
     );
   }
 
@@ -310,6 +294,10 @@ export default function MiTiendaPage() {
     }
   }
 
+  function recargarProductos(tiendaId: string) {
+    apiGet<Producto[]>(`/api/tiendas/${tiendaId}/productos`).then(setProductos).catch(() => {});
+  }
+
   async function transicionar(pedidoId: string, accion: AccionPedido) {
     const actualizado = await apiPost<Pedido>(`/api/pedidos/${pedidoId}/transicion`, { accion });
     setPedidos(pedidos.map((p) => (p.id === pedidoId ? actualizado : p)));
@@ -362,7 +350,7 @@ export default function MiTiendaPage() {
       </div>
 
       <div className="flex gap-1.5 px-5 pb-3 pt-3.5">
-        {(["tienda", "productos", "pedidos"] as const).map((t) => (
+        {(["vender", "pedidos", "productos", "tienda"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -461,50 +449,8 @@ export default function MiTiendaPage() {
                   className="h-5 w-5 accent-[#0e6b5c]"
                 />
               </label>
-              <div className={`flex flex-col gap-2 ${abierto24hsForm ? "hidden" : ""}`}>
-                {horariosForm
-                  .slice()
-                  .sort((a, b) => a.diaSemana - b.diaSemana)
-                  .map((h) => {
-                    const cerrado = h.abre === null;
-                    return (
-                      <div
-                        key={h.diaSemana}
-                        className="flex flex-col gap-2 rounded-control border border-border bg-surface p-2.5"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[13px] font-semibold text-text">
-                            {DIAS_SEMANA[h.diaSemana]}
-                          </span>
-                          <label className="flex flex-shrink-0 items-center gap-1.5 text-[12px] text-text-2">
-                            <input
-                              type="checkbox"
-                              checked={cerrado}
-                              onChange={() => toggleDiaCerrado(h.diaSemana)}
-                            />
-                            Cerrado
-                          </label>
-                        </div>
-                        {!cerrado && (
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="time"
-                              value={h.abre ?? ""}
-                              onChange={(e) => actualizarHora(h.diaSemana, "abre", e.target.value)}
-                              className="w-full min-w-0 rounded-control border border-border bg-bg px-2 py-1.5 text-[13px]"
-                            />
-                            <span className="flex-shrink-0 text-text-2">–</span>
-                            <input
-                              type="time"
-                              value={h.cierra ?? ""}
-                              onChange={(e) => actualizarHora(h.diaSemana, "cierra", e.target.value)}
-                              className="w-full min-w-0 rounded-control border border-border bg-bg px-2 py-1.5 text-[13px]"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+              <div className={abierto24hsForm ? "hidden" : ""}>
+                <EditorHorarios horarios={horariosForm} onChange={setHorariosForm} />
               </div>
             </div>
 
@@ -543,9 +489,13 @@ export default function MiTiendaPage() {
               <span className="text-[13px] font-semibold text-text">
                 Plan {tienda.plan === "premium" ? "Premium" : "Free"}
               </span>
-              {tienda.plan === "free" && (
+              {tienda.plan === "free" ? (
                 <span className="text-[12px] text-text-2">
                   Fotos del banco de Almacenia. Premium: fotos propias y prioridad en el mapa.
+                </span>
+              ) : (
+                <span className="text-[12px] text-text-2">
+                  Podés subir fotos propias de tus productos: en Productos, tocá «Foto propia» → «Subir foto propia».
                 </span>
               )}
             </div>
@@ -602,6 +552,15 @@ export default function MiTiendaPage() {
               </>
             )}
           </div>
+        )}
+
+        {tab === "vender" && (
+          <PuntoDeVenta
+            tiendaId={tienda.id}
+            mediosDePago={tienda.mediosDePago}
+            productos={productos}
+            onStockCambiado={() => recargarProductos(tienda.id)}
+          />
         )}
 
         {tab === "productos" && (

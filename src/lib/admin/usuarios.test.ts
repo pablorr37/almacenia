@@ -173,3 +173,35 @@ describe("marcarTester", () => {
     }
   });
 });
+
+describe("listarUsuarios: búsqueda y orden", () => {
+  it("q busca por nombre, email o nombre de tienda (sin mayúsculas)", async () => {
+    const admin = await crearAdmin();
+    const comprador = await crearComprador();
+    const { vendedor, tienda } = await crearVendedorConTienda();
+    try {
+      const porEmail = await listarUsuarios(admin, { q: comprador.email.toUpperCase() });
+      expect(porEmail.data.map((u) => u.id)).toEqual([comprador.id]);
+      const porTienda = await listarUsuarios(admin, { q: tienda.nombre.toLowerCase() });
+      expect(porTienda.data.map((u) => u.id)).toEqual([vendedor.id]);
+      expect(porTienda.total).toBe(1);
+    } finally {
+      await limpiar([admin.id, comprador.id, vendedor.id]);
+    }
+  });
+
+  it("devuelve los más nuevos primero y pagina hasta el total", async () => {
+    const admin = await crearAdmin();
+    const a = await crearComprador();
+    const b = await crearComprador();
+    try {
+      const primera = await listarUsuarios(admin, { page: 1, pageSize: 2 });
+      expect(primera.data.map((u) => u.id)).toEqual([b.id, a.id]);
+      const total = primera.total;
+      const ultima = await listarUsuarios(admin, { page: Math.ceil(total / 2), pageSize: 2 });
+      expect(ultima.data.length).toBeGreaterThan(0);
+    } finally {
+      await limpiar([admin.id, a.id, b.id]);
+    }
+  });
+});

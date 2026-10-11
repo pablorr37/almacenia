@@ -50,7 +50,8 @@ export async function obtenerMetricas(admin: Usuario, rango: RangoFechas): Promi
 
   const [ventasAgregado, pedidosAgrupados, tiendasNuevas, tiendasDadasDeBaja, usuariosNuevos] = await Promise.all([
     prisma.venta.aggregate({
-      where: { creadaEn: entreFechas },
+      // Solo ventas cobradas (05-ventas.md: las por cobrar y anuladas no cuentan).
+      where: { creadaEn: entreFechas, estado: "cobrada" },
       _count: { _all: true },
       _sum: { total: true },
     }),

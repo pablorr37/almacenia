@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
 
     const sp = request.nextUrl.searchParams;
     const resultado = await listarUsuarios(usuario, {
+      q: sp.get("q") ?? undefined,
       rol: (sp.get("rol") as RolUsuario) ?? undefined,
       plan: (sp.get("plan") as Plan) ?? undefined,
       page: sp.get("page") ? Number(sp.get("page")) : undefined,
