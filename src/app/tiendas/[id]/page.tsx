@@ -8,7 +8,7 @@ import { apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { EstadoAperturaPill } from "@/components/ui/EstadoAperturaPill";
 import { Toast } from "@/components/ui/Toast";
 import { formatoPuntos } from "@/components/ui/PuntosChip";
-import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
+import { estadoApertura, horariosPorDia, type HorarioTienda } from "@/lib/tiendas/horarios";
 import { useAhora } from "@/lib/hooks/useAhora";
 import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
@@ -205,6 +205,19 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
           </div>
           <div className="truncate text-[13px] text-text-2">{tienda?.direccion}</div>
           {tienda && <EstadoAperturaPill estado={estadoApertura(tienda.horarios, ahora, { abierto24hs: tienda.abierto24hs })} className="self-start" />}
+          {tienda && !tienda.abierto24hs && tienda.horarios.length > 0 && (
+            <details className="text-[12px] text-text-2">
+              <summary className="cursor-pointer font-semibold text-accent-text">Ver horarios</summary>
+              <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                {horariosPorDia(tienda.horarios).map((d) => (
+                  <div key={d.diaSemana} className="contents">
+                    <dt className="font-semibold text-text">{d.dia}</dt>
+                    <dd>{d.texto}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
         </div>
         {/* El backend rechaza el check-in del dueño (CHECKIN_TIENDA_PROPIA). */}
         {tienda && status === "authenticated" && (

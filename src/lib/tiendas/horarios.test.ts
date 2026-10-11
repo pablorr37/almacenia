@@ -1,4 +1,4 @@
-import { estadoApertura, textoEstadoApertura, type HorarioTienda } from "./horarios";
+import { estadoApertura, textoEstadoApertura, horariosPorDia, type HorarioTienda } from "./horarios";
 
 // San Juan (Argentina) es UTC-3 todo el año. 2026-09-26 es sábado (6),
 // 2026-09-27 domingo (0), 2026-09-28 lunes (1).
@@ -161,5 +161,25 @@ describe("estadoApertura con horario partido", () => {
       estado: "cerrada",
       proximaApertura: { diaSemana: 1, hora: "09:00", enDias: 2 },
     });
+  });
+});
+
+describe("horariosPorDia", () => {
+  it("lista la semana de lunes a domingo con todas las franjas", () => {
+    const h: HorarioTienda[] = [
+      { diaSemana: 0, abre: null, cierra: null },
+      ...[1, 2, 3, 4, 5, 6].flatMap((d) => [
+        { diaSemana: d, abre: "16:00", cierra: "20:00" },
+        { diaSemana: d, abre: "09:00", cierra: "12:00" },
+      ]),
+    ];
+    const r = horariosPorDia(h);
+    expect(r[0]).toEqual({ diaSemana: 1, dia: "Lunes", texto: "09:00–12:00 · 16:00–20:00" });
+    expect(r[6]).toEqual({ diaSemana: 0, dia: "Domingo", texto: "Cerrado" });
+    expect(r).toHaveLength(7);
+  });
+
+  it("sin horarios devuelve una lista vacía", () => {
+    expect(horariosPorDia([])).toEqual([]);
   });
 });

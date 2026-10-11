@@ -64,13 +64,24 @@ function horarioCierraTemprano(): HorarioTienda[] {
   });
 }
 
+function horarioPartido(): HorarioTienda[] {
+  // Lunes a sábado 09:00-13:00 y 17:00-21:00 (siesta), domingo cerrado.
+  return [
+    { diaSemana: 0, abre: null, cierra: null },
+    ...[1, 2, 3, 4, 5, 6].flatMap((diaSemana) => [
+      { diaSemana, abre: "09:00", cierra: "13:00" },
+      { diaSemana, abre: "17:00", cierra: "21:00" },
+    ]),
+  ];
+}
+
 function horario24hs(): HorarioTienda[] {
   // Los locales 24 hs se marcan con abierto24hs = true (02-tiendas.md), no con
   // horarios: no se cargan filas de horario.
   return [];
 }
 
-const HORARIOS = [horarioNormal, horarioConDomingoMedioDia, horarioCierraTemprano, horario24hs];
+const HORARIOS = [horarioNormal, horarioConDomingoMedioDia, horarioPartido, horarioCierraTemprano, horario24hs];
 
 // Solo los kioscos a los que les toca horario24hs son 24 hs; el resto de los rubros
 // que caen en ese turno del ciclo usan el horario normal.

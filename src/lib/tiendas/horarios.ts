@@ -77,3 +77,19 @@ export function textoEstadoApertura(estado: EstadoApertura): string {
   if (prox.enDias === 1) return `Cerrado · Abre mañana ${prox.hora}`;
   return `Cerrado · Abre el ${DIAS[prox.diaSemana]} ${prox.hora}`;
 }
+
+// Semana para mostrar (lunes a domingo): "09:00–12:00 · 16:00–20:00" o "Cerrado".
+export function horariosPorDia(horarios: HorarioTienda[]): Array<{ diaSemana: number; dia: string; texto: string }> {
+  if (horarios.length === 0) return [];
+  return [1, 2, 3, 4, 5, 6, 0].map((diaSemana) => {
+    const franjas = horarios
+      .filter((h) => h.diaSemana === diaSemana && h.abre && h.cierra)
+      .sort((a, b) => a.abre!.localeCompare(b.abre!));
+    const dia = DIAS[diaSemana][0].toUpperCase() + DIAS[diaSemana].slice(1);
+    return {
+      diaSemana,
+      dia,
+      texto: franjas.length === 0 ? "Cerrado" : franjas.map((f) => `${f.abre}–${f.cierra}`).join(" · "),
+    };
+  });
+}
