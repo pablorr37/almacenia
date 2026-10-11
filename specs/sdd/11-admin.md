@@ -76,6 +76,14 @@ Request `{ verificada: boolean }`. Response `200`:
 `{ data: { id: string; verificada: boolean } }`. `400 VERIFICADA_INVALIDA` si no es
 booleano; `404 TIENDA_NO_ENCONTRADA`; `403 FORBIDDEN` si no es admin.
 
+### `GET /api/admin/diagnostico`
+
+Solo admin. Prueba la base de datos y el almacenamiento de fotos (escribe y borra
+un archivo `diagnostico/<uuid>.txt` en el bucket). Response `200`:
+`{ data: { db: 'ok' | 'error'; almacenamiento: { ok: boolean; bucket: string; endpoint: string; error?: string } } }`.
+Nunca devuelve credenciales. En `/admin` se usa desde la tarjeta "Estado del
+sistema" (botón "Probar almacenamiento").
+
 ### `GET /api/admin/usuarios`
 
 Query opcional `?q=<texto>&rol=comprador|vendedor|admin&plan=free|premium&page&pageSize`.

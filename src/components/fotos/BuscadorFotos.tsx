@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { apiGet, apiGetPaginado, apiPost, apiPostForm, ApiError } from "@/lib/api-client";
 import { palabrasClave, type ResultadoWeb } from "@/lib/fotos/buscador-web";
 import type { FotoBanco, Fuente } from "@/lib/fotos/banco";
+import { comprimirImagen, mensajeErrorSubida } from "@/lib/archivos/comprimir-imagen";
 
 // Buscador de fotos (16-banco-fotos.md): la misma UI para todos. El banco lo ve
 // cualquiera; la pestaña "Web libre" (Openverse, CC0/dominio público) solo los
@@ -160,7 +161,7 @@ export function BuscadorFotos({
     setError(null);
     try {
       const form = new FormData();
-      form.set("archivo", file);
+      form.set("archivo", await comprimirImagen(file));
       form.set("etiquetas", listaEtiquetas().join(","));
       const foto = await apiPostForm<FotoBanco>("/api/fotos/banco", form);
       if (destino) {
@@ -171,7 +172,7 @@ export function BuscadorFotos({
         buscarBanco(texto);
       }
     } catch (err) {
-      setError(mensajeDe(err, "No se pudo subir la foto."));
+      setError(mensajeErrorSubida(err, err instanceof ApiError && err.code !== "ERROR_INTERNO" ? err.message : null));
     } finally {
       setOcupado(null);
       if (archivo.current) archivo.current.value = "";
@@ -335,7 +336,7 @@ export function BuscadorFotos({
             <input
               ref={archivo}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               className="hidden"
               disabled={ocupado !== null}
               onChange={(e) => {

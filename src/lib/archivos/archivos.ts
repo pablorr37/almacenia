@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, CreateBucketCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, CreateBucketCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { AppError } from "@/lib/errors";
 
 const TIPOS_VALIDOS = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -62,12 +62,65 @@ function construirKey(input: SubirArchivoInput, extension: string): string {
   return `${carpeta}/${input.entidadId}/${nombre}.${extension}`;
 }
 
+// Config mínima del almacenamiento; sin ella no tiene sentido intentar (08-archivos.md).
+function configAlmacenamiento(): { bucket: string; endpoint: string } {
+  const bucket = process.env.S3_BUCKET ?? "";
+  const endpoint = process.env.S3_ENDPOINT ?? "";
+  const faltan = [!bucket && "S3_BUCKET", !endpoint && "S3_ENDPOINT"].filter(Boolean);
+  if (faltan.length > 0) {
+    console.error("[almacenamiento]", "Configuración incompleta:", faltan.join(", "));
+    throw new AppError(
+      "ALMACENAMIENTO_NO_CONFIGURADO",
+      `El almacenamiento de fotos no está configurado (falta ${faltan.join(" y ")}). Avisale al administrador.`
+    );
+  }
+  return { bucket, endpoint };
+}
+
+// AppError con el detalle técnico aparte: el usuario ve el mensaje, el admin (en el
+// diagnóstico) y el log ven el detalle.
+class ErrorAlmacenamiento extends AppError {
+  detalle: string;
+  constructor(detalle: string) {
+    super("ALMACENAMIENTO_NO_DISPONIBLE", "No se pudo guardar la foto en el almacenamiento. Avisale al administrador.");
+    this.detalle = detalle;
+  }
+}
+
+function noDisponible(error: unknown): ErrorAlmacenamiento {
+  const e = error as { name?: string; message?: string };
+  const nombre = e?.name ?? "Error";
+  const mensaje = e?.message ?? String(error);
+  console.error("[almacenamiento]", nombre, mensaje);
+  return new ErrorAlmacenamiento(`${nombre}: ${mensaje}`);
+}
+
+async function enviarConBucket(cliente: S3Client, bucket: string, comando: PutObjectCommand): Promise<void> {
+  try {
+    await cliente.send(comando);
+  } catch (error) {
+    // Primer upload contra un bucket que todavía no existe (deploy nuevo, o el
+    // servidor S3-compatible local no soporta crear el bucket al arrancar): se
+    // crea una única vez y se reintenta, en vez de exigir un paso manual previo.
+    if (error instanceof Error && error.name === "NoSuchBucket") {
+      try {
+        await cliente.send(new CreateBucketCommand({ Bucket: bucket }));
+        await cliente.send(comando);
+        return;
+      } catch (reintento) {
+        throw noDisponible(reintento);
+      }
+    }
+    throw noDisponible(error);
+  }
+}
+
 export async function subirArchivo(input: SubirArchivoInput): Promise<{ url: string }> {
   validarImagen(input.contentType, input.buffer.byteLength);
+  const { bucket } = configAlmacenamiento();
 
   const extension = EXTENSION_POR_TIPO[input.contentType as ContentTypeValido];
   const key = construirKey(input, extension);
-  const bucket = process.env.S3_BUCKET ?? "";
   const cliente = obtenerClienteS3();
   const comando = new PutObjectCommand({
     Bucket: bucket,
@@ -76,20 +129,36 @@ export async function subirArchivo(input: SubirArchivoInput): Promise<{ url: str
     ContentType: input.contentType,
   });
 
-  try {
-    await cliente.send(comando);
-  } catch (error) {
-    // Primer upload contra un bucket que todavía no existe (deploy nuevo, o el
-    // servidor S3-compatible local no soporta crear el bucket al arrancar): se
-    // crea una única vez y se reintenta, en vez de exigir un paso manual previo.
-    if (error instanceof Error && error.name === "NoSuchBucket") {
-      await cliente.send(new CreateBucketCommand({ Bucket: bucket }));
-      await cliente.send(comando);
-    } else {
-      throw error;
-    }
-  }
+  await enviarConBucket(cliente, bucket, comando);
 
   const urlPublica = process.env.S3_PUBLIC_URL ?? process.env.S3_ENDPOINT ?? "";
   return { url: `${urlPublica.replace(/\/$/, "")}/${bucket}/${key}` };
+}
+
+// Diagnóstico del admin (11-admin.md): escribe y borra un archivo de prueba. Nunca
+// lanza ni devuelve credenciales: informa el error exacto para corregir la config.
+export async function probarAlmacenamiento(): Promise<{ ok: boolean; bucket: string; endpoint: string; error?: string }> {
+  const bucket = process.env.S3_BUCKET ?? "";
+  const endpoint = process.env.S3_ENDPOINT ?? "";
+  let config: { bucket: string; endpoint: string };
+  try {
+    config = configAlmacenamiento();
+  } catch (error) {
+    return { ok: false, bucket, endpoint, error: (error as Error).message };
+  }
+
+  const key = `diagnostico/${crypto.randomUUID()}.txt`;
+  const cliente = obtenerClienteS3();
+  try {
+    await enviarConBucket(
+      cliente,
+      config.bucket,
+      new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: "ok", ContentType: "text/plain" })
+    );
+    await cliente.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+    return { ok: true, ...config };
+  } catch (error) {
+    const detalle = error instanceof ErrorAlmacenamiento ? error.detalle : noDisponible(error).detalle;
+    return { ok: false, ...config, error: detalle };
+  }
 }

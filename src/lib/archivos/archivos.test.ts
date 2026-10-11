@@ -11,9 +11,12 @@ vi.mock("@aws-sdk/client-s3", () => ({
   CreateBucketCommand: class {
     constructor(public input: unknown) {}
   },
+  DeleteObjectCommand: class {
+    constructor(public input: unknown) {}
+  },
 }));
 
-import { validarImagen, subirArchivo } from "./archivos";
+import { validarImagen, subirArchivo, probarAlmacenamiento } from "./archivos";
 
 describe("validarImagen", () => {
   it("no lanza con un content-type e tamaño válidos", () => {
@@ -78,5 +81,71 @@ describe("subirArchivo", () => {
       subirArchivo({ tipo: "avatar", entidadId: "u-1", contentType: "text/plain", buffer: Buffer.from("x") })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "TIPO_ARCHIVO_INVALIDO" });
     expect(sendMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("errores de almacenamiento", () => {
+  const input = { tipo: "producto" as const, entidadId: "p", contentType: "image/jpeg", buffer: Buffer.from("x") };
+
+  beforeEach(() => {
+    sendMock.mockReset().mockResolvedValue({});
+    process.env.S3_BUCKET = "almacenia-test";
+    process.env.S3_ENDPOINT = "http://minio:9000";
+    process.env.S3_PUBLIC_URL = "http://localhost:9000";
+  });
+
+  it("un error del SDK (credenciales, red, disco) se convierte en ALMACENAMIENTO_NO_DISPONIBLE", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    sendMock.mockRejectedValue(Object.assign(new Error("Access Denied."), { name: "AccessDenied" }));
+    await expect(subirArchivo(input)).rejects.toMatchObject<Partial<AppError>>({ code: "ALMACENAMIENTO_NO_DISPONIBLE" });
+    expect(errorSpy).toHaveBeenCalledWith("[almacenamiento]", "AccessDenied", "Access Denied.");
+    errorSpy.mockRestore();
+  });
+
+  it("si falla la creación del bucket también es ALMACENAMIENTO_NO_DISPONIBLE", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    sendMock
+      .mockRejectedValueOnce(Object.assign(new Error("no existe"), { name: "NoSuchBucket" }))
+      .mockRejectedValueOnce(Object.assign(new Error("connect ECONNREFUSED"), { name: "Error" }));
+    await expect(subirArchivo(input)).rejects.toMatchObject({ code: "ALMACENAMIENTO_NO_DISPONIBLE" });
+  });
+
+  it("sin S3_BUCKET o S3_ENDPOINT: ALMACENAMIENTO_NO_CONFIGURADO, sin llamar a S3", async () => {
+    delete process.env.S3_BUCKET;
+    await expect(subirArchivo(input)).rejects.toMatchObject({ code: "ALMACENAMIENTO_NO_CONFIGURADO" });
+    process.env.S3_BUCKET = "almacenia-test";
+    delete process.env.S3_ENDPOINT;
+    await expect(subirArchivo(input)).rejects.toMatchObject({ code: "ALMACENAMIENTO_NO_CONFIGURADO" });
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("probarAlmacenamiento", () => {
+  beforeEach(() => {
+    sendMock.mockReset().mockResolvedValue({});
+    process.env.S3_BUCKET = "almacenia-test";
+    process.env.S3_ENDPOINT = "http://minio:9000";
+    process.env.S3_ACCESS_KEY = "clave-secreta";
+  });
+
+  it("escribe y borra un archivo de prueba", async () => {
+    const r = await probarAlmacenamiento();
+    expect(r).toEqual({ ok: true, bucket: "almacenia-test", endpoint: "http://minio:9000" });
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(r)).not.toContain("clave-secreta");
+  });
+
+  it("informa el error exacto sin lanzar", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    sendMock.mockRejectedValue(Object.assign(new Error("Storage backend has reached its minimum free drive threshold."), { name: "XMinioStorageFull" }));
+    const r = await probarAlmacenamiento();
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe("XMinioStorageFull: Storage backend has reached its minimum free drive threshold.");
+  });
+
+  it("sin configuración informa qué variable falta", async () => {
+    delete process.env.S3_ENDPOINT;
+    const r = await probarAlmacenamiento();
+    expect(r).toMatchObject({ ok: false, error: expect.stringContaining("S3_ENDPOINT") });
   });
 });
