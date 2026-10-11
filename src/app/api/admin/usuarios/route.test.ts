@@ -51,4 +51,12 @@ describe("GET /api/admin/usuarios", () => {
     expect(Array.isArray(body.data)).toBe(true);
     expect(body.data.some((u: { id: string }) => u.id === admin.id)).toBe(true);
   });
+
+  it("200 con q filtra por email", async () => {
+    obtenerUsuarioActualMock.mockResolvedValue(admin);
+    const res = await GET(new NextRequest(`http://localhost/api/admin/usuarios?q=${encodeURIComponent(noAdmin.email)}`));
+    const body = await res.json();
+    expect(body.data.map((u: { id: string }) => u.id)).toEqual([noAdmin.id]);
+    expect(body.total).toBe(1);
+  });
 });

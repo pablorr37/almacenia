@@ -14,6 +14,7 @@ export interface UsuarioAdmin extends Usuario {
 }
 
 export interface ListarUsuariosInput {
+  q?: string;
   rol?: RolUsuario;
   plan?: Plan;
   page?: number;
@@ -76,10 +77,23 @@ export async function listarUsuarios(
     ? Math.min(input.pageSize, PAGE_SIZE_MAXIMO)
     : PAGE_SIZE_DEFAULT;
 
+  const q = input.q?.trim();
   const where = {
-    ...(input.rol ? { [CAMPO_POR_ROL[input.rol]]: true } : {}),
-    // Filtrar por plan implica ser vendedor con tienda de ese plan.
-    ...(input.plan ? { esVendedor: true, tienda: { plan: input.plan } } : {}),
+    AND: [
+      input.rol ? { [CAMPO_POR_ROL[input.rol]]: true } : {},
+      // Filtrar por plan implica ser vendedor con tienda de ese plan.
+      input.plan ? { esVendedor: true, tienda: { plan: input.plan } } : {},
+      // Búsqueda libre por nombre, email o nombre de la tienda (11-admin.md).
+      q
+        ? {
+            OR: [
+              { nombre: { contains: q, mode: "insensitive" as const } },
+              { email: { contains: q, mode: "insensitive" as const } },
+              { tienda: { nombre: { contains: q, mode: "insensitive" as const } } },
+            ],
+          }
+        : {},
+    ],
   };
 
   const [usuarios, total] = await Promise.all([
