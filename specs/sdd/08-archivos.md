@@ -67,7 +67,19 @@ interface SubirArchivoInput {
 async function subirArchivo(input: SubirArchivoInput): Promise<{ url: string }>;
 
 function validarImagen(contentType: string, tamanioBytes: number): void;
+
+// Escribe y borra un archivo de prueba en el bucket (diagnóstico del admin, 11-admin.md).
+async function probarAlmacenamiento(): Promise<{ ok: boolean; bucket: string; endpoint: string; error?: string }>;
 ```
+
+### Compresión en el cliente
+
+Antes de subir, el navegador redimensiona la foto a un máximo de **1600 px** del lado
+mayor y la exporta como JPEG (calidad 0.82): una foto de cámara de 12 MP pasa de
+~5 MB a ~300 KB, lo que evita el límite de 5 MB y reduce el uso de memoria del
+teléfono. Si el navegador no puede decodificarla (por ejemplo HEIC), se sube la
+original. El selector de archivo usa `accept="image/*"` sin `capture`, así el
+usuario elige entre galería y cámara.
 
 ## Casos de error a contemplar
 
@@ -78,3 +90,5 @@ function validarImagen(contentType: string, tamanioBytes: number): void;
 | `ARCHIVO_FALTANTE`         | El request no trae el campo `archivo`.                            |
 | `FOTOS_SOLO_PREMIUM`       | Subida de foto de producto/catálogo sin plan premium (`403`, ver `10-planes.md`). |
 | `CATALOGO_YA_TIENE_FOTO`   | `tipo=catalogo`, la entrada ya tiene foto y el usuario no es admin (`409`). |
+| `ALMACENAMIENTO_NO_CONFIGURADO` | Faltan `S3_BUCKET` o `S3_ENDPOINT` en el entorno (`503`). |
+| `ALMACENAMIENTO_NO_DISPONIBLE`  | El servidor S3/MinIO rechazó o no respondió la subida (credenciales, red, disco lleno) (`503`). El detalle técnico va al log con el prefijo `[almacenamiento]`; al usuario solo se le muestra que avise al administrador. |
