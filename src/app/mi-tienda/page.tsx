@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import { BuscadorFotos, type DestinoFoto } from "@/components/fotos/BuscadorFotos";
+import { PuntoDeVenta } from "@/components/ventas/PuntoDeVenta";
 import { ValoracionCliente } from "@/components/ui/ValoracionCliente";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
@@ -72,6 +73,7 @@ type Producto = {
   imagenCatalogoUrl: string | null;
   imagenEfectiva: string | null;
   precio: number;
+  precioOferta: number | null;
   stock: number;
   unidad: UnidadMedida;
   disponible: boolean;
@@ -112,7 +114,7 @@ const formatoARS = (n: number) =>
 
 export default function MiTiendaPage() {
   const { status } = useSession();
-  const [tab, setTab] = useState<"tienda" | "productos" | "pedidos">("pedidos");
+  const [tab, setTab] = useState<"vender" | "pedidos" | "productos" | "tienda">("vender");
   const [tienda, setTienda] = useState<Tienda | null>(null);
   const [cargandoTienda, setCargandoTienda] = useState(true);
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -197,7 +199,7 @@ export default function MiTiendaPage() {
 
   useEffect(() => {
     if (!tienda) return;
-    apiGet<Producto[]>(`/api/tiendas/${tienda.id}/productos`).then(setProductos).catch(() => {});
+    recargarProductos(tienda.id);
     apiGet<Pedido[]>(`/api/pedidos?tiendaId=${tienda.id}`).then(setPedidos).catch(() => {});
     setNombreForm(tienda.nombre);
     setDescripcionForm(tienda.descripcion ?? "");
@@ -310,6 +312,10 @@ export default function MiTiendaPage() {
     }
   }
 
+  function recargarProductos(tiendaId: string) {
+    apiGet<Producto[]>(`/api/tiendas/${tiendaId}/productos`).then(setProductos).catch(() => {});
+  }
+
   async function transicionar(pedidoId: string, accion: AccionPedido) {
     const actualizado = await apiPost<Pedido>(`/api/pedidos/${pedidoId}/transicion`, { accion });
     setPedidos(pedidos.map((p) => (p.id === pedidoId ? actualizado : p)));
@@ -362,7 +368,7 @@ export default function MiTiendaPage() {
       </div>
 
       <div className="flex gap-1.5 px-5 pb-3 pt-3.5">
-        {(["tienda", "productos", "pedidos"] as const).map((t) => (
+        {(["vender", "pedidos", "productos", "tienda"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -602,6 +608,15 @@ export default function MiTiendaPage() {
               </>
             )}
           </div>
+        )}
+
+        {tab === "vender" && (
+          <PuntoDeVenta
+            tiendaId={tienda.id}
+            mediosDePago={tienda.mediosDePago}
+            productos={productos}
+            onStockCambiado={() => recargarProductos(tienda.id)}
+          />
         )}
 
         {tab === "productos" && (
