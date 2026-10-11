@@ -2,6 +2,7 @@
 
 import { useState, type ChangeEvent } from "react";
 import { apiUpload, ApiError } from "@/lib/api-client";
+import { comprimirImagen, mensajeErrorSubida } from "@/lib/archivos/comprimir-imagen";
 
 type TipoArchivo = "tienda" | "producto" | "catalogo" | "avatar";
 
@@ -32,18 +33,13 @@ export function ImageUploadField({ tipo, entidadId, valorActual, onSubido, label
       const entidadQuery = tipo === "avatar" ? "" : `&entidadId=${entidadId}`;
       const resultado = await apiUpload<{ url: string }>(
         `/api/archivos/upload?tipo=${tipo}${entidadQuery}`,
-        archivo
+        await comprimirImagen(archivo)
       );
       onSubido(resultado.url);
     } catch (err) {
-      // Los errores de negocio (FOTOS_SOLO_PREMIUM, CATALOGO_YA_TIENE_FOTO — ver
-      // 10-planes.md / 06-catalogo.md) ya traen el mensaje armado desde el backend;
-      // el resto usa un mensaje genérico.
-      setError(
-        err instanceof ApiError && (err.code === "FOTOS_SOLO_PREMIUM" || err.code === "CATALOGO_YA_TIENE_FOTO")
-          ? err.message
-          : "No pudimos subir la imagen. Probá de nuevo."
-      );
+      // Los errores del backend (plan, catálogo, almacenamiento — 08-archivos.md) ya
+      // traen el mensaje armado; un fallo de red tiene su propio mensaje.
+      setError(mensajeErrorSubida(err, err instanceof ApiError && err.code !== "ERROR_INTERNO" ? err.message : null));
     } finally {
       setSubiendo(false);
       e.target.value = "";
@@ -62,7 +58,7 @@ export function ImageUploadField({ tipo, entidadId, valorActual, onSubido, label
           {subiendo ? "Subiendo..." : valorActual ? "Cambiar foto" : textoSubir}
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
             className="hidden"
             disabled={subiendo}
             onChange={manejarCambio}

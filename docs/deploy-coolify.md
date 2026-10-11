@@ -80,6 +80,27 @@ mano (no hay script para esto):
      las fotos (`<img src>`) — si `S3_ENDPOINT` no es accesible desde afuera,
      asignale un dominio propio al recurso MinIO en Coolify y usá ese acá.
 
+### Comprobar que funciona
+
+En `/admin` (cuenta admin) → tarjeta **Estado del sistema** → **Probar
+almacenamiento**: escribe y borra un archivo de prueba en el bucket y muestra ✓ o
+el error exacto. También queda en el log de la app con el prefijo
+`[almacenamiento]` (`docker logs <app> | grep almacenamiento`).
+
+| Error que muestra | Qué significa | Qué hacer |
+| --- | --- | --- |
+| `falta S3_BUCKET` / `falta S3_ENDPOINT` | La app no tiene la variable. | Cargarla en las variables de entorno de la app en Coolify y redeployar. |
+| `ECONNREFUSED`, `ENOTFOUND`, `getaddrinfo`, `timeout` | La app no llega a MinIO. | Revisar que `S3_ENDPOINT` sea el host **interno** del recurso MinIO (con `http://` y puerto `9000`) y que MinIO esté corriendo. |
+| `InvalidAccessKeyId`, `SignatureDoesNotMatch`, `AccessDenied` | Credenciales incorrectas. | `S3_ACCESS_KEY` / `S3_SECRET_KEY` = usuario y contraseña root de MinIO (`MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`). |
+| `XMinioStorageFull`, `minimum free drive threshold` | El disco del VPS / volumen de MinIO está lleno. | Liberar espacio en el VPS (`df -h`, `docker system prune`) o ampliar el volumen. |
+| ✓ pero las fotos no se ven | El bucket recibe pero el navegador no puede leerlas. | `S3_PUBLIC_URL` tiene que ser una URL pública (dominio del recurso MinIO) y el bucket con lectura pública (`mc anonymous set download local/almacenia`). |
+
+Las fotos se comprimen en el teléfono antes de subirse (máx. 1600 px, JPEG), así
+que una foto de cámara pesa ~300 KB. El cartel negro de Android "memoria
+insuficiente" al sacar la foto es del teléfono (cierra el navegador mientras la
+cámara está abierta), no del servidor: sacar la foto con la cámara y después
+elegirla desde la galería.
+
 ## 3. Crear el recurso de la app en Coolify
 
 1. **New Resource** → fuente **Dockerfile** o **Git Repository** apuntando a este

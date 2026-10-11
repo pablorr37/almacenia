@@ -6,6 +6,11 @@ import { useSession } from "next-auth/react";
 import { apiGet, apiGetPaginado, ApiError } from "@/lib/api-client";
 import { ConfigSistema } from "@/components/ui/ConfigSistema";
 
+type Diagnostico = {
+  db: "ok" | "error";
+  almacenamiento: { ok: boolean; bucket: string; endpoint: string; error?: string };
+};
+
 type Metricas = {
   ventas: { cantidad: number; totalFacturado: number };
   pedidos: Record<string, number>;
@@ -32,6 +37,23 @@ export default function AdminPage() {
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificacionesPendientes, setVerificacionesPendientes] = useState<number | null>(null);
+  const [diagnostico, setDiagnostico] = useState<Diagnostico | null>(null);
+  const [probando, setProbando] = useState(false);
+
+  // 11-admin.md: prueba real de base de datos y almacenamiento de fotos.
+  async function probarSistema() {
+    setProbando(true);
+    try {
+      setDiagnostico(await apiGet<Diagnostico>("/api/admin/diagnostico"));
+    } catch (err) {
+      setDiagnostico({
+        db: "error",
+        almacenamiento: { ok: false, bucket: "", endpoint: "", error: err instanceof ApiError ? err.message : "No se pudo consultar." },
+      });
+    } finally {
+      setProbando(false);
+    }
+  }
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -94,6 +116,34 @@ export default function AdminPage() {
       </div>
 
       {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}
+
+      <section className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-[14px] font-bold">Estado del sistema</h2>
+          <button
+            type="button"
+            onClick={probarSistema}
+            disabled={probando}
+            className="press rounded-control border border-border px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+          >
+            {probando ? "Probando..." : "Probar almacenamiento"}
+          </button>
+        </div>
+        {diagnostico && (
+          <div className="flex flex-col gap-1 text-[13px]" data-testid="diagnostico">
+            <span className={diagnostico.db === "ok" ? "text-estado-entregado-text" : "text-estado-rechazado-text"}>
+              {diagnostico.db === "ok" ? "✓ Base de datos" : "✗ Base de datos"}
+            </span>
+            <span className={diagnostico.almacenamiento.ok ? "text-estado-entregado-text" : "text-estado-rechazado-text"}>
+              {diagnostico.almacenamiento.ok ? "✓ Almacenamiento de fotos" : "✗ Almacenamiento de fotos"}
+              {diagnostico.almacenamiento.bucket ? ` (bucket ${diagnostico.almacenamiento.bucket})` : ""}
+            </span>
+            {diagnostico.almacenamiento.error && (
+              <code className="break-all rounded-control bg-bg p-2 text-[12px] text-text">{diagnostico.almacenamiento.error}</code>
+            )}
+          </div>
+        )}
+      </section>
 
       {metricas && (
         <div className="flex flex-col gap-3">
