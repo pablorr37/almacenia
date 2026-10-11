@@ -44,22 +44,24 @@ export function estadoApertura(
   if (horarios.length === 0) return { estado: "desconocido" };
   const zona = opciones.zona ?? ZONA_HORARIA_NEGOCIO;
 
-  const porDia = new Map(horarios.map((h) => [h.diaSemana, h]));
+  // Franjas abiertas por día, ordenadas por apertura (horario partido: 02-tiendas.md).
+  const porDia = new Map<number, Array<{ abre: string; cierra: string }>>();
+  for (const h of horarios) {
+    if (!h.abre || !h.cierra) continue;
+    porDia.set(h.diaSemana, [...(porDia.get(h.diaSemana) ?? []), { abre: h.abre, cierra: h.cierra }]);
+  }
+  for (const franjas of porDia.values()) franjas.sort((a, b) => a.abre.localeCompare(b.abre));
   const { diaSemana: hoy, hora } = horaLocal(ahora, zona);
 
-  const deHoy = porDia.get(hoy);
-  if (deHoy?.abre && deHoy.cierra && deHoy.abre <= hora && hora < deHoy.cierra) {
-    return { estado: "abierta", cierraA: deHoy.cierra };
-  }
+  const actual = porDia.get(hoy)?.find((f) => f.abre <= hora && hora < f.cierra);
+  if (actual) return { estado: "abierta", cierraA: actual.cierra };
 
-  // Hoy más tarde (si todavía no abrió) o el próximo día abierto, hasta 7 días
-  // adelante (el mismo día de la semana que viene).
+  // La próxima franja de hoy (si queda alguna) o la primera del próximo día abierto,
+  // hasta 7 días adelante (el mismo día de la semana que viene).
   for (let enDias = 0; enDias <= 7; enDias++) {
     const dia = (hoy + enDias) % 7;
-    const h = porDia.get(dia);
-    if (!h?.abre || !h.cierra) continue;
-    if (enDias === 0 && hora >= h.abre) continue;
-    return { estado: "cerrada", proximaApertura: { diaSemana: dia, hora: h.abre, enDias } };
+    const franja = (porDia.get(dia) ?? []).find((f) => enDias > 0 || f.abre > hora);
+    if (franja) return { estado: "cerrada", proximaApertura: { diaSemana: dia, hora: franja.abre, enDias } };
   }
   return { estado: "cerrada", proximaApertura: null };
 }

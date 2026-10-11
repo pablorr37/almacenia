@@ -129,3 +129,37 @@ describe("textoEstadoApertura", () => {
     expect(textoEstadoApertura({ estado: "desconocido" })).toBe("Horario no informado");
   });
 });
+
+describe("estadoApertura con horario partido", () => {
+  // Todos los días 9-12 y 16-20, salvo domingo (0) cerrado. 2026-09-26 es sábado.
+  const partido: HorarioTienda[] = [{ diaSemana: 0, abre: null, cierra: null }];
+  for (let d = 1; d <= 6; d++) {
+    partido.push({ diaSemana: d, abre: "16:00", cierra: "20:00" }, { diaSemana: d, abre: "09:00", cierra: "12:00" });
+  }
+
+  it("en la primera franja: abierta, cierra al fin de esa franja", () => {
+    expect(estadoApertura(partido, local("2026-09-26T10:00"))).toEqual({ estado: "abierta", cierraA: "12:00" });
+  });
+
+  it("entre franjas: cerrada, abre hoy a las 16", () => {
+    const estado = estadoApertura(partido, local("2026-09-26T14:00"));
+    expect(estado).toEqual({ estado: "cerrada", proximaApertura: { diaSemana: 6, hora: "16:00", enDias: 0 } });
+    expect(textoEstadoApertura(estado)).toBe("Cerrado · Abre a las 16:00");
+  });
+
+  it("en la segunda franja: abierta, cierra a las 20", () => {
+    expect(estadoApertura(partido, local("2026-09-26T16:00"))).toEqual({ estado: "abierta", cierraA: "20:00" });
+  });
+
+  it("a la hora exacta de cierre de una franja ya está cerrada", () => {
+    expect(estadoApertura(partido, local("2026-09-26T12:00")).estado).toBe("cerrada");
+  });
+
+  it("después de la última franja: la próxima apertura es la primera franja del siguiente día abierto", () => {
+    // Sábado 21:00 → domingo cerrado → lunes 9:00.
+    expect(estadoApertura(partido, local("2026-09-26T21:00"))).toEqual({
+      estado: "cerrada",
+      proximaApertura: { diaSemana: 1, hora: "09:00", enDias: 2 },
+    });
+  });
+});

@@ -226,6 +226,54 @@ describe("horarioValido", () => {
   });
 });
 
+describe("horarioValido con franjas (horario partido)", () => {
+  // Lunes a sábado 9-12 y 16-20, domingo cerrado.
+  function partido() {
+    const h: Array<{ diaSemana: number; abre: string | null; cierra: string | null }> = [
+      { diaSemana: 0, abre: null, cierra: null },
+    ];
+    for (let d = 1; d <= 6; d++) {
+      h.push({ diaSemana: d, abre: "09:00", cierra: "12:00" }, { diaSemana: d, abre: "16:00", cierra: "20:00" });
+    }
+    return h;
+  }
+
+  it("acepta dos franjas por día", () => {
+    expect(horarioValido(partido())).toBe(true);
+  });
+
+  it("acepta franjas contiguas (12:00 termina y empieza otra)", () => {
+    const h = partido();
+    h[2] = { diaSemana: 1, abre: "12:00", cierra: "14:00" };
+    expect(horarioValido(h)).toBe(true);
+  });
+
+  it("acepta hasta 3 franjas y rechaza 4", () => {
+    const tres = [...partido(), { diaSemana: 1, abre: "21:00", cierra: "23:00" }];
+    expect(horarioValido(tres)).toBe(true);
+    const cuatro = [...tres, { diaSemana: 1, abre: "06:00", cierra: "08:00" }];
+    expect(horarioValido(cuatro)).toBe(false);
+  });
+
+  it("rechaza franjas superpuestas", () => {
+    const h = partido();
+    h[2] = { diaSemana: 1, abre: "11:00", cierra: "14:00" };
+    expect(horarioValido(h)).toBe(false);
+  });
+
+  it("rechaza mezclar una entrada cerrada con franjas abiertas el mismo día", () => {
+    expect(horarioValido([...partido(), { diaSemana: 1, abre: null, cierra: null }])).toBe(false);
+  });
+
+  it("rechaza dos entradas cerradas el mismo día", () => {
+    expect(horarioValido([...partido(), { diaSemana: 0, abre: null, cierra: null }])).toBe(false);
+  });
+
+  it("rechaza si falta un día", () => {
+    expect(horarioValido(partido().filter((h) => h.diaSemana !== 3))).toBe(false);
+  });
+});
+
 describe("buscarTiendasCercanas", () => {
   let cercana: Usuario;
   let lejana: Usuario;
@@ -431,6 +479,24 @@ describe("actualizarTienda", () => {
 
     const desactivada = await actualizarTienda(dueno, tienda.id, { abierto24hs: false });
     expect(desactivada.abierto24hs).toBe(false);
+  });
+
+  it("guarda y devuelve un horario partido (dos franjas por día), ordenado", async () => {
+    const tienda = await crearTienda(dueno, { nombre: "Verdulería", direccion: "D", lat: LAT_BASE, lon: LON_BASE });
+    const horarios = [
+      { diaSemana: 0, abre: null, cierra: null },
+      ...[1, 2, 3, 4, 5, 6].flatMap((d) => [
+        { diaSemana: d, abre: "16:00", cierra: "20:00" },
+        { diaSemana: d, abre: "09:00", cierra: "12:00" },
+      ]),
+    ];
+    const actualizada = await actualizarTienda(dueno, tienda.id, { horarios });
+    expect(actualizada.horarios).toHaveLength(13);
+    const releida = await obtenerTienda(tienda.id);
+    expect(releida!.horarios.filter((h) => h.diaSemana === 1)).toEqual([
+      { diaSemana: 1, abre: "09:00", cierra: "12:00" },
+      { diaSemana: 1, abre: "16:00", cierra: "20:00" },
+    ]);
   });
 
   it("permite al dueño actualizar sus datos", async () => {

@@ -158,7 +158,8 @@ model HorarioTienda {
 
   tienda Tienda @relation(fields: [tiendaId], references: [id])
 
-  @@unique([tiendaId, diaSemana])
+  // Una fila por franja: un día puede tener varias (horario partido).
+  @@index([tiendaId, diaSemana])
   @@map("horarios_tienda")
 }
 

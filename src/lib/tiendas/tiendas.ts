@@ -129,33 +129,45 @@ function validarMediosDePago(mediosDePago: MedioPago[] | undefined): void {
 
 const HORA_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// Valida la forma de `horarios`: exactamente 7 entradas, diaSemana 0-6 sin
-// repetidos, y por cada una ambos null (cerrado) o ambos "HH:mm" válidos con
-// abre < cierra (comparación de string funciona porque el formato es fijo y
+const MAX_FRANJAS_POR_DIA = 3;
+
+// Valida la forma de `horarios` (02-tiendas.md): los 7 días presentes; por día, una
+// sola entrada cerrada (ambos null) o de 1 a 3 franjas "HH:mm" con abre < cierra y
+// sin superponerse (comparación de string funciona porque el formato es fijo y
 // cero-rellenado).
 export function horarioValido(horarios: HorarioTienda[]): boolean {
-  if (horarios.length !== 7) return false;
-
-  const dias = new Set<number>();
+  const porDia = new Map<number, HorarioTienda[]>();
   for (const h of horarios) {
     if (!Number.isInteger(h.diaSemana) || h.diaSemana < 0 || h.diaSemana > 6) return false;
-    if (dias.has(h.diaSemana)) return false;
-    dias.add(h.diaSemana);
-
     const cerrado = h.abre === null && h.cierra === null;
-    if (cerrado) continue;
-    if (h.abre === null || h.cierra === null) return false;
-    if (!HORA_REGEX.test(h.abre) || !HORA_REGEX.test(h.cierra)) return false;
-    if (h.abre >= h.cierra) return false;
+    if (!cerrado) {
+      if (h.abre === null || h.cierra === null) return false;
+      if (!HORA_REGEX.test(h.abre) || !HORA_REGEX.test(h.cierra)) return false;
+      if (h.abre >= h.cierra) return false;
+    }
+    porDia.set(h.diaSemana, [...(porDia.get(h.diaSemana) ?? []), h]);
   }
+  if (porDia.size !== 7) return false;
 
-  return dias.size === 7;
+  for (const franjas of porDia.values()) {
+    const cerradas = franjas.filter((f) => f.abre === null);
+    if (cerradas.length > 0) {
+      if (franjas.length !== 1) return false; // un día cerrado es una sola entrada
+      continue;
+    }
+    if (franjas.length > MAX_FRANJAS_POR_DIA) return false;
+    const ordenadas = [...franjas].sort((a, b) => a.abre!.localeCompare(b.abre!));
+    for (let i = 1; i < ordenadas.length; i++) {
+      if (ordenadas[i].abre! < ordenadas[i - 1].cierra!) return false;
+    }
+  }
+  return true;
 }
 
 async function obtenerHorarios(tiendaId: string): Promise<HorarioTienda[]> {
   const filas = await prisma.horarioTienda.findMany({
     where: { tiendaId },
-    orderBy: { diaSemana: "asc" },
+    orderBy: [{ diaSemana: "asc" }, { abre: "asc" }],
   });
   return filas.map((f) => ({ diaSemana: f.diaSemana, abre: f.abre, cierra: f.cierra }));
 }
@@ -164,7 +176,7 @@ async function obtenerHorariosPorTiendas(tiendaIds: string[]): Promise<Map<strin
   if (tiendaIds.length === 0) return new Map();
   const filas = await prisma.horarioTienda.findMany({
     where: { tiendaId: { in: tiendaIds } },
-    orderBy: { diaSemana: "asc" },
+    orderBy: [{ diaSemana: "asc" }, { abre: "asc" }],
   });
   const mapa = new Map<string, HorarioTienda[]>();
   for (const f of filas) {
@@ -191,7 +203,10 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
   validarMediosDePago(input.mediosDePago);
   validarAbierto24hs(input.abierto24hs);
   if (input.horarios !== undefined && !horarioValido(input.horarios)) {
-    throw new AppError("HORARIO_INVALIDO", "Los horarios deben traer las 7 entradas de la semana.");
+    throw new AppError(
+      "HORARIO_INVALIDO",
+      "Revisá los horarios: tienen que estar los 7 días, hasta 3 franjas por día, sin superponerse y con la apertura antes del cierre."
+    );
   }
 
   const existente = await prisma.tienda.findUnique({ where: { vendedorId: usuario.id } });
@@ -334,7 +349,10 @@ export async function actualizarTienda(
   validarMediosDePago(input.mediosDePago);
   validarAbierto24hs(input.abierto24hs);
   if (input.horarios !== undefined && !horarioValido(input.horarios)) {
-    throw new AppError("HORARIO_INVALIDO", "Los horarios deben traer las 7 entradas de la semana.");
+    throw new AppError(
+      "HORARIO_INVALIDO",
+      "Revisá los horarios: tienen que estar los 7 días, hasta 3 franjas por día, sin superponerse y con la apertura antes del cierre."
+    );
   }
 
   const mediosDePago = input.mediosDePago ?? actual.mediosDePago;
