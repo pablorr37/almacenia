@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { apiGet, ApiError } from "@/lib/api-client";
+import { apiGet, apiGetPaginado, ApiError } from "@/lib/api-client";
 import { ConfigSistema } from "@/components/ui/ConfigSistema";
 
 type Metricas = {
@@ -31,9 +31,13 @@ export default function AdminPage() {
   const [metricas, setMetricas] = useState<Metricas | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificacionesPendientes, setVerificacionesPendientes] = useState<number | null>(null);
 
   useEffect(() => {
     if (status !== "authenticated") return;
+    apiGetPaginado("/api/admin/verificaciones?estado=pendiente&pageSize=1")
+      .then((r) => setVerificacionesPendientes(r.total))
+      .catch(() => {});
     apiGet<Metricas>("/api/admin/metricas")
       .then(setMetricas)
       .catch((err) => {
@@ -73,7 +77,7 @@ export default function AdminPage() {
 
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
         <Link href="/admin/verificaciones" className="text-[13px] font-semibold text-accent-text">
-          Verificaciones →
+          Verificaciones{verificacionesPendientes ? ` (${verificacionesPendientes})` : ""} →
         </Link>
         <Link href="/admin/usuarios" className="text-[13px] font-semibold text-accent-text">
           Usuarios →
