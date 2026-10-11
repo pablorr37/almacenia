@@ -18,6 +18,13 @@ verificación. Todas las rutas bajo `/api/admin/**` requieren `esAdmin = true`
   (columna agregada en `02-tiendas.md` específicamente para este reporte).
 - Revisar una solicitud de verificación (aprobar/rechazar) es una escritura
   delegada a `revisarSolicitudVerificacion` (`02-tiendas.md`).
+- **Verificar una tienda directamente** (`PATCH /api/admin/tiendas/:id/verificacion`):
+  el admin puede marcarla verificada o quitarle la verificación sin que exista una
+  solicitud. Si hay una solicitud `pendiente`, queda resuelta en la misma operación
+  (`aprobada` al verificar, `rechazada` al quitar), con `revisadaPor = admin`.
+- **Cambiar el plan** de una tienda (free ↔ premium) desde la lista de usuarios,
+  con el endpoint existente de `10-planes.md`. Al pasar a premium la tienda puede
+  subir fotos propias (`fotos_personalizadas`).
 - Marcar o desmarcar un usuario como **tester** (`esTester`, `01-auth.md`) con
   `PATCH /api/admin/usuarios/:id`. Es la única escritura sobre usuarios: `esAdmin`
   sigue sin endpoint.
@@ -49,7 +56,9 @@ Response `200`:
 ### `GET /api/admin/verificaciones`
 
 Query opcional `?estado=pendiente|aprobada|rechazada` (default `pendiente`).
-Paginado. Response `200`: `{ data: SolicitudVerificacion[]; page; pageSize; total }`.
+Paginado. Response `200`: `{ data: SolicitudVerificacionAdmin[]; page; pageSize; total }`,
+donde cada solicitud trae además los datos para decidir sin buscar la tienda:
+`tienda: { id; nombre; direccion; rubro; vendedor: { nombre; email } }`.
 
 ### `PATCH /api/admin/verificaciones/:id`
 
@@ -61,10 +70,19 @@ Request: `{ decision: 'aprobada' | 'rechazada'; notaAdmin?: string }`. Delegado 
 
 Ver `10-planes.md`.
 
+### `PATCH /api/admin/tiendas/:id/verificacion`
+
+Request `{ verificada: boolean }`. Response `200`:
+`{ data: { id: string; verificada: boolean } }`. `400 VERIFICADA_INVALIDA` si no es
+booleano; `404 TIENDA_NO_ENCONTRADA`; `403 FORBIDDEN` si no es admin.
+
 ### `GET /api/admin/usuarios`
 
-Query opcional `?rol=comprador|vendedor|admin&plan=free|premium&page&pageSize`.
+Query opcional `?q=<texto>&rol=comprador|vendedor|admin&plan=free|premium&page&pageSize`.
+`q` busca (sin distinguir mayúsculas) en nombre, email y nombre de la tienda.
 `rol` filtra por el flag correspondiente (`esComprador`/`esVendedor`/`esAdmin`).
+Orden: los usuarios más nuevos primero. La UI pagina (anterior/siguiente) para
+llegar a **todos** los usuarios registrados.
 `plan` filtra por el plan de la tienda del usuario — implica `esVendedor=true`
 (un usuario sin tienda no puede tener plan). Paginado. Response `200`:
 `{ data: UsuarioAdmin[]; page; pageSize; total }`.
