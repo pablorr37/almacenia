@@ -82,6 +82,23 @@ describe("/api/tiendas/[tiendaId]/ventas", () => {
       expect(Number(actualizado.stock)).toBe(7);
     });
 
+    it("201 por cobrar: pasa medioPago, nota, cobrarAhora=false y email del cliente", async () => {
+      obtenerUsuarioActualMock.mockResolvedValue(vendedor);
+      const res = await POST(
+        req({
+          items: [{ productoId: producto.id, cantidad: 1 }],
+          medioPago: "transferencia",
+          nota: "Paga mañana",
+          cobrarAhora: false,
+          compradorEmail: otro.email,
+        }),
+        params(tienda.id),
+      );
+      const body = await res.json();
+      expect(res.status).toBe(201);
+      expect(body.data).toMatchObject({ estado: "por_cobrar", medioPago: "transferencia", nota: "Paga mañana", compradorId: otro.id });
+    });
+
     it("409 STOCK_INSUFICIENTE si pide más de lo disponible", async () => {
       obtenerUsuarioActualMock.mockResolvedValue(vendedor);
       const res = await POST(
@@ -110,6 +127,18 @@ describe("/api/tiendas/[tiendaId]/ventas", () => {
 
       expect(res.status).toBe(200);
       expect(body.data).toHaveLength(1);
+    });
+
+    it("filtra por estado", async () => {
+      obtenerUsuarioActualMock.mockResolvedValue(vendedor);
+      const post = (b: unknown) =>
+        POST(new NextRequest("http://localhost/api/tiendas/x/ventas", { method: "POST", body: JSON.stringify(b) }), params(tienda.id));
+      await post({ items: [{ productoId: producto.id, cantidad: 1 }] });
+      await post({ items: [{ productoId: producto.id, cantidad: 1 }], cobrarAhora: false });
+
+      const res = await GET(new NextRequest(`http://localhost/api/tiendas/x/ventas?estado=por_cobrar`), params(tienda.id));
+      const body = await res.json();
+      expect(body.data.map((v: { estado: string }) => v.estado)).toEqual(["por_cobrar"]);
     });
   });
 });

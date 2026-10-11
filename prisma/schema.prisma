@@ -328,6 +328,15 @@ enum OrigenVenta {
   @@map("origen_venta")
 }
 
+// 05-ventas.md, "Máquina de estados de cobro".
+enum EstadoVenta {
+  por_cobrar
+  cobrada
+  anulada
+
+  @@map("estado_venta")
+}
+
 model Venta {
   id          String      @id @default(uuid())
   tiendaId    String      @map("tienda_id")
@@ -335,7 +344,12 @@ model Venta {
   pedidoId    String?     @unique @map("pedido_id")
   origen      OrigenVenta
   total       Decimal     @db.Decimal(12, 2)
+  estado      EstadoVenta @default(cobrada)
+  medioPago   MedioPago?  @map("medio_pago")
+  nota        String?
   creadaEn    DateTime    @default(now()) @map("creada_en")
+  cobradaEn   DateTime?   @map("cobrada_en")
+  anuladaEn   DateTime?   @map("anulada_en")
 
   tienda    Tienda      @relation(fields: [tiendaId], references: [id])
   comprador Usuario?    @relation(fields: [compradorId], references: [id])
@@ -344,6 +358,7 @@ model Venta {
 
   @@index([tiendaId])
   @@index([creadaEn])
+  @@index([tiendaId, estado])
   @@map("ventas")
 }
 

@@ -8,7 +8,7 @@ import type { Categoria, Plan, EstadoVerificacion } from "@/generated-prisma/cli
 const RADIO_KM_DEFAULT = 5;
 const RADIO_KM_MAXIMO = 50;
 
-const MEDIOS_DE_PAGO_VALIDOS = ["efectivo", "transferencia", "mercado_pago", "debito", "qr"] as const;
+export const MEDIOS_DE_PAGO_VALIDOS = ["efectivo", "transferencia", "mercado_pago", "debito", "qr"] as const;
 export type MedioPago = (typeof MEDIOS_DE_PAGO_VALIDOS)[number];
 
 import type { HorarioTienda } from "./horarios";

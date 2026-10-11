@@ -271,7 +271,7 @@ async function acreditarVisitasCompra(compradorId: string, tiendaId: string, fec
   if (!checkIn) return 0;
 
   const ventas = await prisma.venta.findMany({
-    where: { compradorId, tiendaId, creadaEn: { gte: inicio, lt: fin } },
+    where: { compradorId, tiendaId, creadaEn: { gte: inicio, lt: fin }, estado: "cobrada" },
     include: { items: true },
     orderBy: { creadaEn: "asc" },
   });
@@ -300,7 +300,8 @@ export async function otorgarPorVenta(ventaId: string): Promise<void> {
       tienda: { select: { id: true, vendedorId: true } },
     },
   });
-  if (!venta) return;
+  // Solo puntúan las ventas cobradas (12-gamificacion.md).
+  if (!venta || venta.estado !== "cobrada") return;
   const lineas: LineaVenta[] = venta.items.map((i) => ({
     productoId: i.productoId,
     cantidad: Number(i.cantidad),

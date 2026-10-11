@@ -37,8 +37,8 @@ function buscarConTienda(id: string) {
 
 async function aUsuarioAdmin(u: UsuarioConTienda): Promise<UsuarioAdmin> {
   const cantidadVentas = u.tienda
-    ? await prisma.venta.count({ where: { tiendaId: u.tienda.id } })
-    : await prisma.venta.count({ where: { compradorId: u.id } });
+    ? await prisma.venta.count({ where: { tiendaId: u.tienda.id, estado: "cobrada" } })
+    : await prisma.venta.count({ where: { compradorId: u.id, estado: "cobrada" } });
   return {
     id: u.id,
     email: u.email,

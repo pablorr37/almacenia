@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, type Usuario } from "@/lib/auth/auth";
-import type { Venta, OrigenVenta } from "@/lib/ventas/ventas";
+import type { Venta } from "@/lib/ventas/ventas";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAXIMO = 100;
@@ -13,7 +13,8 @@ export interface ItemVentaAdmin {
   precioUnitario: number;
 }
 
-export interface VentaAdmin extends Omit<Venta, "items"> {
+export interface VentaAdmin
+  extends Pick<Venta, "id" | "tiendaId" | "compradorId" | "pedidoId" | "origen" | "estado" | "medioPago" | "total" | "creadaEn"> {
   tiendaNombre: string;
   items: ItemVentaAdmin[];
 }
@@ -60,8 +61,11 @@ export async function listarVentasAdmin(
     tiendaId: v.tiendaId,
     compradorId: v.compradorId,
     pedidoId: v.pedidoId,
-    origen: v.origen as OrigenVenta,
+    origen: v.origen,
+    estado: v.estado,
+    medioPago: v.medioPago,
     total: Number(v.total),
+    creadaEn: v.creadaEn.toISOString(),
     items: v.items.map((item) => ({
       id: item.id,
       productoId: item.productoId,
