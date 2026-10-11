@@ -489,9 +489,13 @@ export default function MiTiendaPage() {
               <span className="text-[13px] font-semibold text-text">
                 Plan {tienda.plan === "premium" ? "Premium" : "Free"}
               </span>
-              {tienda.plan === "free" && (
+              {tienda.plan === "free" ? (
                 <span className="text-[12px] text-text-2">
                   Fotos del banco de Almacenia. Premium: fotos propias y prioridad en el mapa.
+                </span>
+              ) : (
+                <span className="text-[12px] text-text-2">
+                  Podés subir fotos propias de tus productos: en Productos, tocá «Foto propia» → «Subir foto propia».
                 </span>
               )}
             </div>
