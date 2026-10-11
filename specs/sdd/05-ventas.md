@@ -70,7 +70,7 @@ CREATE INDEX items_venta_venta_id_idx ON items_venta (venta_id);
 ```
 cerrar (cobrarAhora = false) ─▶ por_cobrar ──cobrar──▶ cobrada
                                      └──────anular──▶ anulada   (devuelve el stock)
-cerrar (cobrarAhora = true)  ─▶ cobrada
+cerrar (cobrarAhora = true, default) ─▶ cobrada
 ```
 
 - El stock se descuenta **al cerrar** (la mercadería sale del local aunque la plata
@@ -96,9 +96,12 @@ cerrar (cobrarAhora = true)  ─▶ cobrada
 - **Origen presencial**: solo el vendedor dueño de la tienda puede crear una venta
   presencial, para productos de su propia tienda.
   - Precio unitario: el precio vigente del producto (`precioOferta ?? precio`).
-  - `medioPago` obligatorio y uno de los `medios_de_pago` de la tienda
-    (`MEDIO_PAGO_INVALIDO`).
-  - Cliente opcional por `compradorEmail` (cuenta registrada): si no existe,
+  - `medioPago` opcional; si viene, tiene que ser uno de los `medios_de_pago` de la
+    tienda (`MEDIO_PAGO_INVALIDO`) — si la tienda no configuró medios, se acepta
+    cualquiera. La UI de mostrador siempre lo manda.
+  - `cobrarAhora` default `true` (compatibilidad: una venta sin el campo es una venta
+    cobrada en el acto, como antes); la UI manda `false` para "Cerrar · por cobrar".
+  - Cliente opcional por `compradorEmail` (cuenta registrada) o `compradorId`: si no existe,
     `COMPRADOR_INVALIDO`; si es el propio vendedor, `VENTA_PROPIA`. Sin email, la
     venta es anónima (`comprador_id` null).
 - **Origen a distancia**: no tiene endpoint propio de creación — es un efecto interno
@@ -125,9 +128,9 @@ Request:
 ```ts
 {
   items: Array<{ productoId: string; cantidad: number }>;
-  medioPago: MedioPago;
-  cobrarAhora?: boolean;   // true: nace 'cobrada'; default false: 'por_cobrar'
-  compradorEmail?: string; // opcional: cliente anónimo si se omite
+  medioPago?: MedioPago;
+  cobrarAhora?: boolean;   // default true: nace 'cobrada'; false: 'por_cobrar'
+  compradorEmail?: string; // opcional: cliente anónimo si se omite (o compradorId)
   nota?: string;           // hasta 200 caracteres
 }
 ```
@@ -199,9 +202,10 @@ interface Venta {
 
 interface CrearVentaPresencialInput {
   items: Array<{ productoId: string; cantidad: number }>;
-  medioPago: MedioPago;
+  medioPago?: MedioPago;
   cobrarAhora?: boolean;
   compradorEmail?: string;
+  compradorId?: string;
   nota?: string;
 }
 
@@ -249,8 +253,8 @@ async function listarVentas(
 | `ITEMS_VACIOS`                | `items` es un array vacío al crear una venta presencial.             |
 | `VENTA_NO_ENCONTRADA`         | `:id` no existe.                                                     |
 | `NO_AUTORIZADO_VENTA`         | El usuario no es ni el vendedor dueño ni el comprador de esa venta.  |
-| `COMPRADOR_INVALIDO`          | `compradorEmail` (si se pasa) no corresponde a ningún usuario existente. |
+| `COMPRADOR_INVALIDO`          | `compradorEmail`/`compradorId` (si se pasa) no corresponde a ningún usuario existente. |
 | `VENTA_PROPIA`                | `compradorEmail` es el del propio vendedor.                          |
-| `MEDIO_PAGO_INVALIDO`         | Falta `medioPago` o no es uno de los medios que acepta la tienda.    |
+| `MEDIO_PAGO_INVALIDO`         | `medioPago` no es uno de los medios que acepta la tienda.           |
 | `NOTA_INVALIDA`               | `nota` de más de 200 caracteres.                                     |
 | `TRANSICION_INVALIDA`         | `cobrar`/`anular` sobre una venta que no está `por_cobrar` (`409`).  |
