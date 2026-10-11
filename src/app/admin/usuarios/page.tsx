@@ -223,7 +223,7 @@ export default function AdminUsuariosPage() {
       </div>
 
       <p className="text-[12px] text-text-2" data-testid="rango-usuarios">
-        {total === 0 ? "Sin resultados" : `Mostrando ${desde}–${hasta} de ${total} usuarios`}
+        {total === 0 ? "Sin resultados" : `Mostrando ${desde}–${hasta} de ${total} usuario${total === 1 ? "" : "s"}`}
       </p>
 
       {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}
