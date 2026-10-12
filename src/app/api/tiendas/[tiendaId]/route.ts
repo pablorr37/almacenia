@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { obtenerTienda, actualizarTienda } from "@/lib/tiendas/tiendas";
+import { obtenerTiendaPublica, actualizarTienda } from "@/lib/tiendas/tiendas";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { respuestaExitosa, respuestaError } from "@/lib/api-response";
 import { AppError } from "@/lib/errors";
@@ -7,7 +7,7 @@ import { AppError } from "@/lib/errors";
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ tiendaId: string }> }) {
   try {
     const { tiendaId } = await params;
-    const tienda = await obtenerTienda(tiendaId);
+    const tienda = await obtenerTiendaPublica(tiendaId);
     if (!tienda) {
       throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
     }

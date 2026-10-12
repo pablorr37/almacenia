@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { apiGetPaginado, apiPatch, ApiError } from "@/lib/api-client";
+import { apiGetPaginado, apiPatch, apiDelete, ApiError } from "@/lib/api-client";
 
 type Rol = "comprador" | "vendedor" | "admin";
+type EstadoCuenta = "activa" | "pausada" | "baneada";
 type Plan = "free" | "premium";
 
 type UsuarioAdmin = {
@@ -16,6 +17,8 @@ type UsuarioAdmin = {
   esVendedor: boolean;
   esAdmin: boolean;
   esTester: boolean;
+  estadoCuenta: EstadoCuenta;
+  motivoSuspension: string | null;
   tienda: { id: string; nombre: string; plan: Plan; verificada: boolean } | null;
   cantidadVentas: number;
 };
@@ -33,6 +36,13 @@ const PLANES: Array<{ valor: Plan | ""; etiqueta: string }> = [
   { valor: "premium", etiqueta: "Premium" },
 ];
 
+const ESTADOS: Array<{ valor: EstadoCuenta | ""; etiqueta: string }> = [
+  { valor: "", etiqueta: "Cualquier estado" },
+  { valor: "activa", etiqueta: "Activas" },
+  { valor: "pausada", etiqueta: "Pausadas" },
+  { valor: "baneada", etiqueta: "Baneadas" },
+];
+
 const PAGE_SIZE = 20;
 
 // 11-admin.md: todos los usuarios (búsqueda + paginación), con las acciones del
@@ -46,6 +56,9 @@ export default function AdminUsuariosPage() {
   const [q, setQ] = useState("");
   const [rol, setRol] = useState<Rol | "">("");
   const [plan, setPlan] = useState<Plan | "">("");
+  const [estado, setEstado] = useState<EstadoCuenta | "">("");
+  const [aEliminar, setAEliminar] = useState<UsuarioAdmin | null>(null);
+  const [confirmacion, setConfirmacion] = useState("");
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [procesando, setProcesando] = useState<string | null>(null);
@@ -65,6 +78,7 @@ export default function AdminUsuariosPage() {
     if (q) sp.set("q", q);
     if (rol) sp.set("rol", rol);
     if (plan) sp.set("plan", plan);
+    if (estado) sp.set("estadoCuenta", estado);
 
     apiGetPaginado<UsuarioAdmin>(`/api/admin/usuarios?${sp.toString()}`)
       .then((r) => {
@@ -78,7 +92,7 @@ export default function AdminUsuariosPage() {
           setError(err instanceof ApiError ? err.message : "No se pudieron cargar los usuarios.");
         }
       });
-  }, [status, q, rol, plan, page]);
+  }, [status, q, rol, plan, estado, page]);
 
   function reemplazar(id: string, cambios: Partial<UsuarioAdmin>) {
     setUsuarios((prev) => prev.map((x) => (x.id === id ? { ...x, ...cambios } : x)));
@@ -140,6 +154,42 @@ export default function AdminUsuariosPage() {
         reemplazar(u.id, { tienda: { ...tienda, verificada } });
       },
       "No se pudo cambiar la verificación."
+    );
+  }
+
+  // 01-auth.md / 11-admin.md: pausar (temporal), banear (sanción) o reactivar.
+  function cambiarEstado(u: UsuarioAdmin, nuevo: EstadoCuenta) {
+    let motivo: string | undefined;
+    if (nuevo === "baneada") {
+      const respuesta = window.prompt(`Motivo del baneo de ${u.nombre} (opcional):`, "");
+      if (respuesta === null) return;
+      motivo = respuesta;
+    } else if (nuevo === "pausada" && !window.confirm(`¿Pausar la cuenta de ${u.nombre}? No va a poder entrar y su tienda deja de verse.`)) {
+      return;
+    }
+    return ejecutar(
+      u.id,
+      async () => {
+        const actualizado = await apiPatch<UsuarioAdmin>(`/api/admin/usuarios/${u.id}`, { estadoCuenta: nuevo, motivo });
+        reemplazar(u.id, actualizado);
+      },
+      "No se pudo cambiar el estado de la cuenta."
+    );
+  }
+
+  async function confirmarEliminacion() {
+    if (!aEliminar) return;
+    const u = aEliminar;
+    await ejecutar(
+      u.id,
+      async () => {
+        await apiDelete(`/api/admin/usuarios/${u.id}`, { confirmacionEmail: confirmacion });
+        setUsuarios((prev) => prev.filter((x) => x.id !== u.id));
+        setTotal((t) => Math.max(0, t - 1));
+        setAEliminar(null);
+        setConfirmacion("");
+      },
+      "No se pudo eliminar el usuario."
     );
   }
 
@@ -220,6 +270,21 @@ export default function AdminUsuariosPage() {
             </option>
           ))}
         </select>
+        <select
+          value={estado}
+          onChange={(e) => {
+            setEstado(e.target.value as EstadoCuenta | "");
+            setPage(1);
+          }}
+          aria-label="Filtrar por estado de cuenta"
+          className="min-w-0 flex-grow rounded-control border border-border bg-surface px-2.5 py-2 text-[13px]"
+        >
+          {ESTADOS.map((e) => (
+            <option key={e.valor} value={e.valor}>
+              {e.etiqueta}
+            </option>
+          ))}
+        </select>
       </div>
 
       <p className="text-[12px] text-text-2" data-testid="rango-usuarios">
@@ -254,7 +319,13 @@ export default function AdminUsuariosPage() {
               {u.esVendedor && <span className="rounded-pill bg-placeholder px-2 py-0.5">Vendedor</span>}
               {u.esAdmin && <span className="rounded-pill bg-placeholder px-2 py-0.5">Admin</span>}
               {u.esTester && <span className="rounded-pill bg-primary-soft px-2 py-0.5 text-primary-dark">Tester</span>}
+              {u.estadoCuenta !== "activa" && (
+                <span className="rounded-pill bg-estado-rechazado-bg px-2 py-0.5 font-bold text-estado-rechazado-text">
+                  {u.estadoCuenta === "pausada" ? "PAUSADA" : "BANEADA"}
+                </span>
+              )}
             </div>
+            {u.motivoSuspension && <p className="text-[12px] italic text-text-2">Motivo: {u.motivoSuspension}</p>}
 
             {u.tienda && (
               <div className="flex flex-col gap-2 rounded-control bg-bg p-2.5">
@@ -301,6 +372,50 @@ export default function AdminUsuariosPage() {
               />
               Tester (cura el banco de fotos)
             </label>
+            {!u.esAdmin && (
+              <div className="flex flex-wrap gap-2">
+                {u.estadoCuenta === "activa" ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={procesando === u.id}
+                      onClick={() => cambiarEstado(u, "pausada")}
+                      className="press h-9 flex-1 rounded-control border border-border bg-surface text-[12px] font-semibold disabled:opacity-50"
+                    >
+                      Pausar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={procesando === u.id}
+                      onClick={() => cambiarEstado(u, "baneada")}
+                      className="press h-9 flex-1 rounded-control border border-estado-rechazado-text/40 bg-surface text-[12px] font-semibold text-estado-rechazado-text disabled:opacity-50"
+                    >
+                      Banear
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={procesando === u.id}
+                    onClick={() => cambiarEstado(u, "activa")}
+                    className="press h-9 flex-1 rounded-control bg-primary text-[12px] font-semibold text-white disabled:opacity-50"
+                  >
+                    Reactivar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={procesando === u.id}
+                  onClick={() => {
+                    setAEliminar(u);
+                    setConfirmacion("");
+                  }}
+                  className="press h-9 flex-1 rounded-control bg-estado-rechazado-text text-[12px] font-semibold text-white disabled:opacity-50"
+                >
+                  Eliminar
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between text-[13px]">
               <span className="text-text-2">
                 {u.cantidadVentas} venta{u.cantidadVentas !== 1 ? "s" : ""}
@@ -341,6 +456,51 @@ export default function AdminUsuariosPage() {
           >
             Siguientes →
           </button>
+        </div>
+      )}
+      {aEliminar && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-text/40 p-4 sm:items-center" role="presentation" onClick={() => setAEliminar(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="eliminar-titulo"
+            onClick={(e) => e.stopPropagation()}
+            className="flex w-full max-w-md flex-col gap-3 rounded-card bg-surface p-5 shadow-float"
+          >
+            <h2 id="eliminar-titulo" className="font-display text-[20px] font-bold text-estado-rechazado-text">
+              Eliminar a {aEliminar.nombre}
+            </h2>
+            <p className="text-[13px] text-text-2">
+              Se borra la cuenta{aEliminar.tienda ? `, la tienda "${aEliminar.tienda.nombre}" con sus productos, pedidos y ventas` : ""} y
+              todos sus datos. <strong>No se puede deshacer.</strong> Si solo querés impedir que entre, usá Pausar o Banear.
+            </p>
+            <label className="flex flex-col gap-1 text-[12px] text-text-2">
+              Para confirmar, escribí su email: <strong className="text-text">{aEliminar.email}</strong>
+              <input
+                value={confirmacion}
+                onChange={(e) => setConfirmacion(e.target.value)}
+                aria-label="Email de confirmación"
+                className="h-11 rounded-control border border-border bg-surface px-3 text-[14px] text-text focus:border-primary focus:outline-none"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAEliminar(null)}
+                className="press h-11 flex-1 rounded-control border border-border bg-surface text-[14px] font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={confirmacion.trim().toLowerCase() !== aEliminar.email || procesando === aEliminar.id}
+                onClick={confirmarEliminacion}
+                className="press h-11 flex-1 rounded-control bg-estado-rechazado-text text-[14px] font-semibold text-white disabled:opacity-40"
+              >
+                Eliminar definitivamente
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

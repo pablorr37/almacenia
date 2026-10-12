@@ -284,6 +284,8 @@ export async function buscarTiendasCercanas(
       ST_Distance(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography) / 1000 AS distancia_km
     FROM tiendas
     WHERE activa = true
+      -- 01-auth.md: las tiendas de cuentas pausadas/baneadas no se muestran.
+      AND vendedor_id IN (SELECT id FROM usuarios WHERE estado_cuenta = 'activa')
       AND ST_DWithin(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography, ${radioMetros})
     ORDER BY (plan = 'premium') DESC, distancia_km ASC
   `;
@@ -303,6 +305,17 @@ export async function obtenerTienda(id: string): Promise<Tienda | null> {
   if (!filas[0]) return null;
   const horarios = await obtenerHorarios(id);
   return aTienda(filas[0], horarios);
+}
+
+// Para la vista pública de una tienda: null si el dueño tiene la cuenta pausada o
+// baneada (01-auth.md), igual que si no existiera.
+export async function obtenerTiendaPublica(id: string): Promise<Tienda | null> {
+  const dueno = await prisma.tienda.findUnique({
+    where: { id },
+    select: { vendedor: { select: { estadoCuenta: true } } },
+  });
+  if (!dueno || dueno.vendedor.estadoCuenta !== "activa") return null;
+  return obtenerTienda(id);
 }
 
 export async function obtenerTiendaPorVendedor(vendedorId: string): Promise<Tienda | null> {

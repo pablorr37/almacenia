@@ -94,6 +94,13 @@ describe("crearPedido", () => {
 
   afterEach(() => limpiar([vendedor.id, comprador.id]));
 
+  it("TIENDA_NO_DISPONIBLE si el dueño de la tienda tiene la cuenta pausada o baneada", async () => {
+    await prisma.usuario.update({ where: { id: vendedor.id }, data: { estadoCuenta: "baneada" } });
+    await expect(
+      crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 1 }] })
+    ).rejects.toMatchObject({ code: "TIENDA_NO_DISPONIBLE" });
+  });
+
   it("crea el pedido con items y precioUnitario copiado del producto", async () => {
     const pedido = await crearPedido(comprador, {
       tiendaId: tienda.id,

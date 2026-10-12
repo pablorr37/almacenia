@@ -25,6 +25,15 @@ datasource db {
 // 01-auth.md
 // ---------------------------------------------------------------------------
 
+// 01-auth.md, "Estado de la cuenta".
+enum EstadoCuenta {
+  activa
+  pausada
+  baneada
+
+  @@map("estado_cuenta")
+}
+
 model Usuario {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -34,6 +43,9 @@ model Usuario {
   esVendedor   Boolean  @default(false) @map("es_vendedor")
   esAdmin      Boolean  @default(false) @map("es_admin")
   esTester     Boolean  @default(false) @map("es_tester")
+  estadoCuenta     EstadoCuenta @default(activa) @map("estado_cuenta")
+  motivoSuspension String?      @map("motivo_suspension")
+  suspendidaEn     DateTime?    @map("suspendida_en")
   avatarUrl    String?  @map("avatar_url")
   creadoEn     DateTime @default(now()) @map("creado_en")
 

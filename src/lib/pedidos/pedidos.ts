@@ -86,9 +86,15 @@ export async function crearPedido(comprador: Usuario, input: CrearPedidoInput): 
     throw new AppError("ITEMS_VACIOS", "El pedido debe tener al menos un producto.");
   }
 
-  const tienda = await prisma.tienda.findUnique({ where: { id: input.tiendaId } });
+  const tienda = await prisma.tienda.findUnique({
+    where: { id: input.tiendaId },
+    include: { vendedor: { select: { estadoCuenta: true } } },
+  });
   if (!tienda) {
     throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
+  }
+  if (tienda.vendedor.estadoCuenta !== "activa") {
+    throw new AppError("TIENDA_NO_DISPONIBLE", "Esta tienda no está disponible por ahora.");
   }
 
   const productoIds = input.items.map((item) => item.productoId);

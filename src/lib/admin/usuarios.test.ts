@@ -4,7 +4,8 @@ import { registrarUsuario, type Usuario } from "@/lib/auth/auth";
 import { crearTienda, type Tienda } from "@/lib/tiendas/tiendas";
 import { crearProducto } from "@/lib/productos/productos";
 import { crearVentaPresencial } from "@/lib/ventas/ventas";
-import { listarUsuarios, marcarTester } from "./usuarios";
+import { crearPedido } from "@/lib/pedidos/pedidos";
+import { listarUsuarios, marcarTester, cambiarEstadoCuenta, eliminarUsuario } from "./usuarios";
 
 let contador = 0;
 async function crearAdmin(): Promise<Usuario> {
@@ -202,6 +203,118 @@ describe("listarUsuarios: búsqueda y orden", () => {
       expect(ultima.data.length).toBeGreaterThan(0);
     } finally {
       await limpiar([admin.id, a.id, b.id]);
+    }
+  });
+});
+
+describe("cambiarEstadoCuenta", () => {
+  it("pausa, banea con motivo y reactiva", async () => {
+    const admin = await crearAdmin();
+    const comprador = await crearComprador();
+    try {
+      const pausado = await cambiarEstadoCuenta(admin, comprador.id, "pausada");
+      expect(pausado).toMatchObject({ estadoCuenta: "pausada", motivoSuspension: null });
+      const baneado = await cambiarEstadoCuenta(admin, comprador.id, "baneada", "  Publicó insultos ");
+      expect(baneado).toMatchObject({ estadoCuenta: "baneada", motivoSuspension: "Publicó insultos" });
+      const db = await prisma.usuario.findUniqueOrThrow({ where: { id: comprador.id } });
+      expect(db.suspendidaEn).not.toBeNull();
+
+      const activo = await cambiarEstadoCuenta(admin, comprador.id, "activa");
+      expect(activo).toMatchObject({ estadoCuenta: "activa", motivoSuspension: null });
+      expect((await prisma.usuario.findUniqueOrThrow({ where: { id: comprador.id } })).suspendidaEn).toBeNull();
+    } finally {
+      await limpiar([admin.id, comprador.id]);
+    }
+  });
+
+  it("FORBIDDEN para no admins y sobre otro admin; ACCION_SOBRE_SI_MISMO; ESTADO_CUENTA_INVALIDO", async () => {
+    const admin = await crearAdmin();
+    const otroAdmin = await crearAdmin();
+    const comprador = await crearComprador();
+    try {
+      await expect(cambiarEstadoCuenta(comprador, admin.id, "pausada")).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(cambiarEstadoCuenta(admin, otroAdmin.id, "pausada")).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(cambiarEstadoCuenta(admin, admin.id, "pausada")).rejects.toMatchObject({ code: "ACCION_SOBRE_SI_MISMO" });
+      await expect(cambiarEstadoCuenta(admin, comprador.id, "borrada" as "activa")).rejects.toMatchObject({
+        code: "ESTADO_CUENTA_INVALIDO",
+      });
+    } finally {
+      await limpiar([admin.id, otroAdmin.id, comprador.id]);
+    }
+  });
+
+  it("listarUsuarios filtra por estado de cuenta", async () => {
+    const admin = await crearAdmin();
+    const comprador = await crearComprador();
+    try {
+      await cambiarEstadoCuenta(admin, comprador.id, "pausada");
+      const r = await listarUsuarios(admin, { estadoCuenta: "pausada", q: comprador.email });
+      expect(r.data.map((u) => u.id)).toEqual([comprador.id]);
+      const activos = await listarUsuarios(admin, { estadoCuenta: "activa", q: comprador.email });
+      expect(activos.total).toBe(0);
+    } finally {
+      await limpiar([admin.id, comprador.id]);
+    }
+  });
+});
+
+describe("eliminarUsuario", () => {
+  it("borra a un vendedor con su tienda, productos, pedidos y ventas", async () => {
+    const admin = await crearAdmin();
+    const { vendedor, tienda } = await crearVendedorConTienda();
+    const comprador = await crearComprador();
+    try {
+      const producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Fideos" }, precio: 100, stock: 10 });
+      await crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 1 }] });
+      await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }], compradorId: comprador.id });
+
+      expect(await eliminarUsuario(admin, vendedor.id, vendedor.email.toUpperCase())).toEqual({ id: vendedor.id });
+      expect(await prisma.usuario.findUnique({ where: { id: vendedor.id } })).toBeNull();
+      expect(await prisma.tienda.findUnique({ where: { id: tienda.id } })).toBeNull();
+      expect(await prisma.producto.count({ where: { tiendaId: tienda.id } })).toBe(0);
+      expect(await prisma.pedido.count({ where: { tiendaId: tienda.id } })).toBe(0);
+      expect(await prisma.venta.count({ where: { tiendaId: tienda.id } })).toBe(0);
+      // El comprador sigue existiendo.
+      expect(await prisma.usuario.findUnique({ where: { id: comprador.id } })).not.toBeNull();
+    } finally {
+      await limpiar([admin.id, vendedor.id, comprador.id]);
+    }
+  });
+
+  it("al borrar un comprador, sus compras en otras tiendas quedan anónimas (no se rompe el historial ajeno)", async () => {
+    const admin = await crearAdmin();
+    const { vendedor, tienda } = await crearVendedorConTienda();
+    const comprador = await crearComprador();
+    try {
+      const producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Yerba" }, precio: 100, stock: 10 });
+      await crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 1 }] });
+      const venta = await crearVentaPresencial(vendedor, tienda.id, {
+        items: [{ productoId: producto.id, cantidad: 2 }],
+        compradorId: comprador.id,
+      });
+
+      await eliminarUsuario(admin, comprador.id, comprador.email);
+      expect(await prisma.usuario.findUnique({ where: { id: comprador.id } })).toBeNull();
+      const ventaDb = await prisma.venta.findUniqueOrThrow({ where: { id: venta.id } });
+      expect(ventaDb.compradorId).toBeNull();
+      expect(await prisma.pedido.count({ where: { compradorId: comprador.id } })).toBe(0);
+    } finally {
+      await limpiar([admin.id, vendedor.id, comprador.id]);
+    }
+  });
+
+  it("CONFIRMACION_INVALIDA, ACCION_SOBRE_SI_MISMO, FORBIDDEN sobre otro admin y USUARIO_NO_ENCONTRADO", async () => {
+    const admin = await crearAdmin();
+    const otroAdmin = await crearAdmin();
+    const comprador = await crearComprador();
+    try {
+      await expect(eliminarUsuario(admin, comprador.id, "otro@mail.com")).rejects.toMatchObject({ code: "CONFIRMACION_INVALIDA" });
+      await expect(eliminarUsuario(admin, admin.id, admin.email)).rejects.toMatchObject({ code: "ACCION_SOBRE_SI_MISMO" });
+      await expect(eliminarUsuario(admin, otroAdmin.id, otroAdmin.email)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(eliminarUsuario(admin, crypto.randomUUID(), "x@x.com")).rejects.toMatchObject({ code: "USUARIO_NO_ENCONTRADO" });
+      await expect(eliminarUsuario(comprador, admin.id, admin.email)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    } finally {
+      await limpiar([admin.id, otroAdmin.id, comprador.id]);
     }
   });
 });

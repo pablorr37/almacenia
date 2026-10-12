@@ -67,6 +67,31 @@ export async function buscarUsuarioPorEmail(email: string): Promise<Usuario | nu
   return usuario ? aUsuario(usuario) : null;
 }
 
+// Para la sesión (src/lib/auth/session.ts): una cuenta pausada o baneada deja de
+// valer en el siguiente request aunque el JWT siga vigente (01-auth.md).
+export async function buscarUsuarioActivoPorEmail(email: string): Promise<Usuario | null> {
+  const usuario = await prisma.usuario.findUnique({
+    where: { email: email.trim().toLowerCase() },
+  });
+  return usuario && usuario.estadoCuenta === "activa" ? aUsuario(usuario) : null;
+}
+
+// Lanza CUENTA_PAUSADA / CUENTA_BANEADA si la cuenta no está activa (login).
+export async function exigirCuentaActiva(usuarioId: string): Promise<void> {
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: { estadoCuenta: true, motivoSuspension: true },
+  });
+  if (!usuario || usuario.estadoCuenta === "activa") return;
+  if (usuario.estadoCuenta === "pausada") {
+    throw new AppError("CUENTA_PAUSADA", "Tu cuenta está pausada. Escribinos si creés que es un error.");
+  }
+  throw new AppError(
+    "CUENTA_BANEADA",
+    `Tu cuenta fue suspendida${usuario.motivoSuspension ? `: ${usuario.motivoSuspension}` : "."}`
+  );
+}
+
 export async function verificarPassword(email: string, password: string): Promise<Usuario | null> {
   const usuario = await prisma.usuario.findUnique({
     where: { email: email.trim().toLowerCase() },
