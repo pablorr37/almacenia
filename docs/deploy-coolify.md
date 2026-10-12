@@ -62,15 +62,43 @@ La subida de fotos (producto, tienda, perfil) necesita un bucket S3-compatible �
 sin esto, `POST /api/archivos/upload` va a fallar en cuanto se lo use. Se crea a
 mano (no hay script para esto):
 
-1. En el proyecto de Coolify: **+ New → Service → MinIO** (plantilla incluida en
-   Coolify). Coolify genera el usuario y la contraseña root (variables
-   `SERVICE_USER_MINIO` / `SERVICE_PASSWORD_MINIO`, o `MINIO_ROOT_USER` /
-   `MINIO_ROOT_PASSWORD` según la versión) — los vas a necesitar abajo.
-2. Asignale dominios al servicio:
-   - **API S3** (puerto 9000): por ejemplo `https://s3.almacenia.store`;
-   - consola web (puerto 9001, opcional): por ejemplo `https://minio.almacenia.store`.
-   Creá en tu DNS los registros A de esos subdominios apuntando a la IP del VPS
-   (igual que `app.almacenia.store`). Deploy del servicio.
+1. En el proyecto de Coolify (mismo entorno que la app): **+ New → Docker Compose
+   Empty**. Las versiones actuales de Coolify ya no muestran la plantilla de MinIO
+   en el catálogo (MinIO dejó de publicar imágenes Docker en 2025), y Garage, que sí
+   aparece, no soporta las políticas de bucket que usa la app. Pegá:
+
+   ```yaml
+   services:
+     minio:
+       image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
+       command: server /data --console-address ":9001"
+       environment:
+         - MINIO_SERVER_URL=https://s3.almacenia.store
+         - MINIO_BROWSER_REDIRECT_URL=https://minio.almacenia.store
+         - MINIO_ROOT_USER=$SERVICE_USER_MINIO
+         - MINIO_ROOT_PASSWORD=$SERVICE_PASSWORD_MINIO
+       volumes:
+         - minio-data:/data
+       healthcheck:
+         test: ["CMD", "mc", "ready", "local"]
+         interval: 5s
+         timeout: 20s
+         retries: 10
+   ```
+
+   Es la imagen que mantiene el equipo de Coolify (la misma de su plantilla
+   oculta). `SERVICE_USER_MINIO` / `SERVICE_PASSWORD_MINIO` son variables mágicas:
+   Coolify genera el usuario y la contraseña root al guardar (pestaña Environment
+   Variables del servicio); los vas a necesitar abajo. Sin sección `ports:` a
+   propósito: MinIO solo se alcanza por el proxy, con HTTPS. El volumen
+   `minio-data` es lo que conserva las fotos entre redeploys.
+2. En **Settings** del componente `minio`, campo **Domains**:
+   `https://s3.almacenia.store:9000,https://minio.almacenia.store:9001` (el `:puerto`
+   le dice a Traefik a qué puerto del contenedor reenviar; hacia afuera es 443).
+   La consola (9001) es opcional. Creá en tu DNS los registros A de esos
+   subdominios apuntando a la IP del VPS (igual que `app.almacenia.store`) y, una
+   vez propagados, Deploy del servicio. `https://s3.almacenia.store/minio/health/live`
+   tiene que responder 200.
 3. No hace falta crear el bucket ni configurar permisos a mano: la app crea el
    bucket en el primer upload y le aplica **lectura pública solo de archivos**
    (`s3:GetObject`), para que el navegador pueda mostrar las fotos.
@@ -101,7 +129,9 @@ el error exacto. También queda en el log de la app con el prefijo
 | Error que muestra | Qué significa | Qué hacer |
 | --- | --- | --- |
 | `falta S3_BUCKET` / `falta S3_ENDPOINT` | La app no tiene la variable. | Cargarla en las variables de entorno de la app en Coolify y redeployar. |
-| `ECONNREFUSED`, `ENOTFOUND`, `getaddrinfo`, `timeout` | La app no llega a MinIO. | Revisar que `S3_ENDPOINT` sea el host **interno** del recurso MinIO (con `http://` y puerto `9000`) y que MinIO esté corriendo. |
+| `ECONNREFUSED`, `ENOTFOUND`, `getaddrinfo`, `timeout` | La app no llega a MinIO. | Revisar que `S3_ENDPOINT` sea `https://s3.almacenia.store` (sin barra final), que el registro DNS exista y que MinIO esté corriendo. |
+| `certificate`, `self-signed` | Traefik todavía no emitió el certificado de `s3.`. | Con el DNS ya propagado, **Restart** del servicio MinIO. |
+| `404 page not found`, `no available server` | Traefik no sabe a qué contenedor mandar el dominio. | Revisar el campo Domains del componente `minio` (con `:9000`). |
 | `InvalidAccessKeyId`, `SignatureDoesNotMatch`, `AccessDenied` | Credenciales incorrectas. | `S3_ACCESS_KEY` / `S3_SECRET_KEY` = usuario y contraseña root de MinIO (`MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`). |
 | `XMinioStorageFull`, `minimum free drive threshold` | El disco del VPS / volumen de MinIO está lleno. | Liberar espacio en el VPS (`df -h`, `docker system prune`) o ampliar el volumen. |
 | ✓ almacenamiento pero ✗ "Las fotos se pueden ver" | El bucket recibe pero el navegador no puede leerlas. | El diagnóstico ya reaplica la política de lectura; si sigue en ✗, `S3_PUBLIC_URL` no es una URL pública accesible: usá el dominio del servicio MinIO (puerto 9000) con HTTPS. |
@@ -127,7 +157,7 @@ En la sección de Environment Variables del recurso de la app:
 | --- | --- |
 | `DATABASE_URL` | La URL armada en el paso 2. |
 | `AUTH_SECRET` | Un valor nuevo, generado para producción — **no reutilices** el de tu `.env` local. Generalo con `openssl rand -base64 32` (o `npx auth secret` si tenés el CLI de Auth.js). |
-| `S3_ENDPOINT` | Host interno del recurso S3/MinIO (paso 2.5). |
+| `S3_ENDPOINT` | Dominio público de la API de MinIO, ej. `https://s3.almacenia.store` (paso 2.5). |
 | `S3_PUBLIC_URL` | URL pública desde la que el navegador carga las fotos (puede ser igual a `S3_ENDPOINT` si ese host ya es público). |
 | `S3_BUCKET` | Nombre del bucket (ej. `almacenia`). |
 | `S3_REGION` | `us-east-1` sirve para MinIO/la mayoría de proveedores S3-compatibles. |
