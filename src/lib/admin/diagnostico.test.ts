@@ -2,7 +2,7 @@ import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 
 vi.mock("@/lib/archivos/archivos", () => ({
-  probarAlmacenamiento: vi.fn(async () => ({ ok: false, bucket: "b", endpoint: "http://minio:9000", error: "AccessDenied: x" })),
+  probarAlmacenamiento: vi.fn(async () => ({ ok: false, bucket: "b", endpoint: "http://minio:9000", error: "AccessDenied: x", lecturaPublica: false })),
 }));
 
 import { diagnosticar } from "./diagnostico";
@@ -16,7 +16,7 @@ describe("diagnosticar", () => {
   it("informa base de datos y almacenamiento", async () => {
     expect(await diagnosticar(base)).toEqual({
       db: "ok",
-      almacenamiento: { ok: false, bucket: "b", endpoint: "http://minio:9000", error: "AccessDenied: x" },
+      almacenamiento: { ok: false, bucket: "b", endpoint: "http://minio:9000", error: "AccessDenied: x", lecturaPublica: false },
     });
   });
 

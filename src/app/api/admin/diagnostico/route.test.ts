@@ -18,7 +18,7 @@ describe("GET /api/admin/diagnostico", () => {
     expect((await GET()).status).toBe(401);
 
     vi.mocked(obtenerUsuarioActual).mockResolvedValue(admin);
-    vi.mocked(diagnosticar).mockResolvedValue({ db: "ok", almacenamiento: { ok: true, bucket: "b", endpoint: "e" } });
+    vi.mocked(diagnosticar).mockResolvedValue({ db: "ok", almacenamiento: { ok: true, bucket: "b", endpoint: "e", lecturaPublica: true } });
     const res = await GET();
     expect(res.status).toBe(200);
     expect((await res.json()).data.db).toBe("ok");

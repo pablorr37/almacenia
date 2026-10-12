@@ -80,7 +80,8 @@ booleano; `404 TIENDA_NO_ENCONTRADA`; `403 FORBIDDEN` si no es admin.
 
 Solo admin. Prueba la base de datos y el almacenamiento de fotos (escribe y borra
 un archivo `diagnostico/<uuid>.txt` en el bucket). Response `200`:
-`{ data: { db: 'ok' | 'error'; almacenamiento: { ok: boolean; bucket: string; endpoint: string; error?: string } } }`.
+`{ data: { db: 'ok' | 'error'; almacenamiento: { ok: boolean; bucket: string; endpoint: string; error?: string; lecturaPublica: boolean; errorLectura?: string } } }`
+— `lecturaPublica` indica si el navegador va a poder mostrar las fotos.
 Nunca devuelve credenciales. En `/admin` se usa desde la tarjeta "Estado del
 sistema" (botón "Probar almacenamiento").
 

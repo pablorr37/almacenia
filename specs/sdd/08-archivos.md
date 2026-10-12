@@ -15,6 +15,10 @@ llamador guarda en el campo `imagenUrl`/`avatarUrl` que corresponda (`Usuario`,
 - Solo se aceptan imágenes: `image/jpeg`, `image/png`, `image/webp`. Cualquier otro
   `Content-Type` es rechazado.
 - Tamaño máximo por archivo: 5 MB.
+- El bucket tiene **lectura pública anónima, solo `s3:GetObject`** (nunca escritura
+  ni listado): las fotos se muestran con `<img src>` apuntando a `S3_PUBLIC_URL`.
+  La app aplica esa política al crear el bucket, y el diagnóstico del admin la
+  reaplica y comprueba leyendo un archivo por la URL pública sin credenciales.
 - La key en el bucket sigue la convención `<tipo>/<entidadId>/<uuid>.<ext>`, ej.
   `tiendas/<tiendaId>/<uuid>.jpg`, `productos/<productoId>/<uuid>.jpg`,
   `usuarios/<usuarioId>/avatar-<uuid>.jpg` — no se reusa la key entre subidas
@@ -69,7 +73,10 @@ async function subirArchivo(input: SubirArchivoInput): Promise<{ url: string }>;
 function validarImagen(contentType: string, tamanioBytes: number): void;
 
 // Escribe y borra un archivo de prueba en el bucket (diagnóstico del admin, 11-admin.md).
-async function probarAlmacenamiento(): Promise<{ ok: boolean; bucket: string; endpoint: string; error?: string }>;
+async function probarAlmacenamiento(opciones?: { fetch?: typeof fetch }): Promise<{
+  ok: boolean; bucket: string; endpoint: string; error?: string;
+  lecturaPublica: boolean; errorLectura?: string;
+}>;
 ```
 
 ### Compresión en el cliente

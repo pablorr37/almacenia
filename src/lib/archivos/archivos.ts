@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, CreateBucketCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  CreateBucketCommand,
+  DeleteObjectCommand,
+  PutBucketPolicyCommand,
+} from "@aws-sdk/client-s3";
 import { AppError } from "@/lib/errors";
 
 const TIPOS_VALIDOS = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -95,6 +101,16 @@ function noDisponible(error: unknown): ErrorAlmacenamiento {
   return new ErrorAlmacenamiento(`${nombre}: ${mensaje}`);
 }
 
+// Lectura pública anónima, solo GetObject (nunca escritura ni listado): las fotos
+// se muestran con <img src> directo al bucket (08-archivos.md).
+async function asegurarLecturaPublica(cliente: S3Client, bucket: string): Promise<void> {
+  const politica = {
+    Version: "2012-10-17",
+    Statement: [{ Effect: "Allow", Principal: "*", Action: ["s3:GetObject"], Resource: [`arn:aws:s3:::${bucket}/*`] }],
+  };
+  await cliente.send(new PutBucketPolicyCommand({ Bucket: bucket, Policy: JSON.stringify(politica) }));
+}
+
 async function enviarConBucket(cliente: S3Client, bucket: string, comando: PutObjectCommand): Promise<void> {
   try {
     await cliente.send(comando);
@@ -105,6 +121,7 @@ async function enviarConBucket(cliente: S3Client, bucket: string, comando: PutOb
     if (error instanceof Error && error.name === "NoSuchBucket") {
       try {
         await cliente.send(new CreateBucketCommand({ Bucket: bucket }));
+        await asegurarLecturaPublica(cliente, bucket);
         await cliente.send(comando);
         return;
       } catch (reintento) {
@@ -135,16 +152,26 @@ export async function subirArchivo(input: SubirArchivoInput): Promise<{ url: str
   return { url: `${urlPublica.replace(/\/$/, "")}/${bucket}/${key}` };
 }
 
-// Diagnóstico del admin (11-admin.md): escribe y borra un archivo de prueba. Nunca
-// lanza ni devuelve credenciales: informa el error exacto para corregir la config.
-export async function probarAlmacenamiento(): Promise<{ ok: boolean; bucket: string; endpoint: string; error?: string }> {
+export interface ResultadoAlmacenamiento {
+  ok: boolean;
+  bucket: string;
+  endpoint: string;
+  error?: string;
+  lecturaPublica: boolean;
+  errorLectura?: string;
+}
+
+// Diagnóstico del admin (11-admin.md): escribe un archivo de prueba, asegura la
+// lectura pública del bucket, lo lee de forma anónima por S3_PUBLIC_URL (como lo
+// haría el navegador) y lo borra. Nunca lanza ni devuelve credenciales.
+export async function probarAlmacenamiento(opciones: { fetch?: typeof fetch } = {}): Promise<ResultadoAlmacenamiento> {
   const bucket = process.env.S3_BUCKET ?? "";
   const endpoint = process.env.S3_ENDPOINT ?? "";
   let config: { bucket: string; endpoint: string };
   try {
     config = configAlmacenamiento();
   } catch (error) {
-    return { ok: false, bucket, endpoint, error: (error as Error).message };
+    return { ok: false, bucket, endpoint, error: (error as Error).message, lecturaPublica: false };
   }
 
   const key = `diagnostico/${crypto.randomUUID()}.txt`;
@@ -155,10 +182,41 @@ export async function probarAlmacenamiento(): Promise<{ ok: boolean; bucket: str
       config.bucket,
       new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: "ok", ContentType: "text/plain" })
     );
-    await cliente.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
-    return { ok: true, ...config };
   } catch (error) {
     const detalle = error instanceof ErrorAlmacenamiento ? error.detalle : noDisponible(error).detalle;
-    return { ok: false, ...config, error: detalle };
+    return { ok: false, ...config, error: detalle, lecturaPublica: false };
+  }
+
+  const lectura = await probarLecturaPublica(cliente, config.bucket, key, opciones.fetch ?? fetch);
+  await cliente.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key })).catch(() => {});
+  return { ok: true, ...config, ...lectura };
+}
+
+async function probarLecturaPublica(
+  cliente: S3Client,
+  bucket: string,
+  key: string,
+  hacerFetch: typeof fetch
+): Promise<{ lecturaPublica: boolean; errorLectura?: string }> {
+  try {
+    await asegurarLecturaPublica(cliente, bucket);
+  } catch (error) {
+    const e = error as { name?: string; message?: string };
+    console.error("[almacenamiento]", "No se pudo aplicar la política de lectura:", e?.name, e?.message);
+  }
+  const urlPublica = (process.env.S3_PUBLIC_URL ?? process.env.S3_ENDPOINT ?? "").replace(/\/$/, "");
+  const url = `${urlPublica}/${bucket}/${key}`;
+  try {
+    const respuesta = await hacerFetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (respuesta.ok) return { lecturaPublica: true };
+    return {
+      lecturaPublica: false,
+      errorLectura: `La URL pública respondió ${respuesta.status}: el navegador no va a poder mostrar las fotos. Revisá la política del bucket.`,
+    };
+  } catch {
+    return {
+      lecturaPublica: false,
+      errorLectura: `No se pudo abrir ${urlPublica}: S3_PUBLIC_URL tiene que ser una URL pública del almacenamiento (por ejemplo el dominio del recurso MinIO).`,
+    };
   }
 }

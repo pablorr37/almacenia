@@ -62,23 +62,34 @@ La subida de fotos (producto, tienda, perfil) necesita un bucket S3-compatible �
 sin esto, `POST /api/archivos/upload` va a fallar en cuanto se lo use. Se crea a
 mano (no hay script para esto):
 
-1. En Coolify: **New Resource → Docker Image**, imagen `minio/minio` (requiere
-   cuenta/login de Docker Hub para esa imagen — si no la tenés, cualquier otro
-   servidor S3-compatible autoalojado, o un proveedor S3 real como Cloudflare R2 o
-   AWS S3, sirve igual: el cliente (`@aws-sdk/client-s3`) solo necesita un
-   `endpoint` y credenciales, no depende de que sea MinIO específicamente).
-2. Comando: `server /data --console-address ":9001"`. Exponé el puerto 9000 (API
-   S3) al menos internamente para la app; el 9001 (consola web) es opcional.
-3. No hace falta crear el bucket a mano: `subirArchivo`
-   (`src/lib/archivos/archivos.ts`) lo crea solo en el primer upload si no existe.
-4. Variables de entorno de la app (ver paso 4):
-   `S3_ENDPOINT`, `S3_PUBLIC_URL`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY`,
-   `S3_SECRET_KEY`.
-   - `S3_ENDPOINT` es el host interno del recurso MinIO en Coolify (service-to-
-     service, como con `DATABASE_URL`).
-   - `S3_PUBLIC_URL` es la URL **pública** desde la que el navegador va a cargar
-     las fotos (`<img src>`) — si `S3_ENDPOINT` no es accesible desde afuera,
-     asignale un dominio propio al recurso MinIO en Coolify y usá ese acá.
+1. En el proyecto de Coolify: **+ New → Service → MinIO** (plantilla incluida en
+   Coolify). Coolify genera el usuario y la contraseña root (variables
+   `SERVICE_USER_MINIO` / `SERVICE_PASSWORD_MINIO`, o `MINIO_ROOT_USER` /
+   `MINIO_ROOT_PASSWORD` según la versión) — los vas a necesitar abajo.
+2. Asignale dominios al servicio:
+   - **API S3** (puerto 9000): por ejemplo `https://s3.almacenia.store`;
+   - consola web (puerto 9001, opcional): por ejemplo `https://minio.almacenia.store`.
+   Creá en tu DNS los registros A de esos subdominios apuntando a la IP del VPS
+   (igual que `app.almacenia.store`). Deploy del servicio.
+3. No hace falta crear el bucket ni configurar permisos a mano: la app crea el
+   bucket en el primer upload y le aplica **lectura pública solo de archivos**
+   (`s3:GetObject`), para que el navegador pueda mostrar las fotos.
+4. Variables de entorno **de la app** (recurso de la app → Environment Variables),
+   y después **Redeploy** de la app:
+
+   ```
+   S3_ENDPOINT=https://s3.almacenia.store
+   S3_PUBLIC_URL=https://s3.almacenia.store
+   S3_BUCKET=almacenia
+   S3_REGION=us-east-1
+   S3_ACCESS_KEY=<usuario root de MinIO>
+   S3_SECRET_KEY=<contraseña root de MinIO>
+   ```
+
+   Usar el dominio público también como `S3_ENDPOINT` es lo más simple: no depende
+   de que la app y MinIO compartan red interna de Docker. (Si preferís la red
+   interna, `S3_ENDPOINT` puede ser el host interno del servicio con `:9000`, pero
+   `S3_PUBLIC_URL` siempre tiene que ser el dominio público.)
 
 ### Comprobar que funciona
 
@@ -93,7 +104,7 @@ el error exacto. También queda en el log de la app con el prefijo
 | `ECONNREFUSED`, `ENOTFOUND`, `getaddrinfo`, `timeout` | La app no llega a MinIO. | Revisar que `S3_ENDPOINT` sea el host **interno** del recurso MinIO (con `http://` y puerto `9000`) y que MinIO esté corriendo. |
 | `InvalidAccessKeyId`, `SignatureDoesNotMatch`, `AccessDenied` | Credenciales incorrectas. | `S3_ACCESS_KEY` / `S3_SECRET_KEY` = usuario y contraseña root de MinIO (`MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`). |
 | `XMinioStorageFull`, `minimum free drive threshold` | El disco del VPS / volumen de MinIO está lleno. | Liberar espacio en el VPS (`df -h`, `docker system prune`) o ampliar el volumen. |
-| ✓ pero las fotos no se ven | El bucket recibe pero el navegador no puede leerlas. | `S3_PUBLIC_URL` tiene que ser una URL pública (dominio del recurso MinIO) y el bucket con lectura pública (`mc anonymous set download local/almacenia`). |
+| ✓ almacenamiento pero ✗ "Las fotos se pueden ver" | El bucket recibe pero el navegador no puede leerlas. | El diagnóstico ya reaplica la política de lectura; si sigue en ✗, `S3_PUBLIC_URL` no es una URL pública accesible: usá el dominio del servicio MinIO (puerto 9000) con HTTPS. |
 
 Las fotos se comprimen en el teléfono antes de subirse (máx. 1600 px, JPEG), así
 que una foto de cámara pesa ~300 KB. El cartel negro de Android "memoria

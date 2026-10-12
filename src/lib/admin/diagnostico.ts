@@ -1,11 +1,11 @@
 // Estado del sistema para el admin (11-admin.md, GET /api/admin/diagnostico).
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, type Usuario } from "@/lib/auth/auth";
-import { probarAlmacenamiento } from "@/lib/archivos/archivos";
+import { probarAlmacenamiento, type ResultadoAlmacenamiento } from "@/lib/archivos/archivos";
 
 export interface Diagnostico {
   db: "ok" | "error";
-  almacenamiento: { ok: boolean; bucket: string; endpoint: string; error?: string };
+  almacenamiento: ResultadoAlmacenamiento;
 }
 
 export async function diagnosticar(admin: Usuario): Promise<Diagnostico> {
