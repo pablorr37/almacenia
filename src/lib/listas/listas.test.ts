@@ -131,3 +131,14 @@ describe("listas de compras (14-listas-compras.md)", () => {
     await expect(obtenerLista(comprador, lista.id)).rejects.toMatchObject<Partial<AppError>>({ code: "LISTA_NO_ENCONTRADA" });
   });
 });
+
+describe("moderación del nombre de la lista", () => {
+  it("TEXTO_NO_PERMITIDO si el nombre tiene groserías", async () => {
+    const u = await registrarUsuario({ email: `test-lista-mod-${Date.now()}@almacenia.test`, password: "password123", nombre: "L" });
+    try {
+      await expect(crearLista(u, { nombre: "Compras del boludo", items: [] })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+    } finally {
+      await prisma.usuario.delete({ where: { id: u.id } });
+    }
+  });
+});

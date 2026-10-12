@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
+import { exigirTextoPermitido } from "@/lib/moderacion/moderacion";
 import { Prisma } from "@/generated-prisma/client";
 import type { Usuario } from "@/lib/auth/auth";
 import { requireAdmin } from "@/lib/auth/auth";
@@ -200,6 +201,7 @@ export interface CrearTiendaInput {
 
 export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Promise<Tienda> {
   validarUbicacion(input.lat, input.lon);
+  if (typeof input.nombre === "string") exigirTextoPermitido(input.nombre, "El nombre de la tienda");
   validarMediosDePago(input.mediosDePago);
   validarAbierto24hs(input.abierto24hs);
   if (input.horarios !== undefined && !horarioValido(input.horarios)) {
@@ -353,6 +355,7 @@ export async function actualizarTienda(
   if (actual.vendedorId !== vendedor.id) {
     throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
   }
+  if (typeof input.nombre === "string") exigirTextoPermitido(input.nombre, "El nombre de la tienda");
 
   const lat = input.lat ?? actual.lat;
   const lon = input.lon ?? actual.lon;

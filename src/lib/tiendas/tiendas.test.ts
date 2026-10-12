@@ -680,3 +680,18 @@ describe("solicitarVerificacion / revisarSolicitudVerificacion", () => {
     ).rejects.toMatchObject<Partial<AppError>>({ code: "FORBIDDEN" });
   });
 });
+
+describe("moderación del nombre de la tienda", () => {
+  it("TEXTO_NO_PERMITIDO al crear o renombrar con groserías", async () => {
+    const u = await crearUsuarioDePrueba();
+    try {
+      await expect(
+        crearTienda(u, { nombre: "Kiosco La Puta", direccion: "D", lat: LAT_BASE, lon: LON_BASE })
+      ).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+      const t = await crearTienda(u, { nombre: "Kiosco Pepe", direccion: "D", lat: LAT_BASE, lon: LON_BASE });
+      await expect(actualizarTienda(u, t.id, { nombre: "Kiosco Pelotudo" })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+    } finally {
+      await limpiar([u.id]);
+    }
+  });
+});

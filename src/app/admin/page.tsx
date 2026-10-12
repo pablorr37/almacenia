@@ -119,6 +119,9 @@ export default function AdminPage() {
         <Link href="/admin/fotos" className="text-[13px] font-semibold text-accent-text">
           Fotos →
         </Link>
+        <Link href="/admin/catalogo" className="text-[13px] font-semibold text-accent-text">
+          Catálogo de compradores →
+        </Link>
       </div>
 
       {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}

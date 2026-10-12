@@ -5,6 +5,7 @@ import {
   obtenerProductoCatalogo,
   crearProductoNuevoEnCatalogo,
   asignarFotoCatalogo,
+  sumarAlCatalogo,
 } from "./catalogo";
 import { registrarUsuario, type Usuario } from "@/lib/auth/auth";
 import { crearTienda } from "@/lib/tiendas/tiendas";
@@ -147,5 +148,55 @@ describe("asignarFotoCatalogo", () => {
     await expect(
       asignarFotoCatalogo(a, "00000000-0000-0000-0000-000000000000", "http://s3/x.jpg")
     ).rejects.toMatchObject<Partial<AppError>>({ code: "CATALOGO_NO_ENCONTRADO" });
+  });
+});
+
+describe("sumarAlCatalogo (alta desde una lista de compras)", () => {
+  const usuarios: string[] = [];
+  const creados: string[] = [];
+  let n = 0;
+  afterEach(async () => {
+    await prisma.productoCatalogo.deleteMany({ where: { id: { in: creados.splice(0) } } });
+    await prisma.usuario.deleteMany({ where: { id: { in: usuarios.splice(0) } } });
+  });
+  async function comprador(): Promise<Usuario> {
+    n += 1;
+    const u = await registrarUsuario({ email: `test-sumar-cat-${Date.now()}-${n}@almacenia.test`, password: "password123", nombre: "C" });
+    usuarios.push(u.id);
+    return u;
+  }
+  const nombreUnico = () => `Fernet Branca 750ml ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  it("crea la entrada con creadoPorId y la unidad indicada", async () => {
+    const u = await comprador();
+    const nombre = nombreUnico();
+    const { producto, creado } = await sumarAlCatalogo(u, { nombre: `  ${nombre} `, unidad: "unidad", categoria: "almacen" });
+    creados.push(producto.id);
+    expect(creado).toBe(true);
+    expect(producto).toMatchObject({ nombre, unidad: "unidad", categoria: "almacen" });
+    expect((await prisma.productoCatalogo.findUniqueOrThrow({ where: { id: producto.id } })).creadoPorId).toBe(u.id);
+  });
+
+  it("no duplica: el mismo nombre (sin tildes ni mayúsculas) devuelve la entrada existente", async () => {
+    const u = await comprador();
+    const base = `Dulce de leche ${Date.now()}`;
+    const primero = await sumarAlCatalogo(u, { nombre: base });
+    creados.push(primero.producto.id);
+    const segundo = await sumarAlCatalogo(u, { nombre: base.toUpperCase().replace("DULCE", "DÚLCE") });
+    expect(segundo).toEqual({ producto: primero.producto, creado: false });
+  });
+
+  it("rechaza groserías, nombres inválidos y más de 20 altas por día", async () => {
+    const u = await comprador();
+    await expect(sumarAlCatalogo(u, { nombre: "pelotudo" })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+    await expect(sumarAlCatalogo(u, { nombre: "Yerba", marca: "La puta" })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+    await expect(sumarAlCatalogo(u, { nombre: "x" })).rejects.toMatchObject({ code: "NOMBRE_CATALOGO_INVALIDO" });
+    await expect(sumarAlCatalogo(u, { nombre: "Yerba", unidad: "litro" as "kg" })).rejects.toMatchObject({ code: "UNIDAD_INVALIDA" });
+
+    const datos = Array.from({ length: 20 }, (_, i) => ({ nombre: `Alta ${Date.now()} ${i}`, creadoPorId: u.id }));
+    await prisma.productoCatalogo.createMany({ data: datos });
+    const ids = await prisma.productoCatalogo.findMany({ where: { creadoPorId: u.id }, select: { id: true } });
+    creados.push(...ids.map((x) => x.id));
+    await expect(sumarAlCatalogo(u, { nombre: nombreUnico() })).rejects.toMatchObject({ code: "LIMITE_ALTAS_CATALOGO" });
   });
 });

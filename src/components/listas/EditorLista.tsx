@@ -7,6 +7,7 @@ import { BotonVolver } from "@/components/ui/BotonVolver";
 import { Toast } from "@/components/ui/Toast";
 import { DialogoNombre } from "@/components/ui/DialogoNombre";
 import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
+import { DialogoNuevoProducto } from "@/components/listas/DialogoNuevoProducto";
 import { pasoDe, redondearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 
 type ProductoCatalogo = { id: string; nombre: string; marca: string | null; imagenUrl: string | null; unidad: UnidadMedida };
@@ -34,6 +35,7 @@ export function EditorLista({ listaId }: { listaId?: string }) {
   const [q, setQ] = useState("");
   const [resultados, setResultados] = useState<ProductoCatalogo[]>([]);
   const [buscando, setBuscando] = useState(false);
+  const [nuevoProducto, setNuevoProducto] = useState<string | null>(null);
   const [guardando, setGuardando] = useState<"guardar" | "comparar" | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -174,9 +176,32 @@ export function EditorLista({ listaId }: { listaId?: string }) {
                 </button>
               </li>
             ))}
+            {/* 06-catalogo.md: si no está (o no es exactamente lo que busca), lo suma al catálogo. */}
+            {!buscando && !resultados.some((p) => p.nombre.toLowerCase() === q.trim().toLowerCase()) && (
+              <li className="border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setNuevoProducto(q.trim())}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-left text-[13px] font-semibold text-accent-text hover:bg-bg"
+                >
+                  + Agregar «{q.trim()}» al catálogo
+                </button>
+              </li>
+            )}
           </ul>
         )}
       </div>
+
+      {nuevoProducto !== null && (
+        <DialogoNuevoProducto
+          nombreInicial={nuevoProducto}
+          onCerrar={() => setNuevoProducto(null)}
+          onCreado={(p) => {
+            agregar(p);
+            setNuevoProducto(null);
+          }}
+        />
+      )}
 
       <div className="flex flex-1 flex-col gap-2 px-5 py-4">
         {items.length === 0 && (
