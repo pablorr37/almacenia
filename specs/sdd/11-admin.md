@@ -25,6 +25,18 @@ verificación. Todas las rutas bajo `/api/admin/**` requieren `esAdmin = true`
 - **Cambiar el plan** de una tienda (free ↔ premium) desde la lista de usuarios,
   con el endpoint existente de `10-planes.md`. Al pasar a premium la tienda puede
   subir fotos propias (`fotos_personalizadas`).
+- **Pausar, banear y reactivar** usuarios (`estado_cuenta`, `01-auth.md`) con
+  `PATCH /api/admin/usuarios/:id` `{ estadoCuenta, motivo? }`.
+- **Eliminar** un usuario (`DELETE /api/admin/usuarios/:id`): borrado físico de la
+  base en una transacción. Se borran su tienda y todo lo que cuelga de ella
+  (productos, horarios, pedidos, ventas, reseñas, solicitudes, valoraciones), sus
+  pedidos, reseñas y valoraciones como comprador, y en cascada sus listas, puntos,
+  check-ins, visitas y códigos de cliente. En ventas de **otras** tiendas donde
+  figuraba como comprador, `comprador_id` queda en `null` (la venta queda anónima;
+  no se rompe el historial ajeno). Las fotos del banco que subió quedan sin autor.
+  Exige reescribir el email del usuario como confirmación.
+- Un admin no puede pausar, banear ni eliminarse a sí mismo (`ACCION_SOBRE_SI_MISMO`)
+  ni hacerlo con otro admin (`FORBIDDEN`).
 - Marcar o desmarcar un usuario como **tester** (`esTester`, `01-auth.md`) con
   `PATCH /api/admin/usuarios/:id`. Es la única escritura sobre usuarios: `esAdmin`
   sigue sin endpoint.
@@ -87,7 +99,7 @@ sistema" (botón "Probar almacenamiento").
 
 ### `GET /api/admin/usuarios`
 
-Query opcional `?q=<texto>&rol=comprador|vendedor|admin&plan=free|premium&page&pageSize`.
+Query opcional `?q=<texto>&rol=comprador|vendedor|admin&plan=free|premium&estadoCuenta=activa|pausada|baneada&page&pageSize`.
 `q` busca (sin distinguir mayúsculas) en nombre, email y nombre de la tienda.
 `rol` filtra por el flag correspondiente (`esComprador`/`esVendedor`/`esAdmin`).
 Orden: los usuarios más nuevos primero. La UI pagina (anterior/siguiente) para
@@ -98,7 +110,15 @@ llegar a **todos** los usuarios registrados.
 
 ### `PATCH /api/admin/usuarios/:id`
 
-Request `{ esTester: boolean }`. Response `200`: `{ data: UsuarioAdmin }`.
+Request `{ esTester: boolean }` o `{ estadoCuenta: 'activa' | 'pausada' | 'baneada'; motivo?: string }`.
+Response `200`: `{ data: UsuarioAdmin }` (incluye `estadoCuenta`, `motivoSuspension`).
+`400 ESTADO_CUENTA_INVALIDO` si `estadoCuenta` no es válido.
+
+### `DELETE /api/admin/usuarios/:id`
+
+Request `{ confirmacionEmail: string }`. Response `200`: `{ data: { id: string } }`.
+`400 CONFIRMACION_INVALIDA` si el email no coincide; `409 ACCION_SOBRE_SI_MISMO`;
+`403 FORBIDDEN` sobre otro admin; `404 USUARIO_NO_ENCONTRADO`.
 `400 ES_TESTER_INVALIDO` si `esTester` no es booleano; `404 USUARIO_NO_ENCONTRADO`.
 
 ### `GET /api/admin/productos`
