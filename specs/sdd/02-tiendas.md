@@ -346,6 +346,7 @@ async function revisarSolicitudVerificacion(
 | `TIENDA_NO_ENCONTRADA`       | `:id` no existe.                                                |
 | `NO_ES_DUENO_DE_TIENDA`      | El usuario autenticado intenta editar una tienda que no es la suya. |
 | `RADIO_INVALIDO`             | `radioKm` <= 0 o > 50 en la búsqueda por cercanía.              |
+| `TEXTO_NO_PERMITIDO`         | El nombre de la tienda tiene palabras no permitidas (`src/lib/moderacion`). |
 | `HORARIO_INVALIDO`           | `horarios` no cubre los 7 días, `diaSemana` fuera de 0-6, formato de hora inválido, `abre >= cierra`, franjas superpuestas, más de 3 franjas en un día, o un día con entrada cerrada y franjas abiertas a la vez. |
 | `ABIERTO_24HS_INVALIDO`      | `abierto24hs` viene y no es boolean. |
 | `MEDIO_PAGO_INVALIDO`        | Algún valor de `mediosDePago` no es uno de los valores del enum `MedioPago` (el request llega como JSON sin tipar, hay que validarlo en runtime). |

@@ -53,6 +53,12 @@ CREATE TABLE items_lista_compras (
 - Ítems: cada `catalogoId` debe existir; `cantidad` válida según la unidad del producto (entero ≥ 1, o kg en pasos de 50 g — `03-productos.md`); sin `catalogoId`
   repetidos en la misma lista (si vienen repetidos en el request, se suman las
   cantidades). Máximo 100 ítems por lista.
+- **Producto que no está en el catálogo**: si la búsqueda del editor no lo encuentra,
+  el comprador lo puede agregar ("+ Agregar «texto» al catálogo"): se crea en el
+  catálogo compartido con `POST /api/catalogo` (`06-catalogo.md`, con filtro de
+  groserías y sin duplicar) y queda en la lista. "Buscar y comparar" lo compara
+  apenas alguna tienda lo venda; mientras tanto figura como faltante `sin_oferta`.
+- El nombre de la lista pasa por el mismo filtro de groserías (`TEXTO_NO_PERMITIDO`).
 - Actualizar ítems **reemplaza** la lista completa de ítems (como `horarios` en
   `02-tiendas.md`).
 - Borrar una lista es borrado físico (no tiene historial asociado).

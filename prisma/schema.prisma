@@ -63,6 +63,7 @@ model Usuario {
   fotosSubidas           FotoBanco[]           @relation("FotosSubidas")
   fotosRevisadas         FotoBanco[]           @relation("FotosRevisadas")
   codigosCliente         CodigoCliente[]
+  catalogoCargado        ProductoCatalogo[]    @relation("CatalogoCargado")
 
   @@map("usuarios")
 }
@@ -190,11 +191,15 @@ model ProductoCatalogo {
   imagenUrl    String?   @map("imagen_url")
   unidad       UnidadMedida @default(unidad)
   creadoEn     DateTime  @default(now()) @map("creado_en")
+  // Si lo cargó un comprador desde su lista (14-listas-compras.md); null si vino de una tienda o del seed.
+  creadoPorId  String?   @map("creado_por_id")
 
+  creadoPor   Usuario?   @relation("CatalogoCargado", fields: [creadoPorId], references: [id], onDelete: SetNull)
   productos   Producto[]
   itemsListas ItemListaCompras[]
 
   @@index([nombre])
+  @@index([creadoPorId, creadoEn])
   @@map("productos_catalogo")
 }
 
