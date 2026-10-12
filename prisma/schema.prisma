@@ -62,6 +62,7 @@ model Usuario {
   listasCompras          ListaCompras[]
   fotosSubidas           FotoBanco[]           @relation("FotosSubidas")
   fotosRevisadas         FotoBanco[]           @relation("FotosRevisadas")
+  codigosCliente         CodigoCliente[]
 
   @@map("usuarios")
 }
@@ -526,4 +527,21 @@ model FotoBanco {
   @@index([estado, fuente])
   @@index([etiquetas], type: Gin)
   @@map("fotos_banco")
+}
+
+// ---------------------------------------------------------------------------
+// 01-auth.md — código temporal para compartir (venta de mostrador)
+// ---------------------------------------------------------------------------
+
+model CodigoCliente {
+  id        String   @id @default(uuid())
+  codigo    String   @unique @db.Char(6)
+  usuarioId String   @map("usuario_id")
+  expiraEn  DateTime @map("expira_en")
+  creadoEn  DateTime @default(now()) @map("creado_en")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("codigos_cliente")
 }

@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiGetPaginado, apiPost, ApiError } from "@/lib/api-client";
+import { apiGet, apiGetPaginado, apiPost, ApiError } from "@/lib/api-client";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
 import { Toast } from "@/components/ui/Toast";
+import { IconoQr } from "@/components/clientes/CompartirQr";
+import { leerCodigoQr } from "@/lib/clientes/leer-codigo";
+import { useCodigoBarras } from "@/lib/scanner/useCodigoBarras";
 
 // Punto de venta de mostrador (05-ventas.md): el vendedor arma el ticket con lo que
 // le pide el cliente, lo cobra en el acto o lo deja "por cobrar" hasta que llega la
@@ -78,7 +81,40 @@ export function PuntoDeVenta({
   const [ticket, setTicket] = useState<Record<string, number>>({});
   const [medio, setMedio] = useState<MedioPago>(medios.includes("efectivo") ? "efectivo" : medios[0]);
   const [nota, setNota] = useState("");
+  // Cliente: email o código de 6 dígitos / QR que comparte desde su perfil (01-auth.md).
   const [emailCliente, setEmailCliente] = useState("");
+  const [clienteConfirmado, setClienteConfirmado] = useState<{ codigo: string; nombre: string } | null>(null);
+  const [errorCliente, setErrorCliente] = useState<string | null>(null);
+  const [escaneandoQr, setEscaneandoQr] = useState(false);
+  const codigoCliente = leerCodigoQr(emailCliente);
+
+  const confirmarCodigo = useCallback(async (codigo: string) => {
+    setErrorCliente(null);
+    setClienteConfirmado(null);
+    try {
+      const { nombre } = await apiGet<{ nombre: string }>(`/api/clientes/codigo/${codigo}`);
+      setClienteConfirmado({ codigo, nombre });
+    } catch (err) {
+      setErrorCliente(err instanceof ApiError ? err.message : "No se pudo verificar el código.");
+    }
+  }, []);
+
+  const { videoRef: videoQrRef, error: errorQr, iniciar: iniciarQr, detener: detenerQr } = useCodigoBarras(
+    useCallback(
+      (texto: string) => {
+        const codigo = leerCodigoQr(texto);
+        if (!codigo) return;
+        setEscaneandoQr(false);
+        setEmailCliente(codigo);
+        confirmarCodigo(codigo);
+      },
+      [confirmarCodigo]
+    )
+  );
+  useEffect(() => {
+    if (escaneandoQr) iniciarQr();
+    else detenerQr();
+  }, [escaneandoQr, iniciarQr, detenerQr]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -133,11 +169,13 @@ export function PuntoDeVenta({
         medioPago: medio,
         cobrarAhora,
         nota: nota.trim() || undefined,
-        compradorEmail: emailCliente.trim() || undefined,
+        compradorCodigo: codigoCliente ?? undefined,
+        compradorEmail: codigoCliente ? undefined : emailCliente.trim() || undefined,
       });
       setTicket({});
       setNota("");
       setEmailCliente("");
+      setClienteConfirmado(null);
       setToast(cobrarAhora ? `Venta cobrada: ${formatoARS(total)}` : `Venta por cobrar: ${formatoARS(total)}`);
       onStockCambiado();
       cargarVentas();
@@ -267,14 +305,47 @@ export function PuntoDeVenta({
           </div>
         </div>
 
-        <input
-          value={emailCliente}
-          onChange={(e) => setEmailCliente(e.target.value)}
-          type="email"
-          placeholder="Email del cliente (opcional, si tiene cuenta)"
-          aria-label="Email del cliente"
-          className="h-11 rounded-control border border-border bg-surface px-3.5 text-[14px] focus:border-primary focus:outline-none"
-        />
+        <div className="flex flex-col gap-1.5">
+          <div className="flex gap-2">
+            <input
+              value={emailCliente}
+              onChange={(e) => {
+                setEmailCliente(e.target.value);
+                setErrorCliente(null);
+                const codigo = leerCodigoQr(e.target.value);
+                if (codigo) confirmarCodigo(codigo);
+                else setClienteConfirmado(null);
+              }}
+              inputMode="text"
+              placeholder="Cliente: código de 6 dígitos o email (opcional)"
+              aria-label="Cliente"
+              className="h-11 min-w-0 flex-1 rounded-control border border-border bg-surface px-3.5 text-[14px] focus:border-primary focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setEscaneandoQr((v) => !v)}
+              aria-label="Escanear QR del cliente"
+              className={`press flex h-11 flex-shrink-0 items-center gap-1.5 rounded-control px-3 text-[13px] font-semibold ${
+                escaneandoQr ? "bg-primary text-white" : "border border-border bg-surface text-text"
+              }`}
+            >
+              <IconoQr className="h-5 w-5" />
+              {escaneandoQr ? "Cerrar" : "Escanear QR"}
+            </button>
+          </div>
+          {escaneandoQr && (
+            <div className="flex flex-col gap-1">
+              <video ref={videoQrRef} className="w-full rounded-control" muted playsInline />
+              {errorQr && <span className="text-[12px] text-estado-rechazado-text">{errorQr}</span>}
+            </div>
+          )}
+          {clienteConfirmado && codigoCliente === clienteConfirmado.codigo && (
+            <span className="text-[13px] font-semibold text-estado-entregado-text" data-testid="cliente-confirmado">
+              ✓ Cliente: {clienteConfirmado.nombre}
+            </span>
+          )}
+          {errorCliente && <span className="text-[12px] text-estado-rechazado-text">{errorCliente}</span>}
+        </div>
         <input
           value={nota}
           onChange={(e) => setNota(e.target.value)}
