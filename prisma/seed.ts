@@ -22,6 +22,7 @@ import { crearTienda, actualizarTienda, type HorarioTienda, type MedioPago } fro
 import { crearProducto } from "../src/lib/productos/productos";
 import { crearLista } from "../src/lib/listas/listas";
 import { mejorFotoDelBanco, guardarFotoWeb } from "../src/lib/fotos/banco";
+import { contieneGroseria } from "../src/lib/moderacion/moderacion";
 import { buscarWeb, consultaWeb, palabrasClave } from "../src/lib/fotos/buscador-web";
 import {
   consultarOverpass,
@@ -267,7 +268,8 @@ async function main() {
     await registrarUsuario({ email, password: "password123", nombre });
   }
 
-  const definiciones = await definirTiendas(entero("SEED_TIENDAS", 20));
+  // Un nombre de fantasía que caiga en el filtro de groserías no se usa (crearTienda lo rechazaría).
+  const definiciones = (await definirTiendas(entero("SEED_TIENDAS", 20))).filter((d) => !contieneGroseria(d.nombre));
   console.log(`Creando ${definiciones.length} tiendas...`);
   // Catálogo compartido entre vendedores (06-catalogo.md): si la entrada ya existe
   // (de una corrida anterior o de una tienda real) se reutiliza; si no, la primera

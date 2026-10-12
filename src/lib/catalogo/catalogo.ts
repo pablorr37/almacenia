@@ -4,6 +4,7 @@ import type { Usuario } from "@/lib/auth/auth";
 import { tienePermiso } from "@/lib/planes/planes";
 import type { UnidadMedida } from "@/lib/productos/unidades";
 import { sinRomper, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
+import { exigirTextoPermitido } from "@/lib/moderacion/moderacion";
 import type { Categoria, ProductoCatalogo as ProductoCatalogoDb } from "@/generated-prisma/client";
 
 export interface ProductoCatalogo {
@@ -131,4 +132,69 @@ export async function asignarFotoCatalogo(
     await sinRomper(() => otorgarPorFotoCargada(usuario.id, tiendaId, catalogoId));
   }
   return aProductoCatalogo(actualizado);
+}
+
+// Alta desde una lista de compras (06-catalogo.md / 14-listas-compras.md): cualquier
+// usuario suma al catálogo compartido un producto que no encuentra. Sin duplicar, con
+// filtro de groserías y un límite diario por usuario.
+const LIMITE_ALTAS_POR_DIA = 20;
+
+function normalizarNombreCatalogo(texto: string): string {
+  return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+export interface SumarAlCatalogoInput {
+  nombre: string;
+  marca?: string;
+  categoria?: Categoria;
+  unidad?: UnidadMedida;
+}
+
+export async function sumarAlCatalogo(
+  usuario: Usuario,
+  input: SumarAlCatalogoInput
+): Promise<{ producto: ProductoCatalogo; creado: boolean }> {
+  const nombre = typeof input.nombre === "string" ? input.nombre.trim().replace(/\s+/g, " ") : "";
+  if (nombre.length < 2 || nombre.length > 80) {
+    throw new AppError("NOMBRE_CATALOGO_INVALIDO", "El nombre tiene que tener entre 2 y 80 caracteres.");
+  }
+  const marca = input.marca?.trim() || undefined;
+  if (input.unidad !== undefined && input.unidad !== "unidad" && input.unidad !== "kg") {
+    throw new AppError("UNIDAD_INVALIDA", "La unidad tiene que ser 'unidad' o 'kg'.");
+  }
+  exigirTextoPermitido(nombre, "El nombre");
+  if (marca) exigirTextoPermitido(marca, "La marca");
+
+  // Mismo nombre y marca normalizados → se reutiliza la entrada existente.
+  const clave = normalizarNombreCatalogo(nombre);
+  const claveMarca = normalizarNombreCatalogo(marca ?? "");
+  // translate() en vez de unaccent: no requiere extensiones de Postgres.
+  const coincidencias = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM productos_catalogo
+    WHERE regexp_replace(translate(lower(nombre), 'áéíóúüñàèìòù', 'aeiouunaeiou'), '\s+', ' ', 'g') = ${clave.replace(/ñ/g, "n")}
+      AND regexp_replace(translate(lower(coalesce(marca, '')), 'áéíóúüñàèìòù', 'aeiouunaeiou'), '\s+', ' ', 'g') = ${claveMarca.replace(/ñ/g, "n")}
+    ORDER BY creado_en ASC
+    LIMIT 1
+  `;
+  const existente = coincidencias[0]
+    ? await prisma.productoCatalogo.findUnique({ where: { id: coincidencias[0].id } })
+    : null;
+  if (existente) return { producto: aProductoCatalogo(existente), creado: false };
+
+  const desde = new Date(Date.now() - 24 * 3600_000);
+  const altasHoy = await prisma.productoCatalogo.count({ where: { creadoPorId: usuario.id, creadoEn: { gte: desde } } });
+  if (altasHoy >= LIMITE_ALTAS_POR_DIA) {
+    throw new AppError("LIMITE_ALTAS_CATALOGO", `Podés sumar hasta ${LIMITE_ALTAS_POR_DIA} productos al catálogo por día.`);
+  }
+
+  const creado = await prisma.productoCatalogo.create({
+    data: {
+      nombre,
+      marca: marca ?? null,
+      categoria: input.categoria ?? null,
+      unidad: input.unidad ?? "unidad",
+      creadoPorId: usuario.id,
+    },
+  });
+  return { producto: aProductoCatalogo(creado), creado: true };
 }

@@ -7,6 +7,8 @@ import {
   activarVendedor,
   actualizarPerfil,
   requireAdmin,
+  exigirCuentaActiva,
+  buscarUsuarioActivoPorEmail,
   type Usuario,
 } from "./auth";
 
@@ -201,5 +203,36 @@ describe("requireAdmin", () => {
     } catch (e) {
       expect((e as AppError).code).toBe("FORBIDDEN");
     }
+  });
+});
+
+describe("estado de la cuenta", () => {
+  const email = "test-estado-cuenta@almacenia.test";
+
+  beforeEach(() => limpiarUsuario(email));
+  afterEach(() => limpiarUsuario(email));
+
+  it("exigirCuentaActiva: activa pasa; pausada y baneada lanzan con su código y mensaje", async () => {
+    const u = await registrarUsuario({ email, password: "password123", nombre: "Ana" });
+    await expect(exigirCuentaActiva(u.id)).resolves.toBeUndefined();
+
+    await prisma.usuario.update({ where: { id: u.id }, data: { estadoCuenta: "pausada" } });
+    await expect(exigirCuentaActiva(u.id)).rejects.toMatchObject<Partial<AppError>>({
+      code: "CUENTA_PAUSADA",
+      message: expect.stringContaining("pausada"),
+    });
+
+    await prisma.usuario.update({ where: { id: u.id }, data: { estadoCuenta: "baneada", motivoSuspension: "Spam" } });
+    await expect(exigirCuentaActiva(u.id)).rejects.toMatchObject({
+      code: "CUENTA_BANEADA",
+      message: expect.stringContaining("Spam"),
+    });
+  });
+
+  it("buscarUsuarioActivoPorEmail devuelve null si la cuenta no está activa (sesiones abiertas dejan de valer)", async () => {
+    const u = await registrarUsuario({ email, password: "password123", nombre: "Ana" });
+    expect((await buscarUsuarioActivoPorEmail(email))?.id).toBe(u.id);
+    await prisma.usuario.update({ where: { id: u.id }, data: { estadoCuenta: "pausada" } });
+    expect(await buscarUsuarioActivoPorEmail(email)).toBeNull();
   });
 });

@@ -101,7 +101,9 @@ cerrar (cobrarAhora = true, default) ─▶ cobrada
     cualquiera. La UI de mostrador siempre lo manda.
   - `cobrarAhora` default `true` (compatibilidad: una venta sin el campo es una venta
     cobrada en el acto, como antes); la UI manda `false` para "Cerrar · por cobrar".
-  - Cliente opcional por `compradorEmail` (cuenta registrada) o `compradorId`: si no existe,
+  - Cliente opcional por `compradorCodigo` (el código de 6 dígitos o QR que el
+    cliente comparte desde su perfil; vencido → `CODIGO_CLIENTE_INVALIDO`),
+    `compradorEmail` (cuenta registrada) o `compradorId`: si no existe,
     `COMPRADOR_INVALIDO`; si es el propio vendedor, `VENTA_PROPIA`. Sin email, la
     venta es anónima (`comprador_id` null).
 - **Origen a distancia**: no tiene endpoint propio de creación — es un efecto interno
@@ -131,6 +133,7 @@ Request:
   medioPago?: MedioPago;
   cobrarAhora?: boolean;   // default true: nace 'cobrada'; false: 'por_cobrar'
   compradorEmail?: string; // opcional: cliente anónimo si se omite (o compradorId)
+  compradorCodigo?: string; // código de 6 dígitos / QR que comparte el cliente (01-auth.md)
   nota?: string;           // hasta 200 caracteres
 }
 ```
@@ -205,6 +208,7 @@ interface CrearVentaPresencialInput {
   medioPago?: MedioPago;
   cobrarAhora?: boolean;
   compradorEmail?: string;
+  compradorCodigo?: string;
   compradorId?: string;
   nota?: string;
 }

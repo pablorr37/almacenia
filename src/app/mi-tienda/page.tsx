@@ -9,6 +9,7 @@ import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import { BuscadorFotos, type DestinoFoto } from "@/components/fotos/BuscadorFotos";
 import { PuntoDeVenta } from "@/components/ventas/PuntoDeVenta";
+import { DetallePedido, haceCuanto, type ItemPedidoVista } from "@/components/pedidos/DetallePedido";
 import { EditorHorarios } from "@/components/tiendas/EditorHorarios";
 import { ValoracionCliente } from "@/components/ui/ValoracionCliente";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
@@ -91,7 +92,11 @@ type Pedido = {
   id: string;
   compradorId: string;
   estado: EstadoPedido;
-  items: Array<{ productoId: string; cantidad: number; precioUnitario: number }>;
+  nota: string | null;
+  total: number;
+  creadoEn: string;
+  comprador: { nombre: string };
+  items: ItemPedidoVista[];
 };
 
 type AccionPedido = "confirmar" | "rechazar" | "marcarListo" | "entregar";
@@ -760,8 +765,8 @@ export default function MiTiendaPage() {
           <div className="flex flex-col gap-3">
             {pedidos.length === 0 && <p className="text-[13px] text-text-2">Todavía no tenés pedidos.</p>}
             {pedidos.map((p) => {
-              const total = p.items.reduce((sum, i) => sum + i.cantidad * i.precioUnitario, 0);
               const acciones = ACCION_POR_ESTADO[p.estado] ?? [];
+              const cantidadProductos = p.items.length;
               return (
                 <div key={p.id} className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5">
                   <div className="flex items-center justify-between">
@@ -770,9 +775,22 @@ export default function MiTiendaPage() {
                     </span>
                     <EstadoPedidoBadge estado={p.estado} />
                   </div>
-                  <div className="text-[13px] text-text-2">
-                    {p.items.length} producto(s) · {formatoARS(total)}
+                  <div className="text-[13px] text-text">
+                    de <span className="font-semibold">{p.comprador.nombre}</span>
+                    <span className="text-text-2"> · {haceCuanto(p.creadoEn)}</span>
                   </div>
+                  <div className="text-[13px] text-text-2">
+                    {cantidadProductos} producto{cantidadProductos !== 1 ? "s" : ""} · {formatoARS(p.total)}
+                  </div>
+                  <details className="group">
+                    <summary className="cursor-pointer text-[13px] font-semibold text-accent-text">Ver detalle</summary>
+                    <div className="mt-2 flex flex-col gap-2">
+                      <DetallePedido items={p.items} nota={p.nota} total={p.total} />
+                      <Link href={`/pedidos/${p.id}`} className="text-[12px] font-semibold text-text-2">
+                        Abrir pedido →
+                      </Link>
+                    </div>
+                  </details>
                   <ValoracionCliente compradorId={p.compradorId} puedeValorar={p.estado === "entregado"} />
                   {acciones.length > 0 && (
                     <div className="mt-1 flex gap-2">

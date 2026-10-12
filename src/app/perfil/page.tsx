@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import { apiGet, apiPatch, ApiError } from "@/lib/api-client";
 import { formatoPuntos } from "@/components/ui/PuntosChip";
+import { CompartirQr } from "@/components/clientes/CompartirQr";
 import { Estrellas } from "@/components/ui/Estrellas";
 import { useConteo } from "@/lib/hooks/useConteo";
 
@@ -128,6 +129,11 @@ export default function PerfilPage() {
           )}
         </div>
       )}
+
+      <section className="flex flex-col gap-2" aria-label="Compartir mis datos">
+        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-text-2">Compartir mis datos</h2>
+        <CompartirQr />
+      </section>
 
       <nav className="flex flex-col gap-2" aria-label="Secciones de mi cuenta">
         <FilaNavegacion i={0} href="/perfil/pedidos" titulo="Mis pedidos" />

@@ -6,6 +6,7 @@ import {
   buscarTiendasCercanas,
   obtenerTienda,
   obtenerTiendaPorVendedor,
+  obtenerTiendaPublica,
   actualizarTienda,
   horarioValido,
   solicitarVerificacion,
@@ -322,6 +323,17 @@ describe("buscarTiendasCercanas", () => {
     for (let i = 1; i < resultado.length; i++) {
       expect(resultado[i].distanciaKm).toBeGreaterThanOrEqual(resultado[i - 1].distanciaKm);
     }
+  });
+
+  it("no devuelve tiendas de dueños con la cuenta pausada o baneada; obtenerTiendaPublica tampoco", async () => {
+    await prisma.usuario.update({ where: { id: cercana.id }, data: { estadoCuenta: "pausada" } });
+    const resultado = await buscarTiendasCercanas({ lat: LAT_BASE, lon: LON_BASE, radioKm: 5 });
+    expect(resultado.map((t) => t.nombre)).not.toContain("Tienda cercana");
+
+    const tienda = await obtenerTiendaPorVendedor(cercana.id);
+    expect(await obtenerTiendaPublica(tienda!.id)).toBeNull();
+    await prisma.usuario.update({ where: { id: cercana.id }, data: { estadoCuenta: "activa" } });
+    expect((await obtenerTiendaPublica(tienda!.id))?.nombre).toBe("Tienda cercana");
   });
 
   it("lista las tiendas premium antes que las free, dentro de un mismo radio (destacado_prioritario, 10-planes.md)", async () => {
@@ -666,5 +678,20 @@ describe("solicitarVerificacion / revisarSolicitudVerificacion", () => {
     await expect(
       revisarSolicitudVerificacion(dueno, solicitud.id, "aprobada")
     ).rejects.toMatchObject<Partial<AppError>>({ code: "FORBIDDEN" });
+  });
+});
+
+describe("moderación del nombre de la tienda", () => {
+  it("TEXTO_NO_PERMITIDO al crear o renombrar con groserías", async () => {
+    const u = await crearUsuarioDePrueba();
+    try {
+      await expect(
+        crearTienda(u, { nombre: "Kiosco La Puta", direccion: "D", lat: LAT_BASE, lon: LON_BASE })
+      ).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+      const t = await crearTienda(u, { nombre: "Kiosco Pepe", direccion: "D", lat: LAT_BASE, lon: LON_BASE });
+      await expect(actualizarTienda(u, t.id, { nombre: "Kiosco Pelotudo" })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+    } finally {
+      await limpiar([u.id]);
+    }
   });
 });

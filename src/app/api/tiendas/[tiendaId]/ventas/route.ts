@@ -23,6 +23,7 @@ export async function POST(
       medioPago: body.medioPago ?? undefined,
       cobrarAhora: typeof body.cobrarAhora === "boolean" ? body.cobrarAhora : undefined,
       compradorEmail: typeof body.compradorEmail === "string" && body.compradorEmail.trim() ? body.compradorEmail : undefined,
+      compradorCodigo: typeof body.compradorCodigo === "string" && body.compradorCodigo.trim() ? body.compradorCodigo : undefined,
       compradorId: body.compradorId,
       nota: typeof body.nota === "string" ? body.nota : undefined,
     });

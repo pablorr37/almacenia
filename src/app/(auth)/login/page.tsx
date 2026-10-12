@@ -25,7 +25,14 @@ export default function LoginPage() {
         redirect: false,
       });
       if (resultado?.error) {
-        setError("Email o contraseña incorrectos.");
+        // 01-auth.md: cuentas pausadas/baneadas tienen su propio mensaje.
+        setError(
+          resultado.code === "cuenta_pausada"
+            ? "Tu cuenta está pausada. Escribinos si creés que es un error."
+            : resultado.code === "cuenta_baneada"
+              ? "Tu cuenta fue suspendida."
+              : "Email o contraseña incorrectos."
+        );
         return;
       }
       router.push("/");

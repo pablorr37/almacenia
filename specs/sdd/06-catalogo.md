@@ -66,7 +66,23 @@ precio ni stock**: eso es siempre propio de cada `Producto` por tienda (ver
   MVP — cada tienda ajusta su copia denormalizada en `Producto` (`03-productos.md`)
   sin tocar la entrada compartida.
 
+- **Alta desde una lista de compras** (`14-listas-compras.md`): cualquier usuario
+  autenticado puede sumar al catálogo compartido un producto que no encuentra.
+  - Campos: `nombre` (2–80), `marca?`, `categoria?`, `unidad` (`unidad` | `kg`).
+  - Si ya existe una entrada con el mismo nombre y marca normalizados (sin tildes
+    ni mayúsculas ni espacios de más), se devuelve esa y no se duplica.
+  - Filtro de groserías en nombre y marca (`TEXTO_NO_PERMITIDO`, `src/lib/moderacion`).
+  - Máximo 20 altas por usuario por día (`LIMITE_ALTAS_CATALOGO`).
+  - Se guarda `creado_por_id` (columna nueva, `ON DELETE SET NULL`) para que el
+    admin pueda revisar y borrar las entradas sin uso cargadas por compradores.
+
 ## Endpoints REST
+
+### `POST /api/catalogo`
+
+Requiere sesión. Request: `{ nombre: string; marca?: string; categoria?: Categoria; unidad?: 'unidad' | 'kg' }`.
+Response `201`: `{ data: ProductoCatalogo; creado: boolean }` (`creado: false` si ya
+existía y se devolvió esa).
 
 ### `GET /api/catalogo/buscar`
 
@@ -136,6 +152,9 @@ async function asignarFotoCatalogo(
 | `BUSQUEDA_CATALOGO_INVALIDA`   | `buscarEnCatalogo` sin `q` ni `codigoBarras`.                    |
 | `CODIGO_BARRAS_DUPLICADO`      | `crearProductoNuevoEnCatalogo` con un `codigoBarras` que ya existe. |
 | `UNIDAD_INVALIDA`              | `unidad` no es `'unidad'` ni `'kg'` al crear una entrada.         |
+| `NOMBRE_CATALOGO_INVALIDO`     | `nombre` vacío, de menos de 2 o más de 80 caracteres (alta desde lista). |
+| `TEXTO_NO_PERMITIDO`           | Nombre o marca con palabras no permitidas.                     |
+| `LIMITE_ALTAS_CATALOGO`        | El usuario ya sumó 20 productos al catálogo hoy (`429`).       |
 | `CATALOGO_YA_TIENE_FOTO`       | Un vendedor premium (no admin) intenta reemplazar una foto de catálogo existente (`409`). |
 | `FOTOS_SOLO_PREMIUM`           | Un vendedor `free` (o un usuario sin tienda que no es admin) intenta asignar foto de catálogo (`403`). |
 | `CATALOGO_NO_ENCONTRADO`       | `obtenerProductoCatalogo`/`adoptarProductoDeCatalogo` con `id` inexistente (usado desde `03-productos.md`). |

@@ -76,6 +76,11 @@ pendiente ──confirmar──> confirmado ──marcarListo──> listo_para_
   (ajuste de stock o contacto con el comprador fuera del sistema).
 - Solo el `comprador_id` puede ver/cancelar su propio pedido; solo el vendedor dueño
   de la tienda puede confirmar/rechazar/avanzar su estado.
+- **Detalle para el vendedor**: el vendedor dueño de la tienda ve cada pedido con el
+  nombre del comprador, la fecha, la cantidad de productos, el total y el detalle
+  (producto, cantidad en unidades o kg, precio unitario, subtotal) más la nota del
+  comprador — tanto en la pestaña Pedidos de mi-tienda como en `/pedidos/:id`. El
+  email del comprador no se expone.
 
 ## Endpoints REST
 
@@ -131,6 +136,8 @@ type EstadoPedido =
 interface ItemPedido {
   id: string;
   productoId: string;
+  nombre: string;          // nombre del producto en la tienda (para el detalle)
+  unidad: UnidadMedida;    // 'unidad' | 'kg'
   cantidad: number;
   precioUnitario: number;
 }
@@ -143,6 +150,8 @@ interface Pedido {
   nota: string | null;
   items: ItemPedido[];
   total: number; // derivado: SUM(cantidad * precioUnitario) de items, no columna propia
+  comprador: { nombre: string }; // nunca el email: el vendedor solo ve el nombre
+  creadoEn: string;
 }
 
 interface CrearPedidoInput {

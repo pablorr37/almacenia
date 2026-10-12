@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
+import { exigirTextoPermitido } from "@/lib/moderacion/moderacion";
 import { Prisma } from "@/generated-prisma/client";
 import type { Usuario } from "@/lib/auth/auth";
 import { requireAdmin } from "@/lib/auth/auth";
@@ -200,6 +201,7 @@ export interface CrearTiendaInput {
 
 export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Promise<Tienda> {
   validarUbicacion(input.lat, input.lon);
+  if (typeof input.nombre === "string") exigirTextoPermitido(input.nombre, "El nombre de la tienda");
   validarMediosDePago(input.mediosDePago);
   validarAbierto24hs(input.abierto24hs);
   if (input.horarios !== undefined && !horarioValido(input.horarios)) {
@@ -284,6 +286,8 @@ export async function buscarTiendasCercanas(
       ST_Distance(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography) / 1000 AS distancia_km
     FROM tiendas
     WHERE activa = true
+      -- 01-auth.md: las tiendas de cuentas pausadas/baneadas no se muestran.
+      AND vendedor_id IN (SELECT id FROM usuarios WHERE estado_cuenta = 'activa')
       AND ST_DWithin(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography, ${radioMetros})
     ORDER BY (plan = 'premium') DESC, distancia_km ASC
   `;
@@ -303,6 +307,17 @@ export async function obtenerTienda(id: string): Promise<Tienda | null> {
   if (!filas[0]) return null;
   const horarios = await obtenerHorarios(id);
   return aTienda(filas[0], horarios);
+}
+
+// Para la vista pública de una tienda: null si el dueño tiene la cuenta pausada o
+// baneada (01-auth.md), igual que si no existiera.
+export async function obtenerTiendaPublica(id: string): Promise<Tienda | null> {
+  const dueno = await prisma.tienda.findUnique({
+    where: { id },
+    select: { vendedor: { select: { estadoCuenta: true } } },
+  });
+  if (!dueno || dueno.vendedor.estadoCuenta !== "activa") return null;
+  return obtenerTienda(id);
 }
 
 export async function obtenerTiendaPorVendedor(vendedorId: string): Promise<Tienda | null> {
@@ -340,6 +355,7 @@ export async function actualizarTienda(
   if (actual.vendedorId !== vendedor.id) {
     throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
   }
+  if (typeof input.nombre === "string") exigirTextoPermitido(input.nombre, "El nombre de la tienda");
 
   const lat = input.lat ?? actual.lat;
   const lon = input.lon ?? actual.lon;

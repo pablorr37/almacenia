@@ -25,6 +25,15 @@ datasource db {
 // 01-auth.md
 // ---------------------------------------------------------------------------
 
+// 01-auth.md, "Estado de la cuenta".
+enum EstadoCuenta {
+  activa
+  pausada
+  baneada
+
+  @@map("estado_cuenta")
+}
+
 model Usuario {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -34,6 +43,9 @@ model Usuario {
   esVendedor   Boolean  @default(false) @map("es_vendedor")
   esAdmin      Boolean  @default(false) @map("es_admin")
   esTester     Boolean  @default(false) @map("es_tester")
+  estadoCuenta     EstadoCuenta @default(activa) @map("estado_cuenta")
+  motivoSuspension String?      @map("motivo_suspension")
+  suspendidaEn     DateTime?    @map("suspendida_en")
   avatarUrl    String?  @map("avatar_url")
   creadoEn     DateTime @default(now()) @map("creado_en")
 
@@ -50,6 +62,8 @@ model Usuario {
   listasCompras          ListaCompras[]
   fotosSubidas           FotoBanco[]           @relation("FotosSubidas")
   fotosRevisadas         FotoBanco[]           @relation("FotosRevisadas")
+  codigosCliente         CodigoCliente[]
+  catalogoCargado        ProductoCatalogo[]    @relation("CatalogoCargado")
 
   @@map("usuarios")
 }
@@ -177,11 +191,15 @@ model ProductoCatalogo {
   imagenUrl    String?   @map("imagen_url")
   unidad       UnidadMedida @default(unidad)
   creadoEn     DateTime  @default(now()) @map("creado_en")
+  // Si lo cargó un comprador desde su lista (14-listas-compras.md); null si vino de una tienda o del seed.
+  creadoPorId  String?   @map("creado_por_id")
 
+  creadoPor   Usuario?   @relation("CatalogoCargado", fields: [creadoPorId], references: [id], onDelete: SetNull)
   productos   Producto[]
   itemsListas ItemListaCompras[]
 
   @@index([nombre])
+  @@index([creadoPorId, creadoEn])
   @@map("productos_catalogo")
 }
 
@@ -514,4 +532,21 @@ model FotoBanco {
   @@index([estado, fuente])
   @@index([etiquetas], type: Gin)
   @@map("fotos_banco")
+}
+
+// ---------------------------------------------------------------------------
+// 01-auth.md — código temporal para compartir (venta de mostrador)
+// ---------------------------------------------------------------------------
+
+model CodigoCliente {
+  id        String   @id @default(uuid())
+  codigo    String   @unique @db.Char(6)
+  usuarioId String   @map("usuario_id")
+  expiraEn  DateTime @map("expira_en")
+  creadoEn  DateTime @default(now()) @map("creado_en")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("codigos_cliente")
 }

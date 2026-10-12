@@ -14,6 +14,9 @@ CREATE TABLE usuarios (
   es_vendedor    BOOLEAN NOT NULL DEFAULT false,
   es_admin       BOOLEAN NOT NULL DEFAULT false,
   es_tester      BOOLEAN NOT NULL DEFAULT false,
+  estado_cuenta  estado_cuenta NOT NULL DEFAULT 'activa', -- 'activa' | 'pausada' | 'baneada'
+  motivo_suspension TEXT,
+  suspendida_en  TIMESTAMPTZ,
   avatar_url     TEXT,
   creado_en      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -53,6 +56,23 @@ reglas de negocio).
   API. No confundir con `es_vendedor`: un admin no necesariamente tiene tienda, y una
   cuenta admin puede además ser comprador/vendedor (flags independientes). Las rutas
   bajo `/api/admin/**` (ver `11-admin.md`) requieren `es_admin = true`.
+- **Estado de la cuenta** (`estado_cuenta`, lo cambia un admin, `11-admin.md`):
+  - `activa`: uso normal.
+  - `pausada`: suspensión temporal. No puede iniciar sesión (`CUENTA_PAUSADA`,
+    "Tu cuenta está pausada") y una sesión ya abierta deja de valer en el siguiente
+    request. Su tienda deja de aparecer en el mapa, búsquedas, "Buscar y comparar" y
+    no recibe pedidos (`TIENDA_NO_DISPONIBLE`). Los datos se conservan.
+  - `baneada`: igual que pausada pero como sanción (`CUENTA_BANEADA`, "Tu cuenta fue
+    suspendida", con `motivo_suspension` opcional). También se puede reactivar.
+- **Código de cliente para compartir** (venta de mostrador, `05-ventas.md`): desde su
+  perfil ("Compartir mis datos" → **Compartir QR**) el usuario genera un código
+  numérico de **6 dígitos** que vale **10 minutos**, mostrado también como QR
+  (contenido `almacenia:cliente:<codigo>`). Generar uno nuevo reemplaza al anterior.
+  Tabla `codigos_cliente (codigo CHAR(6) UNIQUE, usuario_id → usuarios ON DELETE
+  CASCADE, expira_en TIMESTAMPTZ)`. Un código vencido o inexistente:
+  `CODIGO_CLIENTE_INVALIDO`. Endpoints: `POST /api/auth/perfil/codigo` →
+  `{ codigo, expiraEn }`; `GET /api/clientes/codigo/:codigo` (solo vendedores) →
+  `{ nombre }` para que el vendedor confirme a quién le vende.
 - **`es_tester` nace en `false`** y lo activa un admin (`PATCH /api/admin/usuarios/:id`,
   `11-admin.md`). Un tester es *curador* del banco de fotos (`16-banco-fotos.md`):
   busca fotos libres en la web y aprueba fotos. No da acceso a `/api/admin/**`.

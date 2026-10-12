@@ -8,7 +8,7 @@ import { ConfigSistema } from "@/components/ui/ConfigSistema";
 
 type Diagnostico = {
   db: "ok" | "error";
-  almacenamiento: { ok: boolean; bucket: string; endpoint: string; error?: string };
+  almacenamiento: { ok: boolean; bucket: string; endpoint: string; error?: string; lecturaPublica: boolean; errorLectura?: string };
 };
 
 type Metricas = {
@@ -48,7 +48,13 @@ export default function AdminPage() {
     } catch (err) {
       setDiagnostico({
         db: "error",
-        almacenamiento: { ok: false, bucket: "", endpoint: "", error: err instanceof ApiError ? err.message : "No se pudo consultar." },
+        almacenamiento: {
+          ok: false,
+          bucket: "",
+          endpoint: "",
+          error: err instanceof ApiError ? err.message : "No se pudo consultar.",
+          lecturaPublica: false,
+        },
       });
     } finally {
       setProbando(false);
@@ -113,6 +119,9 @@ export default function AdminPage() {
         <Link href="/admin/fotos" className="text-[13px] font-semibold text-accent-text">
           Fotos →
         </Link>
+        <Link href="/admin/catalogo" className="text-[13px] font-semibold text-accent-text">
+          Catálogo de compradores →
+        </Link>
       </div>
 
       {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}
@@ -140,6 +149,14 @@ export default function AdminPage() {
             </span>
             {diagnostico.almacenamiento.error && (
               <code className="break-all rounded-control bg-bg p-2 text-[12px] text-text">{diagnostico.almacenamiento.error}</code>
+            )}
+            {diagnostico.almacenamiento.ok && (
+              <span className={diagnostico.almacenamiento.lecturaPublica ? "text-estado-entregado-text" : "text-estado-rechazado-text"}>
+                {diagnostico.almacenamiento.lecturaPublica ? "✓ Las fotos se pueden ver (lectura pública)" : "✗ Las fotos no se pueden ver (lectura pública)"}
+              </span>
+            )}
+            {diagnostico.almacenamiento.errorLectura && (
+              <code className="break-all rounded-control bg-bg p-2 text-[12px] text-text">{diagnostico.almacenamiento.errorLectura}</code>
             )}
           </div>
         )}

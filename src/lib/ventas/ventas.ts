@@ -5,6 +5,7 @@ import type { Pedido } from "@/lib/pedidos/pedidos";
 import { sinRomper, otorgarPorVenta } from "@/lib/gamificacion/gamificacion";
 import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { MEDIOS_DE_PAGO_VALIDOS, type MedioPago } from "@/lib/tiendas/tiendas";
+import { resolverCodigoCliente } from "@/lib/clientes/codigo-cliente";
 import type { Prisma } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
@@ -149,11 +150,17 @@ export interface CrearVentaPresencialInput {
   medioPago?: MedioPago;
   cobrarAhora?: boolean; // default true (05-ventas.md)
   compradorEmail?: string;
+  compradorCodigo?: string; // 6 dígitos o contenido del QR (01-auth.md)
   compradorId?: string;
   nota?: string;
 }
 
 async function resolverComprador(vendedor: Usuario, input: CrearVentaPresencialInput): Promise<string | null> {
+  if (input.compradorCodigo) {
+    const { id } = await resolverCodigoCliente(input.compradorCodigo);
+    if (id === vendedor.id) throw new AppError("VENTA_PROPIA", "No podés registrarte una venta a vos mismo.");
+    return id;
+  }
   const email = input.compradorEmail?.trim().toLowerCase();
   if (!email && !input.compradorId) return null;
   const comprador = await prisma.usuario.findUnique({

@@ -4,6 +4,7 @@ import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import type { Categoria } from "@/generated-prisma/client";
 import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
+import { exigirTextoPermitido } from "@/lib/moderacion/moderacion";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAXIMO = 100;
@@ -91,6 +92,7 @@ function normalizarNombre(nombre: unknown): string {
   if (limpio.length === 0 || limpio.length > MAX_NOMBRE) {
     throw new AppError("NOMBRE_LISTA_INVALIDO", `El nombre de la lista debe tener entre 1 y ${MAX_NOMBRE} caracteres.`);
   }
+  exigirTextoPermitido(limpio, "El nombre de la lista");
   return limpio;
 }
 
