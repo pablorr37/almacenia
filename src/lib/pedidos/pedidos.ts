@@ -4,7 +4,7 @@ import { esComprable } from "@/lib/productos/productos";
 import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { crearVentaDesdePedido } from "@/lib/ventas/ventas";
 import type { Usuario } from "@/lib/auth/auth";
-import type { Pedido as PedidoDb, ItemPedido as ItemPedidoDb, Producto as ProductoDb } from "@/generated-prisma/client";
+import type { Prisma, Producto as ProductoDb } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAXIMO = 100;
@@ -22,6 +22,8 @@ export type AccionPedido = "confirmar" | "rechazar" | "marcarListo" | "entregar"
 export interface ItemPedido {
   id: string;
   productoId: string;
+  nombre: string;
+  unidad: UnidadMedida;
   cantidad: number;
   precioUnitario: number;
 }
@@ -34,14 +36,25 @@ export interface Pedido {
   nota: string | null;
   items: ItemPedido[];
   total: number;
+  comprador: { nombre: string };
+  creadoEn: string;
 }
 
-type PedidoConItems = PedidoDb & { items: ItemPedidoDb[] };
+// Lo necesario para mostrar el detalle (04-pedidos.md): nombre/unidad de cada
+// producto y el nombre (nunca el email) del comprador.
+const INCLUDE_PEDIDO = {
+  items: { include: { producto: { select: { nombre: true, catalogo: { select: { unidad: true } } } } } },
+  comprador: { select: { nombre: true } },
+} satisfies Prisma.PedidoInclude;
+
+type PedidoConItems = Prisma.PedidoGetPayload<{ include: typeof INCLUDE_PEDIDO }>;
 
 function aPedido(pedido: PedidoConItems): Pedido {
   const items = pedido.items.map((item) => ({
     id: item.id,
     productoId: item.productoId,
+    nombre: item.producto.nombre,
+    unidad: item.producto.catalogo.unidad,
     cantidad: Number(item.cantidad),
     precioUnitario: Number(item.precioUnitario),
   }));
@@ -54,6 +67,8 @@ function aPedido(pedido: PedidoConItems): Pedido {
     nota: pedido.nota,
     items,
     total: Math.round(items.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0) * 100) / 100,
+    comprador: { nombre: pedido.comprador.nombre },
+    creadoEn: pedido.creadoEn.toISOString(),
   };
 }
 
@@ -132,7 +147,7 @@ export async function crearPedido(comprador: Usuario, input: CrearPedidoInput): 
         })),
       },
     },
-    include: { items: true },
+    include: INCLUDE_PEDIDO,
   });
 
   return aPedido(pedido);
@@ -141,7 +156,7 @@ export async function crearPedido(comprador: Usuario, input: CrearPedidoInput): 
 async function obtenerPedidoConTienda(pedidoId: string) {
   return prisma.pedido.findUnique({
     where: { id: pedidoId },
-    include: { items: true, tienda: true },
+    include: { ...INCLUDE_PEDIDO, tienda: true },
   });
 }
 
@@ -195,7 +210,7 @@ export async function transicionarPedido(
   const actualizado = await prisma.pedido.update({
     where: { id: pedidoId },
     data: { estado: nuevoEstado },
-    include: { items: true },
+    include: INCLUDE_PEDIDO,
   });
 
   return aPedido(actualizado);
@@ -248,7 +263,7 @@ export async function listarPedidos(
   const [pedidos, total] = await Promise.all([
     prisma.pedido.findMany({
       where,
-      include: { items: true },
+      include: INCLUDE_PEDIDO,
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy: { creadoEn: "desc" },

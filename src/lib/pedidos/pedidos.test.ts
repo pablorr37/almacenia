@@ -227,6 +227,25 @@ describe("obtenerPedido", () => {
     expect(encontrado?.id).toBe(pedido.id);
   });
 
+  it("el detalle trae nombre del comprador (sin email), fecha y nombre/unidad de cada producto", async () => {
+    const pedido = await crearPedido(comprador, {
+      tiendaId: tienda.id,
+      items: [{ productoId: producto.id, cantidad: 2 }],
+      nota: "Sin bolsa",
+    });
+    const visto = (await obtenerPedido(vendedor, pedido.id))!;
+    expect(visto.comprador).toEqual({ nombre: "Comprador" });
+    expect(JSON.stringify(visto)).not.toContain(comprador.email);
+    expect(visto.creadoEn).toEqual(expect.any(String));
+    expect(visto.items[0]).toMatchObject({ nombre: "Producto", unidad: "unidad", cantidad: 2, precioUnitario: 100 });
+    expect(visto.nota).toBe("Sin bolsa");
+
+    // El listado por tienda también trae el detalle.
+    const lista = await listarPedidos(vendedor, { tiendaId: tienda.id });
+    expect(lista.data[0]).toMatchObject({ comprador: { nombre: "Comprador" }, total: 200 });
+    expect(lista.data[0].items[0].nombre).toBe("Producto");
+  });
+
   it("el vendedor dueño de la tienda puede verlo", async () => {
     const pedido = await crearPedido(comprador, {
       tiendaId: tienda.id,
