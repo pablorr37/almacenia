@@ -704,7 +704,7 @@ export default function MiTiendaPage() {
                 const unidad = catalogoSeleccionado?.unidad ?? entradaNueva.unidad;
                 return (
                   <>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
                       <Input
                         id="p-precio"
                         name="precio"
@@ -712,6 +712,7 @@ export default function MiTiendaPage() {
                         step="0.01"
                         min="0"
                         placeholder={unidad === "kg" ? "Precio por kg" : "Precio"}
+                        className="w-full min-w-0"
                         required
                       />
                       <Input
@@ -721,6 +722,7 @@ export default function MiTiendaPage() {
                         min="0"
                         step={unidad === "kg" ? "0.001" : "1"}
                         placeholder={unidad === "kg" ? "Stock (kg)" : "Stock"}
+                        className="w-full min-w-0"
                         required
                       />
                     </div>

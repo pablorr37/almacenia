@@ -73,9 +73,8 @@ mano (no hay script para esto):
        image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
        command: server /data --console-address ":9001"
        environment:
-         - SERVICE_URL_MINIO_9000
-         - MINIO_SERVER_URL=https://s3.almacenia.store
-         - MINIO_BROWSER_REDIRECT_URL=https://minio.almacenia.store
+         - MINIO_SERVER_URL=$MINIO_SERVER_URL
+         - MINIO_BROWSER_REDIRECT_URL=$MINIO_BROWSER_REDIRECT_URL
          - MINIO_ROOT_USER=$SERVICE_USER_MINIO
          - MINIO_ROOT_PASSWORD=$SERVICE_PASSWORD_MINIO
        volumes:
@@ -90,23 +89,26 @@ mano (no hay script para esto):
    Es la imagen que mantiene el equipo de Coolify (la misma de su plantilla
    oculta). `SERVICE_USER_MINIO` / `SERVICE_PASSWORD_MINIO` son variables mágicas:
    Coolify genera el usuario y la contraseña root al guardar (pestaña Environment
-   Variables del servicio); los vas a necesitar abajo. `SERVICE_URL_MINIO_9000`
-   (sin valor) es imprescindible: marca a `minio` como web en el puerto 9000. Sin
-   ella Coolify no le asigna dominio y no genera ninguna etiqueta de Traefik (el
-   contenedor queda healthy pero inalcanzable). Sin sección `ports:` a propósito:
-   MinIO solo se alcanza por el proxy, con HTTPS. El volumen `minio-data` es lo
-   que conserva las fotos entre redeploys.
-2. En el servicio → **Settings → Domains** (Coolify 4.3; no está en el Settings
-   del componente): editar la fila de **Minio** (o **Add domain** → Service
-   application *Minio*) con Protocol `https`, Host `s3.almacenia.store`, Port
-   `9000`. Opcional, la consola: **Add domain** → *Minio*, `https`,
-   `minio.almacenia.store`, `9001` → *Use this port anyway*. El Port es el puerto
-   del contenedor al que reenvía Traefik; hacia afuera siempre es 443. Creá en tu
-   DNS los registros A de esos subdominios apuntando a la IP del VPS (igual que
-   `app.almacenia.store`) y, una vez propagados, **Deploy** del servicio (no
-   *Restart* del componente: ese solo hace `docker restart` y no regenera las
+   Variables del servicio); los vas a necesitar abajo. Sin sección `ports:` a
+   propósito: MinIO solo se alcanza por el proxy, con HTTPS. El volumen
+   `minio-data` es lo que conserva las fotos entre redeploys.
+2. **Dominios: para MinIO, Coolify NO usa la página Domains.** La imagen
+   `coollabsio/minio` está en su lista de servicios especiales (`SPECIFIC_SERVICES`):
+   arma las reglas de Traefik a partir de dos variables **del servicio** (pestaña
+   Environment Variables), que existen porque el compose las declara como
+   `$MINIO_SERVER_URL` / `$MINIO_BROWSER_REDIRECT_URL` (escritas con el valor fijo en
+   el compose, Coolify no las ve y no genera ninguna etiqueta: el contenedor queda
+   healthy pero inalcanzable, y la app da `self-signed certificate`). Cargalas con
+   `https://` y **sin** puerto (Coolify agrega `:9000` y `:9001`):
+   - `MINIO_SERVER_URL` = `https://s3.almacenia.store` (API S3, puerto 9000)
+   - `MINIO_BROWSER_REDIRECT_URL` = `https://minio.almacenia.store` (consola, 9001)
+
+   Creá en tu DNS los registros A de esos subdominios apuntando a la IP del VPS
+   (igual que `app.almacenia.store`) y, una vez propagados, **Deploy** del servicio
+   (no *Restart* del componente: ese solo hace `docker restart` y no regenera las
    etiquetas). Comprobación en el VPS:
-   `grep -c traefik /data/coolify/services/<uuid>/docker-compose.yml` > 0, y
+   `grep -E "traefik.*(rule|certresolver)" /data/coolify/services/<uuid>/docker-compose.yml`
+   tiene que mostrar ``Host(`s3.almacenia.store`)`` y `certresolver=letsencrypt`, y
    `https://s3.almacenia.store/minio/health/live` responde 200.
 3. No hace falta crear el bucket ni configurar permisos a mano: la app crea el
    bucket en el primer upload y le aplica **lectura pública solo de archivos**
@@ -140,7 +142,7 @@ el error exacto. También queda en el log de la app con el prefijo
 | `falta S3_BUCKET` / `falta S3_ENDPOINT` | La app no tiene la variable. | Cargarla en las variables de entorno de la app en Coolify y redeployar. |
 | `ECONNREFUSED`, `ENOTFOUND`, `getaddrinfo`, `timeout` | La app no llega a MinIO. | Revisar que `S3_ENDPOINT` sea `https://s3.almacenia.store` (sin barra final), que el registro DNS exista y que MinIO esté corriendo. |
 | `certificate`, `self-signed` | Traefik todavía no emitió el certificado de `s3.`. | Con el DNS ya propagado, **Restart** del servicio MinIO. |
-| `404 page not found`, `no available server` | Traefik no sabe a qué contenedor mandar el dominio. | Revisar el campo Domains del componente `minio` (con `:9000`). |
+| `self-signed certificate`, `404 page not found`, `no available server` | Traefik no tiene reglas para el dominio de MinIO. | Revisar que el compose declare `$MINIO_SERVER_URL` / `$MINIO_BROWSER_REDIRECT_URL` y que esas variables del servicio tengan los dominios; después **Deploy** del servicio. |
 | `InvalidAccessKeyId`, `SignatureDoesNotMatch`, `AccessDenied` | Credenciales incorrectas. | `S3_ACCESS_KEY` / `S3_SECRET_KEY` = usuario y contraseña root de MinIO (`MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`). |
 | `XMinioStorageFull`, `minimum free drive threshold` | El disco del VPS / volumen de MinIO está lleno. | Liberar espacio en el VPS (`df -h`, `docker system prune`) o ampliar el volumen. |
 | ✓ almacenamiento pero ✗ "Las fotos se pueden ver" | El bucket recibe pero el navegador no puede leerlas. | El diagnóstico ya reaplica la política de lectura; si sigue en ✗, `S3_PUBLIC_URL` no es una URL pública accesible: usá el dominio del servicio MinIO (puerto 9000) con HTTPS. |

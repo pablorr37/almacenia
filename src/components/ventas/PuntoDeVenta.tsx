@@ -301,8 +301,7 @@ export function PuntoDeVenta({
     <div className="flex flex-col gap-4">
       {/* Productos: pestañas, buscador y lista compacta (3 filas con scroll) */}
       <section className="flex flex-col gap-2.5">
-        <div className="flex items-center gap-1.5">
-          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist" aria-label="Lista de productos">
+        <div className="flex gap-1" role="tablist" aria-label="Lista de productos">
             {PESTANAS.map((t) => (
               <button
                 key={t.valor}
@@ -313,33 +312,34 @@ export function PuntoDeVenta({
                   setPestana(t.valor);
                   if (listaOculta) alternarLista();
                 }}
-                className={`press flex-shrink-0 rounded-pill px-3 py-1.5 text-[12px] font-semibold ${
+                className={`press min-w-0 flex-1 rounded-pill px-1.5 py-1.5 text-[12px] font-semibold ${
                   pestana === t.valor ? "bg-primary text-white" : "border border-border bg-surface text-text"
                 }`}
               >
                 {t.etiqueta}
               </button>
             ))}
-          </div>
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={busqueda}
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              if (listaOculta && e.target.value) alternarLista();
+            }}
+            placeholder="Buscar producto para vender"
+            aria-label="Buscar producto para vender"
+            className="h-12 min-w-0 flex-1 rounded-control border border-border bg-surface px-4 text-[15px] focus:border-primary focus:outline-none"
+          />
           <button
             type="button"
             onClick={alternarLista}
             aria-expanded={!listaOculta}
-            className="press flex-shrink-0 rounded-pill px-2.5 py-1.5 text-[12px] font-semibold text-accent-text"
+            className="press h-12 flex-shrink-0 rounded-control border border-border bg-surface px-3 text-[12px] font-semibold text-accent-text"
           >
             {listaOculta ? "Mostrar lista" : "Ocultar lista"}
           </button>
         </div>
-        <input
-          value={busqueda}
-          onChange={(e) => {
-            setBusqueda(e.target.value);
-            if (listaOculta && e.target.value) alternarLista();
-          }}
-          placeholder="Buscar producto para vender"
-          aria-label="Buscar producto para vender"
-          className="h-12 rounded-control border border-border bg-surface px-4 text-[15px] focus:border-primary focus:outline-none"
-        />
         {listaOculta ? null : cargandoProductos ? (
           <p className="text-[13px] text-text-2">Cargando productos…</p>
         ) : productos.length === 0 ? (
@@ -352,14 +352,14 @@ export function PuntoDeVenta({
             data-testid="lista-productos-venta"
           >
             {visibles.map((p) => (
-              <li key={p.id} className="flex flex-shrink-0 items-center gap-2.5 rounded-card border border-border bg-surface p-2.5">
+              <li key={p.id} className="flex flex-shrink-0 flex-wrap items-center gap-2.5 rounded-card border border-border bg-surface p-2.5">
                 {p.imagenEfectiva ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={p.imagenEfectiva} alt="" className="h-11 w-11 flex-shrink-0 rounded-control object-cover" />
                 ) : (
                   <div className="h-11 w-11 flex-shrink-0 rounded-control bg-placeholder" />
                 )}
-                <div className="flex min-w-0 flex-grow flex-col">
+                <div className="flex min-w-0 flex-1 basis-32 flex-col">
                   <span className="truncate text-[14px] font-semibold">{p.nombre}</span>
                   <span className="text-[12px] text-text-2">
                     {formatoARS(precioDe(p))}
@@ -377,14 +377,16 @@ export function PuntoDeVenta({
                 >
                   {p.favorito ? "★" : "☆"}
                 </button>
-                <SelectorCantidad
-                  unidad={p.unidad}
-                  valor={ticket[p.id] ?? 0}
-                  max={p.stock}
-                  nombre={p.nombre}
-                  precio={precioDe(p)}
-                  onChange={(v) => fijar(p.id, v)}
-                />
+                <div className="ml-auto">
+                  <SelectorCantidad
+                    unidad={p.unidad}
+                    valor={ticket[p.id] ?? 0}
+                    max={p.stock}
+                    nombre={p.nombre}
+                    precio={precioDe(p)}
+                    onChange={(v) => fijar(p.id, v)}
+                  />
+                </div>
               </li>
             ))}
           </ul>
