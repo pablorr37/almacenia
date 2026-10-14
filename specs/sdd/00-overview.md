@@ -86,6 +86,12 @@ Status HTTP: `200` (éxito con body), `201` (creación), `400` (validación), `4
 autenticado), `403` (autenticado pero sin permiso sobre el recurso), `404` (no existe),
 `409` (conflicto de estado, ej. stock insuficiente o transición de estado inválida).
 
+**Sin caché:** toda respuesta de la API (éxito o error) lleva `Cache-Control: no-store`.
+Son datos vivos (stock, tiendas visibles, estados de cuenta): ni el navegador ni un
+proxy/CDN delante de la app (Cloudflare, Traefik) pueden servir una copia vieja. Ej.:
+una tienda de una cuenta pausada o eliminada desaparece del mapa en la próxima carga.
+El mapa además vuelve a pedir las tiendas cuando la pestaña recupera el foco.
+
 ### Autenticación
 
 Toda ruta bajo `/api/**` salvo las explícitamente marcadas como públicas en cada spec

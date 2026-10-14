@@ -43,6 +43,15 @@ describe("GET /api/tiendas/cercanas", () => {
     expect(body.data.map((t: { nombre: string }) => t.nombre)).toContain("Almacén Cercano");
   });
 
+  it("no se cachea y no muestra tiendas de cuentas pausadas (00-overview.md, 01-auth.md)", async () => {
+    const primera = await GET(req(`lat=${LAT_BASE}&lon=${LON_BASE}`));
+    expect(primera.headers.get("cache-control")).toBe("no-store");
+
+    await prisma.usuario.update({ where: { id: usuario.id }, data: { estadoCuenta: "pausada" } });
+    const body = await (await GET(req(`lat=${LAT_BASE}&lon=${LON_BASE}`))).json();
+    expect(body.data.map((t: { nombre: string }) => t.nombre)).not.toContain("Almacén Cercano");
+  });
+
   it("400 RADIO_INVALIDO si radioKm excede el máximo", async () => {
     const res = await GET(req(`lat=${LAT_BASE}&lon=${LON_BASE}&radioKm=999`));
     const body = await res.json();
