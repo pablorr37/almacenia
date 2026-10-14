@@ -22,7 +22,8 @@ async function parse<T>(res: Response): Promise<T> {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+  // 00-overview.md, "Sin caché": nunca una respuesta guardada por el navegador.
+  const res = await fetch(path, { cache: "no-store" });
   return parse<T>(res);
 }
 
@@ -30,7 +31,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiGetPaginado<T>(
   path: string
 ): Promise<{ data: T[]; page: number; pageSize: number; total: number }> {
-  const res = await fetch(path);
+  const res = await fetch(path, { cache: "no-store" });
   const body = await res.json();
   if (!res.ok) {
     const { code, message, details } = body.error ?? { code: "ERROR_DESCONOCIDO", message: "Ocurrió un error inesperado." };

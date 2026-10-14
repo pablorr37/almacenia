@@ -18,7 +18,10 @@ export async function POST(request: NextRequest) {
       unidadContenido: body.unidadContenido ?? undefined,
       unidad: body.unidad ?? undefined,
     });
-    return NextResponse.json({ data: producto, creado }, { status: creado ? 201 : 200 });
+    return NextResponse.json(
+      { data: producto, creado },
+      { status: creado ? 201 : 200, headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     return respuestaError(error);
   }

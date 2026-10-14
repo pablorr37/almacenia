@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -13,6 +13,7 @@ import { PuntosChip } from "@/components/ui/PuntosChip";
 import type { TiendaMapa } from "@/components/ui/TiendaMap";
 import { estadoApertura } from "@/lib/tiendas/horarios";
 import { useAhora } from "@/lib/hooks/useAhora";
+import { useAlVolver } from "@/lib/hooks/useAlVolver";
 
 const TiendaMap = dynamic(
   () => import("@/components/ui/TiendaMap").then((m) => m.TiendaMap),
@@ -60,13 +61,19 @@ function MapaAutenticado() {
     );
   }, []);
 
-  useEffect(() => {
+  const cargarTiendas = useCallback(() => {
     if (!origen) return;
     apiGet<Tienda[]>(`/api/tiendas/cercanas?lat=${origen.lat}&lon=${origen.lon}`)
       .then(setTiendas)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Error al buscar tiendas."))
       .finally(() => setCargando(false));
   }, [origen]);
+
+  useEffect(() => {
+    cargarTiendas();
+  }, [cargarTiendas]);
+  // Al volver a la pestaña se actualiza: una tienda pausada o borrada no queda en el mapa.
+  useAlVolver(cargarTiendas);
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-bg">

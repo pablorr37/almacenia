@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useAlVolver } from "@/lib/hooks/useAlVolver";
 import Link from "next/link";
 import { apiGet, ApiError } from "@/lib/api-client";
 import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
@@ -34,7 +35,7 @@ export function HomeInvitado() {
   const [tiendas, setTiendas] = useState<Tienda[] | null>(null);
   const ahora = useAhora();
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
     apiGet<Tienda[]>(`/api/tiendas/cercanas?lat=${LAT_SAN_JUAN}&lon=${LON_SAN_JUAN}&radioKm=50`)
       .then((data) => setTiendas(data.slice(0, 3)))
       .catch((err) => {
@@ -42,6 +43,11 @@ export function HomeInvitado() {
         setTiendas([]);
       });
   }, []);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+  useAlVolver(cargar);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col overflow-hidden bg-bg px-5 pt-8">

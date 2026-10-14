@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import { buscarTiendasCercanas } from "@/lib/tiendas/tiendas";
 import { respuestaExitosa, respuestaError } from "@/lib/api-response";
 
+// Datos vivos (tiendas visibles según estado de cuenta): siempre en el momento (00-overview.md, "Sin caché").
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;

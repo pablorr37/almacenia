@@ -55,12 +55,16 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   ALMACENAMIENTO_NO_CONFIGURADO: 503,
 };
 
+// 00-overview.md, "Sin caché": datos vivos, nadie (navegador, Cloudflare, proxy)
+// puede servir una copia vieja.
+const SIN_CACHE = { "Cache-Control": "no-store" };
+
 export function respuestaExitosa<T>(
   data: T,
   status = 200,
   meta?: { page: number; pageSize: number; total: number }
 ) {
-  return NextResponse.json({ data, ...meta }, { status });
+  return NextResponse.json({ data, ...meta }, { status, headers: SIN_CACHE });
 }
 
 export function respuestaError(error: unknown) {
@@ -68,13 +72,13 @@ export function respuestaError(error: unknown) {
     const status = STATUS_POR_CODIGO[error.code] ?? 400;
     return NextResponse.json(
       { error: { code: error.code, message: error.message } },
-      { status }
+      { status, headers: SIN_CACHE }
     );
   }
 
   console.error(error);
   return NextResponse.json(
     { error: { code: "ERROR_INTERNO", message: "Ocurrió un error inesperado." } },
-    { status: 500 }
+    { status: 500, headers: SIN_CACHE }
   );
 }
