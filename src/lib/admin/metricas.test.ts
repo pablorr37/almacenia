@@ -6,6 +6,7 @@ import { crearProducto } from "@/lib/productos/productos";
 import { crearPedido } from "@/lib/pedidos/pedidos";
 import { crearVentaPresencial } from "@/lib/ventas/ventas";
 import { obtenerMetricas } from "./metricas";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 // Rango amplio fijo: como los datos de otros tests corriendo en paralelo también
 // caen "ahora", las aserciones comparan un delta (antes/después de crear los
@@ -81,7 +82,7 @@ describe("obtenerMetricas", () => {
       lon: -58.3816,
     });
     const producto = await crearProducto(vendedor, tienda.id, {
-      nuevo: { nombre: `Producto métricas ${contador}` },
+      nuevo: { categoriaId: await categoriaDePrueba(), variante: `Producto métricas ${contador}` },
       precio: 100,
       stock: 10,
     });

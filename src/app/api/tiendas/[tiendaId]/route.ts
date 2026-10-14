@@ -34,7 +34,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       lon: body.lon,
       activa: body.activa,
       imagenUrl: body.imagenUrl,
-      rubro: body.rubro,
+      rubroId: body.rubroId,
       mediosDePago: body.mediosDePago,
       abierto24hs: body.abierto24hs,
       horarios: body.horarios,

@@ -7,6 +7,7 @@ import { crearVentaPresencial } from "@/lib/ventas/ventas";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { PUT, GET } from "./route";
 import { GET as GET_PROPIA } from "@/app/api/auth/perfil/valoracion/route";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 vi.mock("@/lib/auth/session", () => ({ obtenerUsuarioActual: vi.fn() }));
 const obtenerUsuarioActualMock = vi.mocked(obtenerUsuarioActual);
@@ -24,7 +25,7 @@ describe("/api/clientes/:compradorId/valoracion", () => {
     vendedor = await registrarUsuario({ email: `test-valcli-api-v-${Date.now()}@almacenia.test`, password: "password123", nombre: "V" });
     comprador = await registrarUsuario({ email: `test-valcli-api-c-${Date.now()}@almacenia.test`, password: "password123", nombre: "C" });
     tienda = await crearTienda(vendedor, { nombre: "T", direccion: "D", lat: -31.5, lon: -68.5 });
-    producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "P" }, precio: 10, stock: 5 });
+    producto = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "P" }, precio: 10, stock: 5 });
   });
 
   afterEach(async () => {

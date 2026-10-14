@@ -5,6 +5,7 @@ import { crearTienda } from "@/lib/tiendas/tiendas";
 import { crearProducto } from "@/lib/productos/productos";
 import { crearVentaPresencial } from "@/lib/ventas/ventas";
 import { generarCodigoCliente, resolverCodigoCliente, leerCodigoQr, VIGENCIA_MINUTOS } from "./codigo-cliente";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let n = 0;
 async function usuario(nombre = "María González"): Promise<Usuario> {
@@ -67,7 +68,7 @@ describe("código de cliente", () => {
     const cliente = await usuario("Cliente QR");
     ids.push(vendedor.id, cliente.id);
     const tienda = await crearTienda(vendedor, { nombre: "T", direccion: "D", lat: -31.5, lon: -68.5 });
-    const producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Yerba" }, precio: 100, stock: 10 });
+    const producto = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Yerba" }, precio: 100, stock: 10 });
 
     const { codigo } = await generarCodigoCliente(cliente);
     const venta = await crearVentaPresencial(vendedor, tienda.id, {

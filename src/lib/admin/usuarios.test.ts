@@ -6,6 +6,7 @@ import { crearProducto } from "@/lib/productos/productos";
 import { crearVentaPresencial } from "@/lib/ventas/ventas";
 import { crearPedido } from "@/lib/pedidos/pedidos";
 import { listarUsuarios, marcarTester, cambiarEstadoCuenta, eliminarUsuario } from "./usuarios";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let contador = 0;
 async function crearAdmin(): Promise<Usuario> {
@@ -102,7 +103,7 @@ describe("listarUsuarios", () => {
     const admin = await crearAdmin();
     const { vendedor, tienda } = await crearVendedorConTienda();
     const producto = await crearProducto(vendedor, tienda.id, {
-      nuevo: { nombre: `Producto admin usuarios ${contador}` },
+      nuevo: { categoriaId: await categoriaDePrueba(), variante: `Producto admin usuarios ${contador}` },
       precio: 100,
       stock: 10,
     });
@@ -124,7 +125,7 @@ describe("listarUsuarios", () => {
     const { vendedor, tienda } = await crearVendedorConTienda();
     const comprador = await crearComprador();
     const producto = await crearProducto(vendedor, tienda.id, {
-      nuevo: { nombre: `Producto admin usuarios comprador ${contador}` },
+      nuevo: { categoriaId: await categoriaDePrueba(), variante: `Producto admin usuarios comprador ${contador}` },
       precio: 50,
       stock: 5,
     });
@@ -264,7 +265,7 @@ describe("eliminarUsuario", () => {
     const { vendedor, tienda } = await crearVendedorConTienda();
     const comprador = await crearComprador();
     try {
-      const producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Fideos" }, precio: 100, stock: 10 });
+      const producto = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Fideos" }, precio: 100, stock: 10 });
       await crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 1 }] });
       await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }], compradorId: comprador.id });
 
@@ -286,7 +287,7 @@ describe("eliminarUsuario", () => {
     const { vendedor, tienda } = await crearVendedorConTienda();
     const comprador = await crearComprador();
     try {
-      const producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Yerba" }, precio: 100, stock: 10 });
+      const producto = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Yerba" }, precio: 100, stock: 10 });
       await crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 1 }] });
       const venta = await crearVentaPresencial(vendedor, tienda.id, {
         items: [{ productoId: producto.id, cantidad: 2 }],

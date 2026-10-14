@@ -10,6 +10,7 @@ import {
   resumenesClientes,
   miResumenComoCliente,
 } from "./valoraciones-clientes";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let contador = 0;
 async function usuario(prefijo: string): Promise<Usuario> {
@@ -24,7 +25,7 @@ async function usuario(prefijo: string): Promise<Usuario> {
 async function vendedorConTienda(): Promise<{ vendedor: Usuario; tienda: Tienda; producto: Producto }> {
   const vendedor = await usuario("vendedor");
   const tienda = await crearTienda(vendedor, { nombre: "Tienda", direccion: "D", lat: -31.53, lon: -68.52 });
-  const producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: `P ${contador}` }, precio: 10, stock: 100 });
+  const producto = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `P ${contador}` }, precio: 10, stock: 100 });
   return { vendedor: { ...vendedor, esVendedor: true }, tienda, producto };
 }
 

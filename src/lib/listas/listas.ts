@@ -2,7 +2,6 @@
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
-import type { Categoria } from "@/generated-prisma/client";
 import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { exigirTextoPermitido } from "@/lib/moderacion/moderacion";
 
@@ -20,7 +19,7 @@ export interface ItemListaCompras {
   id: string;
   catalogoId: string;
   cantidad: number;
-  producto: { nombre: string; marca: string | null; imagenUrl: string | null; categoria: Categoria | null; unidad: UnidadMedida };
+  producto: { nombre: string; marca: string | null; imagenUrl: string | null; categoria: { id: string; nombre: string }; unidad: UnidadMedida };
 }
 
 export interface ListaCompras {
@@ -41,7 +40,7 @@ export interface ResumenLista {
 
 const INCLUDE_ITEMS = {
   items: {
-    include: { catalogo: { select: { nombre: true, marca: true, imagenUrl: true, categoria: true, unidad: true } } },
+    include: { catalogo: { select: { nombre: true, marca: true, imagenUrl: true, categoria: { select: { id: true, nombre: true } }, unidad: true } } },
     orderBy: { catalogo: { nombre: "asc" as const } },
   },
 };
@@ -78,7 +77,7 @@ export function normalizarItems(items: unknown): ItemListaInput[] {
   for (const item of items) {
     const { catalogoId, cantidad } = (item ?? {}) as Partial<ItemListaInput>;
     if (typeof catalogoId !== "string" || catalogoId.length === 0) throw itemsInvalidos();
-    // La forma de la cantidad (entera o kg de a 50 g) depende del producto y se
+    // La forma de la cantidad (entera o kg hasta gramos) depende del producto y se
     // valida contra el catálogo en verificarCatalogo.
     if (typeof cantidad !== "number" || !Number.isFinite(cantidad) || cantidad <= 0) throw itemsInvalidos();
     porCatalogo.set(catalogoId, Math.round(((porCatalogo.get(catalogoId) ?? 0) + cantidad) * 1000) / 1000);

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, type Usuario } from "@/lib/auth/auth";
-import type { Categoria, EstadoVerificacion, SolicitudVerificacion as SolicitudVerificacionDb } from "@/generated-prisma/client";
+import type { EstadoVerificacion, SolicitudVerificacion as SolicitudVerificacionDb } from "@/generated-prisma/client";
 import type { SolicitudVerificacion } from "@/lib/tiendas/tiendas";
 
 const PAGE_SIZE_DEFAULT = 20;
@@ -24,7 +24,7 @@ export interface SolicitudVerificacionAdmin extends SolicitudVerificacion {
     id: string;
     nombre: string;
     direccion: string;
-    rubro: Categoria | null;
+    rubro: string | null; // nombre del rubro (17-rubros-categorias.md)
     vendedor: { nombre: string; email: string };
   };
 }
@@ -56,7 +56,7 @@ export async function listarSolicitudesVerificacion(
             id: true,
             nombre: true,
             direccion: true,
-            rubro: true,
+            rubro: { select: { nombre: true } },
             vendedor: { select: { nombre: true, email: true } },
           },
         },
@@ -69,7 +69,10 @@ export async function listarSolicitudesVerificacion(
   ]);
 
   return {
-    data: solicitudes.map((s) => ({ ...aSolicitudVerificacion(s), tienda: s.tienda })),
+    data: solicitudes.map((s) => ({
+      ...aSolicitudVerificacion(s),
+      tienda: { ...s.tienda, rubro: s.tienda.rubro?.nombre ?? null },
+    })),
     page,
     pageSize,
     total,

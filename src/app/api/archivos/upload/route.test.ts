@@ -6,6 +6,7 @@ import { crearProducto, type Producto } from "@/lib/productos/productos";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { subirArchivo } from "@/lib/archivos/archivos";
 import { POST } from "./route";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 vi.mock("@/lib/auth/session", () => ({ obtenerUsuarioActual: vi.fn() }));
 vi.mock("@/lib/archivos/archivos", async () => {
@@ -45,7 +46,7 @@ describe("POST /api/archivos/upload", () => {
       lat: -34.6037,
       lon: -58.3816,
     });
-    producto = await crearProducto(dueno, tienda.id, { nuevo: { nombre: "Producto" }, precio: 100, stock: 5 });
+    producto = await crearProducto(dueno, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Producto" }, precio: 100, stock: 5 });
     subirArchivoMock.mockResolvedValue({ url: "http://localhost:9000/almacenia/productos/x/y.jpg" });
   });
 

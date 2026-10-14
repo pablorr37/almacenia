@@ -5,30 +5,61 @@ import { tienePermiso } from "@/lib/planes/planes";
 import type { UnidadMedida } from "@/lib/productos/unidades";
 import { sinRomper, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
 import { exigirTextoPermitido } from "@/lib/moderacion/moderacion";
-import type { Categoria, ProductoCatalogo as ProductoCatalogoDb } from "@/generated-prisma/client";
+import { normalizarNombre } from "@/lib/rubros-categorias/rubros-categorias";
+import type { Prisma } from "@/generated-prisma/client";
+
+export const UNIDADES_CONTENIDO = ["g", "kg", "ml", "l", "u"] as const;
+export type UnidadContenido = (typeof UNIDADES_CONTENIDO)[number];
 
 export interface ProductoCatalogo {
   id: string;
   nombre: string;
   descripcion: string | null;
   marca: string | null;
-  categoria: Categoria | null;
+  categoria: { id: string; nombre: string };
+  variante: string | null;
+  contenido: number | null;
+  unidadContenido: UnidadContenido | null;
   codigoBarras: string | null;
   imagenUrl: string | null;
   unidad: UnidadMedida;
 }
 
-function aProductoCatalogo(p: ProductoCatalogoDb): ProductoCatalogo {
+export const INCLUDE_CATEGORIA = { categoria: { select: { id: true, nombre: true } } } as const;
+type FilaCatalogo = Prisma.ProductoCatalogoGetPayload<{ include: typeof INCLUDE_CATEGORIA }>;
+
+export function aProductoCatalogo(p: FilaCatalogo): ProductoCatalogo {
   return {
     id: p.id,
     nombre: p.nombre,
     descripcion: p.descripcion,
     marca: p.marca,
     categoria: p.categoria,
+    variante: p.variante,
+    contenido: p.contenido === null ? null : Number(p.contenido),
+    unidadContenido: p.unidadContenido,
     codigoBarras: p.codigoBarras,
     imagenUrl: p.imagenUrl,
     unidad: p.unidad,
   };
+}
+
+// Pura (06-catalogo.md): "Arroz Gallo Oro largo fino 1 kg".
+export function componerNombreCatalogo(partes: {
+  categoria: string;
+  marca?: string | null;
+  variante?: string | null;
+  contenido?: number | null;
+  unidadContenido?: string | null;
+}): string {
+  const contenido =
+    partes.contenido && partes.unidadContenido
+      ? `${partes.contenido.toLocaleString("es-AR", { maximumFractionDigits: 3 })} ${partes.unidadContenido}`
+      : null;
+  return [partes.categoria, partes.marca, partes.variante, contenido]
+    .map((p) => (p ?? "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 export interface BuscarEnCatalogoInput {
@@ -45,6 +76,7 @@ export async function buscarEnCatalogo(input: BuscarEnCatalogoInput): Promise<Pr
     where: input.codigoBarras
       ? { codigoBarras: input.codigoBarras }
       : { nombre: { contains: input.q, mode: "insensitive" } },
+    include: INCLUDE_CATEGORIA,
     take: 20,
     orderBy: { nombre: "asc" },
   });
@@ -53,26 +85,104 @@ export async function buscarEnCatalogo(input: BuscarEnCatalogoInput): Promise<Pr
 }
 
 export async function obtenerProductoCatalogo(id: string): Promise<ProductoCatalogo | null> {
-  const producto = await prisma.productoCatalogo.findUnique({ where: { id } });
+  const producto = await prisma.productoCatalogo.findUnique({ where: { id }, include: INCLUDE_CATEGORIA });
   return producto ? aProductoCatalogo(producto) : null;
 }
 
-export interface CrearProductoNuevoEnCatalogoInput {
-  nombre: string;
-  descripcion?: string;
+// Datos de una entrada nueva del catálogo (06-catalogo.md).
+export interface NuevaEntradaCatalogo {
+  categoriaId: string;
   marca?: string;
-  categoria?: Categoria;
-  codigoBarras?: string;
-  imagenUrl?: string;
+  variante?: string;
+  contenido?: number;
+  unidadContenido?: UnidadContenido;
   unidad?: UnidadMedida; // default 'unidad'
+  codigoBarras?: string;
+}
+
+export type CrearProductoNuevoEnCatalogoInput = NuevaEntradaCatalogo & {
+  descripcion?: string;
+  imagenUrl?: string;
+};
+
+function textoOpcional(valor: unknown, campo: string): string | null {
+  if (valor === undefined || valor === null) return null;
+  const texto = typeof valor === "string" ? valor.replace(/\s+/g, " ").trim() : "";
+  if (!texto) return null;
+  if (texto.length > 40) throw new AppError("TEXTO_INVALIDO", `${campo} puede tener hasta 40 caracteres.`);
+  exigirTextoPermitido(texto, campo);
+  return texto;
+}
+
+// Valida y normaliza una entrada nueva; devuelve los datos listos para guardar.
+async function prepararEntrada(input: NuevaEntradaCatalogo) {
+  const unidad = input.unidad ?? "unidad";
+  if (unidad !== "unidad" && unidad !== "kg") {
+    throw new AppError("UNIDAD_INVALIDA", "La unidad tiene que ser 'unidad' o 'kg'.");
+  }
+  const categoria =
+    typeof input.categoriaId === "string" && input.categoriaId
+      ? await prisma.categoriaProducto.findUnique({ where: { id: input.categoriaId } })
+      : null;
+  if (!categoria) throw new AppError("CATEGORIA_NO_ENCONTRADA", "Elegí una categoría de la lista.");
+
+  const marca = textoOpcional(input.marca, "La marca");
+  const variante = textoOpcional(input.variante, "La variante");
+
+  const hayContenido = input.contenido !== undefined && input.contenido !== null;
+  const hayUnidadContenido = input.unidadContenido !== undefined && input.unidadContenido !== null;
+  if (hayContenido || hayUnidadContenido) {
+    if (unidad === "kg") {
+      throw new AppError("CONTENIDO_INVALIDO", "Un producto suelto por kg no lleva contenido de envase.");
+    }
+    const valido =
+      typeof input.contenido === "number" &&
+      Number.isFinite(input.contenido) &&
+      input.contenido > 0 &&
+      (UNIDADES_CONTENIDO as readonly string[]).includes(input.unidadContenido as string);
+    if (!valido) {
+      throw new AppError("CONTENIDO_INVALIDO", "El contenido tiene que ser un número mayor a 0 con su unidad (g, kg, ml, l o u).");
+    }
+  }
+  const contenido = hayContenido ? Math.round((input.contenido as number) * 1000) / 1000 : null;
+  const unidadContenido = hayContenido ? (input.unidadContenido as UnidadContenido) : null;
+
+  return {
+    categoriaId: categoria.id,
+    marca,
+    variante,
+    contenido,
+    unidadContenido,
+    unidad,
+    nombre: componerNombreCatalogo({ categoria: categoria.nombre, marca, variante, contenido, unidadContenido }),
+  };
+}
+
+type EntradaPreparada = Awaited<ReturnType<typeof prepararEntrada>>;
+
+// Regla "Sin duplicados" de 06-catalogo.md: misma categoría, unidad y contenido, y
+// misma marca y variante normalizadas.
+async function buscarDuplicado(datos: EntradaPreparada): Promise<FilaCatalogo | null> {
+  const candidatas = await prisma.productoCatalogo.findMany({
+    where: {
+      categoriaId: datos.categoriaId,
+      unidad: datos.unidad,
+      contenido: datos.contenido,
+      unidadContenido: datos.unidadContenido,
+    },
+    include: INCLUDE_CATEGORIA,
+    orderBy: { creadoEn: "asc" },
+  });
+  const clave = (t: string | null) => normalizarNombre(t ?? "");
+  return (
+    candidatas.find((c) => clave(c.marca) === clave(datos.marca) && clave(c.variante) === clave(datos.variante)) ?? null
+  );
 }
 
 export async function crearProductoNuevoEnCatalogo(
   input: CrearProductoNuevoEnCatalogoInput
 ): Promise<ProductoCatalogo> {
-  if (input.unidad !== undefined && input.unidad !== "unidad" && input.unidad !== "kg") {
-    throw new AppError("UNIDAD_INVALIDA", "La unidad tiene que ser 'unidad' o 'kg'.");
-  }
+  const datos = await prepararEntrada(input);
   if (input.codigoBarras) {
     const existente = await prisma.productoCatalogo.findUnique({
       where: { codigoBarras: input.codigoBarras },
@@ -82,16 +192,17 @@ export async function crearProductoNuevoEnCatalogo(
     }
   }
 
+  const duplicado = await buscarDuplicado(datos);
+  if (duplicado) return aProductoCatalogo(duplicado);
+
   const producto = await prisma.productoCatalogo.create({
     data: {
-      nombre: input.nombre,
+      ...datos,
       descripcion: input.descripcion ?? null,
-      marca: input.marca ?? null,
-      categoria: input.categoria ?? null,
       codigoBarras: input.codigoBarras ?? null,
       imagenUrl: input.imagenUrl ?? null,
-      unidad: input.unidad ?? "unidad",
     },
+    include: INCLUDE_CATEGORIA,
   });
 
   return aProductoCatalogo(producto);
@@ -126,7 +237,11 @@ export async function asignarFotoCatalogo(
   imagenUrl: string
 ): Promise<ProductoCatalogo> {
   const { tiendaId } = await verificarPermisoFotoCatalogo(usuario, catalogoId);
-  const actualizado = await prisma.productoCatalogo.update({ where: { id: catalogoId }, data: { imagenUrl } });
+  const actualizado = await prisma.productoCatalogo.update({
+    where: { id: catalogoId },
+    data: { imagenUrl },
+    include: INCLUDE_CATEGORIA,
+  });
   // foto_cargada es para vendedores (12-gamificacion.md); un admin no suma.
   if (tiendaId && !usuario.esAdmin) {
     await sinRomper(() => otorgarPorFotoCargada(usuario.id, tiendaId, catalogoId));
@@ -139,46 +254,15 @@ export async function asignarFotoCatalogo(
 // filtro de groserías y un límite diario por usuario.
 const LIMITE_ALTAS_POR_DIA = 20;
 
-function normalizarNombreCatalogo(texto: string): string {
-  return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-}
-
-export interface SumarAlCatalogoInput {
-  nombre: string;
-  marca?: string;
-  categoria?: Categoria;
-  unidad?: UnidadMedida;
-}
+export type SumarAlCatalogoInput = Omit<NuevaEntradaCatalogo, "codigoBarras">;
 
 export async function sumarAlCatalogo(
   usuario: Usuario,
   input: SumarAlCatalogoInput
 ): Promise<{ producto: ProductoCatalogo; creado: boolean }> {
-  const nombre = typeof input.nombre === "string" ? input.nombre.trim().replace(/\s+/g, " ") : "";
-  if (nombre.length < 2 || nombre.length > 80) {
-    throw new AppError("NOMBRE_CATALOGO_INVALIDO", "El nombre tiene que tener entre 2 y 80 caracteres.");
-  }
-  const marca = input.marca?.trim() || undefined;
-  if (input.unidad !== undefined && input.unidad !== "unidad" && input.unidad !== "kg") {
-    throw new AppError("UNIDAD_INVALIDA", "La unidad tiene que ser 'unidad' o 'kg'.");
-  }
-  exigirTextoPermitido(nombre, "El nombre");
-  if (marca) exigirTextoPermitido(marca, "La marca");
+  const datos = await prepararEntrada({ ...input, codigoBarras: undefined });
 
-  // Mismo nombre y marca normalizados → se reutiliza la entrada existente.
-  const clave = normalizarNombreCatalogo(nombre);
-  const claveMarca = normalizarNombreCatalogo(marca ?? "");
-  // translate() en vez de unaccent: no requiere extensiones de Postgres.
-  const coincidencias = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM productos_catalogo
-    WHERE regexp_replace(translate(lower(nombre), 'áéíóúüñàèìòù', 'aeiouunaeiou'), '\s+', ' ', 'g') = ${clave.replace(/ñ/g, "n")}
-      AND regexp_replace(translate(lower(coalesce(marca, '')), 'áéíóúüñàèìòù', 'aeiouunaeiou'), '\s+', ' ', 'g') = ${claveMarca.replace(/ñ/g, "n")}
-    ORDER BY creado_en ASC
-    LIMIT 1
-  `;
-  const existente = coincidencias[0]
-    ? await prisma.productoCatalogo.findUnique({ where: { id: coincidencias[0].id } })
-    : null;
+  const existente = await buscarDuplicado(datos);
   if (existente) return { producto: aProductoCatalogo(existente), creado: false };
 
   const desde = new Date(Date.now() - 24 * 3600_000);
@@ -188,13 +272,8 @@ export async function sumarAlCatalogo(
   }
 
   const creado = await prisma.productoCatalogo.create({
-    data: {
-      nombre,
-      marca: marca ?? null,
-      categoria: input.categoria ?? null,
-      unidad: input.unidad ?? "unidad",
-      creadoPorId: usuario.id,
-    },
+    data: { ...datos, creadoPorId: usuario.id },
+    include: INCLUDE_CATEGORIA,
   });
   return { producto: aProductoCatalogo(creado), creado: true };
 }

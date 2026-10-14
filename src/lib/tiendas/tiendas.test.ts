@@ -695,3 +695,53 @@ describe("moderación del nombre de la tienda", () => {
     }
   });
 });
+
+describe("rubro de la tienda (17-rubros-categorias.md)", () => {
+  let usuario: Usuario;
+  let kiosco: { id: string; nombre: string };
+  let vivero: { id: string; nombre: string };
+
+  beforeAll(async () => {
+    const sufijo = Date.now();
+    kiosco = await prisma.rubro.create({ data: { nombre: `Kiosco ${sufijo}`, nombreNormalizado: `kiosco ${sufijo}` } });
+    vivero = await prisma.rubro.create({ data: { nombre: `Vivero ${sufijo}`, nombreNormalizado: `vivero ${sufijo}` } });
+  });
+  beforeEach(async () => {
+    usuario = await crearUsuarioDePrueba();
+  });
+  afterEach(() => limpiar([usuario.id]));
+  afterAll(async () => {
+    await prisma.rubro.deleteMany({ where: { id: { in: [kiosco.id, vivero.id] } } });
+  });
+
+  const datos = { nombre: "Tienda con rubro", direccion: "Calle 1", lat: LAT_BASE, lon: LON_BASE };
+
+  it("se elige al crear y se devuelve como { id, nombre }", async () => {
+    const tienda = await crearTienda(usuario, { ...datos, rubroId: kiosco.id });
+    expect(tienda.rubro).toEqual({ id: kiosco.id, nombre: kiosco.nombre });
+    expect((await obtenerTienda(tienda.id))!.rubro).toEqual({ id: kiosco.id, nombre: kiosco.nombre });
+  });
+
+  it("sin rubro queda en null", async () => {
+    const tienda = await crearTienda(usuario, datos);
+    expect(tienda.rubro).toBeNull();
+  });
+
+  it("se cambia con actualizarTienda y se conserva si no se manda", async () => {
+    const tienda = await crearTienda(usuario, { ...datos, rubroId: kiosco.id });
+    const cambiada = await actualizarTienda(usuario, tienda.id, { rubroId: vivero.id });
+    expect(cambiada.rubro?.id).toBe(vivero.id);
+    const igual = await actualizarTienda(usuario, tienda.id, { nombre: "Otro nombre" });
+    expect(igual.rubro?.id).toBe(vivero.id);
+  });
+
+  it("un rubro inexistente da RUBRO_NO_ENCONTRADO", async () => {
+    await expect(crearTienda(usuario, { ...datos, rubroId: "no-existe" })).rejects.toMatchObject({
+      code: "RUBRO_NO_ENCONTRADO",
+    });
+    const tienda = await crearTienda(usuario, datos);
+    await expect(actualizarTienda(usuario, tienda.id, { rubroId: "no-existe" })).rejects.toMatchObject({
+      code: "RUBRO_NO_ENCONTRADO",
+    });
+  });
+});

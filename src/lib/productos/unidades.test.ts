@@ -1,4 +1,4 @@
-import { validarCantidad, esCantidadValida, formatearCantidad, pasoDe, redondearCantidad } from "./unidades";
+import { validarCantidad, esCantidadValida, formatearCantidad, pasoDe, redondearCantidad, pesoPorImporte } from "./unidades";
 
 describe("esCantidadValida / validarCantidad (03-productos.md, Cantidades y unidades)", () => {
   it("unidad: enteros ≥ 1", () => {
@@ -8,13 +8,13 @@ describe("esCantidadValida / validarCantidad (03-productos.md, Cantidades y unid
     expect(esCantidadValida("unidad", 0)).toBe(false);
   });
 
-  it("kg: múltiplos de 0,05 ≥ 0,05 (tolerante a errores de coma flotante)", () => {
+  it("kg: hasta gramos (3 decimales), ≥ 1 g (tolerante a errores de coma flotante)", () => {
     expect(esCantidadValida("kg", 0.25)).toBe(true);
     expect(esCantidadValida("kg", 0.1 + 0.2)).toBe(true); // 0.30000000000000004
     expect(esCantidadValida("kg", 1.5)).toBe(true);
-    expect(esCantidadValida("kg", 0.05)).toBe(true);
-    expect(esCantidadValida("kg", 0.03)).toBe(false);
-    expect(esCantidadValida("kg", 0.26)).toBe(false);
+    expect(esCantidadValida("kg", 0.208)).toBe(true); // $2.500 de queso a $12.000/kg
+    expect(esCantidadValida("kg", 0.001)).toBe(true);
+    expect(esCantidadValida("kg", 0.2085)).toBe(false); // medio gramo
     expect(esCantidadValida("kg", 0)).toBe(false);
   });
 
@@ -54,5 +54,25 @@ describe("pasoDe / redondearCantidad", () => {
   it("redondea al paso de la unidad", () => {
     expect(redondearCantidad("kg", 0.1 + 0.2)).toBe(0.3);
     expect(redondearCantidad("unidad", 2.0000001)).toBe(2);
+  });
+});
+
+describe("pesoPorImporte (03-productos.md, \"$ Importe\")", () => {
+  it("importe / precio por kg, redondeado a 1 g", () => {
+    expect(pesoPorImporte(3000, 12000)).toBe(0.25);
+    expect(pesoPorImporte(2500, 12000)).toBe(0.208);
+    expect(pesoPorImporte(1000, 3333)).toBe(0.3);
+  });
+  it("0 si el importe o el precio no son positivos", () => {
+    expect(pesoPorImporte(0, 12000)).toBe(0);
+    expect(pesoPorImporte(-5, 12000)).toBe(0);
+    expect(pesoPorImporte(3000, 0)).toBe(0);
+    expect(pesoPorImporte(Number.NaN, 12000)).toBe(0);
+  });
+  it("el resultado siempre es una cantidad válida en kg (o 0)", () => {
+    for (const importe of [1, 99, 1234.5, 5000]) {
+      const kg = pesoPorImporte(importe, 7777);
+      expect(kg === 0 || esCantidadValida("kg", kg)).toBe(true);
+    }
   });
 });

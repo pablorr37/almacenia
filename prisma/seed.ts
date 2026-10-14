@@ -18,7 +18,7 @@
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
 import { registrarUsuario } from "../src/lib/auth/auth";
-import { crearTienda, actualizarTienda, type HorarioTienda, type MedioPago } from "../src/lib/tiendas/tiendas";
+import { crearTienda, type HorarioTienda, type MedioPago } from "../src/lib/tiendas/tiendas";
 import { crearProducto } from "../src/lib/productos/productos";
 import { crearLista } from "../src/lib/listas/listas";
 import { mejorFotoDelBanco, guardarFotoWeb } from "../src/lib/fotos/banco";
@@ -31,7 +31,7 @@ import {
   type Rubro,
   type TiendaSeed,
 } from "../src/lib/seed/tiendas-seed";
-import type { Categoria } from "../src/generated-prisma/client";
+import { normalizarNombre } from "../src/lib/rubros-categorias/rubros-categorias";
 
 const DOMINIO_SEED = "seed.almacenia.test";
 
@@ -129,45 +129,81 @@ const NOMBRES_COMPRADORES = [
 // Productos por rubro (precios ARS estimados ago/sep 2026)
 // ---------------------------------------------------------------------------
 
-const PRODUCTOS_POR_RUBRO: Record<Rubro, Array<{ nombre: string; precio: number; stock: number }>> = {
+// Cada producto es una entrada del catálogo (06-catalogo.md): categoría + marca +
+// variante + contenido; el nombre se compone solo ("Fideos tallarín 500 g").
+interface ProductoSeed {
+  categoria: string;
+  marca?: string;
+  variante?: string;
+  contenido?: number;
+  unidadContenido?: "g" | "kg" | "ml" | "l" | "u";
+  unidad?: "unidad" | "kg"; // venta por peso (03-productos.md)
+  precio: number;
+  stock: number;
+}
+
+const PRODUCTOS_POR_RUBRO: Record<Rubro, ProductoSeed[]> = {
   almacen: [
-    { nombre: "Fideos tallarín 500g", precio: 2200, stock: 40 },
-    { nombre: "Aceite de girasol 1.5L", precio: 4200, stock: 25 },
-    { nombre: "Yerba mate 1kg", precio: 5800, stock: 30 },
-    { nombre: "Arroz 1kg", precio: 2100, stock: 35 },
-    { nombre: "Azúcar 1kg", precio: 1800, stock: 30 },
-    { nombre: "Harina 000 1kg", precio: 1500, stock: 40 },
+    { categoria: "Fideos", variante: "tallarín", contenido: 500, unidadContenido: "g", precio: 2200, stock: 40 },
+    { categoria: "Aceite", variante: "de girasol", contenido: 1.5, unidadContenido: "l", precio: 4200, stock: 25 },
+    { categoria: "Yerba mate", contenido: 1, unidadContenido: "kg", precio: 5800, stock: 30 },
+    { categoria: "Arroz", contenido: 1, unidadContenido: "kg", precio: 2100, stock: 35 },
+    { categoria: "Azúcar", contenido: 1, unidadContenido: "kg", precio: 1800, stock: 30 },
+    { categoria: "Harina", variante: "000", contenido: 1, unidadContenido: "kg", precio: 1500, stock: 40 },
   ],
   verduleria: [
-    { nombre: "Tomate perita (kg)", precio: 2800, stock: 20 },
-    { nombre: "Lechuga mantecosa (unidad)", precio: 900, stock: 15 },
-    { nombre: "Papa (kg)", precio: 1400, stock: 30 },
-    { nombre: "Banana (kg)", precio: 2200, stock: 25 },
-    { nombre: "Cebolla (kg)", precio: 1300, stock: 25 },
-    { nombre: "Zanahoria (kg)", precio: 1100, stock: 20 },
+    { categoria: "Tomate", variante: "perita", unidad: "kg", precio: 2800, stock: 20 },
+    { categoria: "Lechuga", variante: "mantecosa", precio: 900, stock: 15 },
+    { categoria: "Papa", unidad: "kg", precio: 1400, stock: 30 },
+    { categoria: "Banana", unidad: "kg", precio: 2200, stock: 25 },
+    { categoria: "Cebolla", unidad: "kg", precio: 1300, stock: 25 },
+    { categoria: "Zanahoria", unidad: "kg", precio: 1100, stock: 20 },
   ],
   kiosco: [
-    { nombre: "Coca-Cola 500ml", precio: 2400, stock: 30 },
-    { nombre: "Alfajor Jorgito", precio: 1600, stock: 40 },
-    { nombre: "Chicles Beldent", precio: 800, stock: 50 },
-    { nombre: "Papas fritas Lays", precio: 3200, stock: 20 },
-    { nombre: "Agua mineral 500ml", precio: 1200, stock: 40 },
-    { nombre: "Chocolate Águila", precio: 2900, stock: 25 },
+    { categoria: "Gaseosa", marca: "Coca-Cola", contenido: 500, unidadContenido: "ml", precio: 2400, stock: 30 },
+    { categoria: "Alfajor", marca: "Jorgito", precio: 1600, stock: 40 },
+    { categoria: "Chicles", marca: "Beldent", precio: 800, stock: 50 },
+    { categoria: "Papas fritas", marca: "Lays", precio: 3200, stock: 20 },
+    { categoria: "Agua mineral", contenido: 500, unidadContenido: "ml", precio: 1200, stock: 40 },
+    { categoria: "Chocolate", marca: "Águila", precio: 2900, stock: 25 },
   ],
   panaderia: [
-    { nombre: "Pan francés (kg)", precio: 3200, stock: 20 },
-    { nombre: "Facturas (docena)", precio: 6500, stock: 15 },
-    { nombre: "Torta de manzana", precio: 9800, stock: 5 },
-    { nombre: "Pan lactal", precio: 4200, stock: 15 },
-    { nombre: "Medialunas (docena)", precio: 7200, stock: 12 },
+    { categoria: "Pan", variante: "francés", unidad: "kg", precio: 3200, stock: 20 },
+    { categoria: "Facturas", contenido: 12, unidadContenido: "u", precio: 6500, stock: 15 },
+    { categoria: "Torta", variante: "de manzana", precio: 9800, stock: 5 },
+    { categoria: "Pan", variante: "lactal", precio: 4200, stock: 15 },
+    { categoria: "Medialunas", contenido: 12, unidadContenido: "u", precio: 7200, stock: 12 },
   ],
   fiambreria: [
-    { nombre: "Jamón cocido (kg)", precio: 14500, stock: 10 },
-    { nombre: "Queso cremoso (kg)", precio: 12800, stock: 10 },
-    { nombre: "Salame (kg)", precio: 16500, stock: 8 },
-    { nombre: "Mortadela (kg)", precio: 9800, stock: 10 },
+    { categoria: "Jamón", variante: "cocido", unidad: "kg", precio: 14500, stock: 10 },
+    { categoria: "Queso", variante: "cremoso", unidad: "kg", precio: 12800, stock: 10 },
+    { categoria: "Salame", unidad: "kg", precio: 16500, stock: 8 },
+    { categoria: "Mortadela", unidad: "kg", precio: 9800, stock: 10 },
   ],
 };
+
+// Rubro del seed → rubro de la tabla (17-rubros-categorias.md).
+const NOMBRE_RUBRO: Record<Rubro, string> = {
+  almacen: "Almacén",
+  verduleria: "Verdulería",
+  kiosco: "Kiosco",
+  panaderia: "Panadería",
+  fiambreria: "Fiambrería",
+};
+
+// Rubros y categorías los mantiene el admin; el seed solo se asegura de que existan
+// los que usa (idempotente por nombre normalizado).
+async function asegurarRubro(nombre: string): Promise<string> {
+  const nombreNormalizado = normalizarNombre(nombre);
+  return (await prisma.rubro.upsert({ where: { nombreNormalizado }, update: {}, create: { nombre, nombreNormalizado } })).id;
+}
+
+async function asegurarCategoria(nombre: string): Promise<string> {
+  const nombreNormalizado = normalizarNombre(nombre);
+  return (
+    await prisma.categoriaProducto.upsert({ where: { nombreNormalizado }, update: {}, create: { nombre, nombreNormalizado } })
+  ).id;
+}
 
 // ---------------------------------------------------------------------------
 // Limpieza (idempotencia): borra solo lo que este script haya creado antes,
@@ -251,12 +287,6 @@ async function definirTiendas(cantidad: number): Promise<TiendaSeed[]> {
 // Main
 // ---------------------------------------------------------------------------
 
-// El rubro del seed coincide 1:1 con los valores del enum Categoria compartido por
-// tiendas y catálogo (ver 02-tiendas.md / 06-catalogo.md).
-function aCategoria(rubro: Rubro): Categoria {
-  return rubro as Categoria;
-}
-
 async function main() {
   await limpiarSeedAnterior();
   await quitarFotosAlAzar();
@@ -271,17 +301,16 @@ async function main() {
   // Un nombre de fantasía que caiga en el filtro de groserías no se usa (crearTienda lo rechazaría).
   const definiciones = (await definirTiendas(entero("SEED_TIENDAS", 20))).filter((d) => !contieneGroseria(d.nombre));
   console.log(`Creando ${definiciones.length} tiendas...`);
-  // Catálogo compartido entre vendedores (06-catalogo.md): si la entrada ya existe
-  // (de una corrida anterior o de una tienda real) se reutiliza; si no, la primera
-  // tienda que carga el producto la da de alta y las siguientes la adoptan.
-  const nombresProductos = Object.values(PRODUCTOS_POR_RUBRO).flat().map((p) => p.nombre);
-  const existentes = await prisma.productoCatalogo.findMany({
-    where: { nombre: { in: nombresProductos } },
-    select: { id: true, nombre: true },
-    orderBy: { creadoEn: "asc" },
-  });
-  const catalogoIdPorNombre = new Map<string, string>();
-  for (const e of existentes) if (!catalogoIdPorNombre.has(e.nombre)) catalogoIdPorNombre.set(e.nombre, e.id);
+  // Catálogo compartido entre vendedores (06-catalogo.md): crearProducto con `nuevo`
+  // reutiliza la entrada si ya existe (regla "Sin duplicados"), así que la primera
+  // tienda la da de alta y las siguientes la adoptan.
+  const rubroIdPor = new Map<Rubro, string>();
+  for (const rubro of Object.keys(NOMBRE_RUBRO) as Rubro[]) rubroIdPor.set(rubro, await asegurarRubro(NOMBRE_RUBRO[rubro]));
+  const categoriaIdPor = new Map<string, string>();
+  for (const p of Object.values(PRODUCTOS_POR_RUBRO).flat()) {
+    if (!categoriaIdPor.has(p.categoria)) categoriaIdPor.set(p.categoria, await asegurarCategoria(p.categoria));
+  }
+  const catalogoIds = new Set<string>();
 
   for (const [i, def] of definiciones.entries()) {
     const email = `vendedor${i + 1}.${slug(def.vendedorNombre)}@${DOMINIO_SEED}`;
@@ -300,11 +329,9 @@ async function main() {
       mediosDePago: elegir(COMBOS_MEDIOS_DE_PAGO, i),
       horarios: es24hs(def, i) ? undefined : horarioDeTienda(i)(),
       abierto24hs: es24hs(def, i),
+      rubroId: rubroIdPor.get(def.rubro),
     });
 
-    // rubro no es parte del alta (CrearTiendaInput), se completa con el mismo
-    // PATCH que usaría el vendedor desde el panel (02-tiendas.md).
-    await actualizarTienda(vendedor, tiendaCreada.id, { rubro: aCategoria(def.rubro) });
     // ~30% de las tiendas nacen verificadas y un par en plan premium, para tener
     // datos de ejemplo de ambos casos en el panel admin (11-admin.md) y en los
     // tabs de destacados del storefront (10-planes.md) sin pasar por el flujo
@@ -318,36 +345,29 @@ async function main() {
     });
 
     const productos = PRODUCTOS_POR_RUBRO[def.rubro];
-    for (const producto of productos) {
-      const catalogoIdExistente = catalogoIdPorNombre.get(producto.nombre);
+    for (const [j, producto] of productos.entries()) {
       // Pequeña variación de precio por tienda para que el mismo producto de
       // catálogo se vea con precios distintos según dónde se compre (la regla de
       // negocio: catálogo comparte identidad, nunca precio).
-      const variacion = 1 + (((i * 7 + producto.nombre.length) % 5) - 2) * 0.03;
+      const variacion = 1 + (((i * 7 + producto.categoria.length + j) % 5) - 2) * 0.03;
       const precioTienda = Math.round((producto.precio * variacion) / 10) * 10;
-
-      const productoCreado = catalogoIdExistente
-        ? await crearProducto(vendedor, tiendaCreada.id, {
-            catalogoId: catalogoIdExistente,
-            precio: precioTienda,
-            stock: producto.stock,
-          })
-        : await crearProducto(vendedor, tiendaCreada.id, {
-            nuevo: {
-              nombre: producto.nombre,
-              categoria: aCategoria(def.rubro),
-              // Venta por peso (03-productos.md): lo que dice "(kg)" se vende por kg.
-              unidad: producto.nombre.includes("(kg)") ? "kg" : "unidad",
-            },
-            precio: precioTienda,
-            stock: producto.stock,
-          });
-
-      if (!catalogoIdExistente) catalogoIdPorNombre.set(producto.nombre, productoCreado.catalogoId);
+      const productoCreado = await crearProducto(vendedor, tiendaCreada.id, {
+        nuevo: {
+          categoriaId: categoriaIdPor.get(producto.categoria)!,
+          marca: producto.marca,
+          variante: producto.variante,
+          contenido: producto.contenido,
+          unidadContenido: producto.unidadContenido,
+          unidad: producto.unidad,
+        },
+        precio: precioTienda,
+        stock: producto.stock,
+      });
+      catalogoIds.add(productoCreado.catalogoId);
 
       // Algunos productos quedan en oferta, para poblar el tab "ofertas" del
       // storefront (03-productos.md).
-      if ((i + producto.nombre.length) % 6 === 0) {
+      if ((i + producto.categoria.length + j) % 6 === 0) {
         await prisma.producto.update({
           where: { id: productoCreado.id },
           data: { precioOferta: Math.round((precioTienda * 0.85) / 10) * 10 },
@@ -356,7 +376,7 @@ async function main() {
     }
   }
 
-  await fotosDelCatalogo([...catalogoIdPorNombre.values()]);
+  await fotosDelCatalogo([...catalogoIds]);
 
   // Lista de compras de ejemplo para el primer comprador (14-listas-compras.md),
   // con productos que venden varias tiendas para que "Buscar y comparar" tenga
@@ -365,10 +385,10 @@ async function main() {
     const comprador = await prisma.usuario.findFirstOrThrow({
       where: { email: { startsWith: "comprador1.", endsWith: `@${DOMINIO_SEED}` } },
     });
-    const paraLista = [...catalogoIdPorNombre.entries()].slice(0, 5);
+    const paraLista = [...catalogoIds].slice(0, 5);
     await crearLista(comprador, {
       nombre: "Compra de la semana",
-      items: paraLista.map(([, catalogoId], i) => ({ catalogoId, cantidad: (i % 3) + 1 })),
+      items: paraLista.map((catalogoId, i) => ({ catalogoId, cantidad: (i % 3) + 1 })),
     });
   }
 

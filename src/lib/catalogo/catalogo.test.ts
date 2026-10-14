@@ -6,7 +6,9 @@ import {
   crearProductoNuevoEnCatalogo,
   asignarFotoCatalogo,
   sumarAlCatalogo,
+  componerNombreCatalogo,
 } from "./catalogo";
+import { categoriaDePrueba, nuevoDePrueba } from "@/lib/rubros-categorias/test-helpers";
 import { registrarUsuario, type Usuario } from "@/lib/auth/auth";
 import { crearTienda } from "@/lib/tiendas/tiendas";
 
@@ -14,24 +16,93 @@ async function limpiar(ids: string[]) {
   await prisma.productoCatalogo.deleteMany({ where: { id: { in: ids } } });
 }
 
+describe("componerNombreCatalogo (06-catalogo.md)", () => {
+  it("une categoría, marca, variante y contenido formateado", () => {
+    expect(
+      componerNombreCatalogo({ categoria: "Arroz", marca: "Gallo Oro", variante: "largo fino", contenido: 1, unidadContenido: "kg" })
+    ).toBe("Arroz Gallo Oro largo fino 1 kg");
+    expect(componerNombreCatalogo({ categoria: "Gaseosa", marca: "Coca-Cola", contenido: 1.5, unidadContenido: "l" })).toBe(
+      "Gaseosa Coca-Cola 1,5 l"
+    );
+    expect(componerNombreCatalogo({ categoria: "Huevos", contenido: 6, unidadContenido: "u" })).toBe("Huevos 6 u");
+    expect(componerNombreCatalogo({ categoria: "Queso", variante: "cremoso" })).toBe("Queso cremoso");
+    expect(componerNombreCatalogo({ categoria: "Yerba", marca: "  Playadito  ", contenido: 500, unidadContenido: "g" })).toBe(
+      "Yerba Playadito 500 g"
+    );
+  });
+});
+
 describe("crearProductoNuevoEnCatalogo", () => {
   const creados: string[] = [];
   afterEach(() => limpiar(creados.splice(0)));
+  let arroz: string;
+  let queso: string;
+  beforeAll(async () => {
+    arroz = await categoriaDePrueba("Arroz test catálogo");
+    queso = await categoriaDePrueba("Queso test catálogo");
+  });
 
-  it("crea el producto de catálogo", async () => {
-    const p = await crearProductoNuevoEnCatalogo({ nombre: "Yerba Cruz de Malta 1kg" });
+  it("crea la entrada con nombre compuesto y la categoría", async () => {
+    const marca = `Gallo ${Date.now()}`;
+    const p = await crearProductoNuevoEnCatalogo({ categoriaId: arroz, marca, contenido: 1, unidadContenido: "kg" });
     creados.push(p.id);
+    expect(p).toMatchObject({
+      nombre: `Arroz test catálogo ${marca} 1 kg`,
+      marca,
+      categoria: { id: arroz, nombre: "Arroz test catálogo" },
+      contenido: 1,
+      unidadContenido: "kg",
+      unidad: "unidad",
+      codigoBarras: null,
+    });
+  });
 
-    expect(p.nombre).toBe("Yerba Cruz de Malta 1kg");
-    expect(p.codigoBarras).toBeNull();
+  it("no duplica: misma categoría, marca/variante normalizadas y contenido devuelven la misma entrada", async () => {
+    const marca = `Molinos ${Date.now()}`;
+    const a = await crearProductoNuevoEnCatalogo({ categoriaId: arroz, marca, variante: "Largo fino", contenido: 500, unidadContenido: "g" });
+    creados.push(a.id);
+    const b = await crearProductoNuevoEnCatalogo({
+      categoriaId: arroz,
+      marca: `  ${marca.toUpperCase()} `,
+      variante: "largo  FÍNO",
+      contenido: 500,
+      unidadContenido: "g",
+    });
+    expect(b.id).toBe(a.id);
+    const otroTamano = await crearProductoNuevoEnCatalogo({ categoriaId: arroz, marca, variante: "Largo fino", contenido: 1, unidadContenido: "kg" });
+    creados.push(otroTamano.id);
+    expect(otroTamano.id).not.toBe(a.id);
+  });
+
+  it("producto suelto por kg sin contenido; con contenido da CONTENIDO_INVALIDO", async () => {
+    const p = await crearProductoNuevoEnCatalogo({ categoriaId: queso, variante: `cremoso ${Date.now()}`, unidad: "kg" });
+    creados.push(p.id);
+    expect(p.unidad).toBe("kg");
+    await expect(
+      crearProductoNuevoEnCatalogo({ categoriaId: queso, unidad: "kg", contenido: 1, unidadContenido: "kg" })
+    ).rejects.toMatchObject({ code: "CONTENIDO_INVALIDO" });
+  });
+
+  it("valida categoría, contenido, largo y groserías", async () => {
+    await expect(crearProductoNuevoEnCatalogo({ categoriaId: "no-existe" })).rejects.toMatchObject({ code: "CATEGORIA_NO_ENCONTRADA" });
+    await expect(crearProductoNuevoEnCatalogo({ categoriaId: arroz, contenido: 1 })).rejects.toMatchObject({ code: "CONTENIDO_INVALIDO" });
+    await expect(
+      crearProductoNuevoEnCatalogo({ categoriaId: arroz, contenido: 0, unidadContenido: "g" })
+    ).rejects.toMatchObject({ code: "CONTENIDO_INVALIDO" });
+    await expect(
+      crearProductoNuevoEnCatalogo({ categoriaId: arroz, unidadContenido: "zz" as "g", contenido: 1 })
+    ).rejects.toMatchObject({ code: "CONTENIDO_INVALIDO" });
+    await expect(crearProductoNuevoEnCatalogo({ categoriaId: arroz, marca: "x".repeat(41) })).rejects.toMatchObject({ code: "TEXTO_INVALIDO" });
+    await expect(crearProductoNuevoEnCatalogo({ categoriaId: arroz, marca: "La puta" })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+    await expect(crearProductoNuevoEnCatalogo({ categoriaId: arroz, unidad: "litro" as "kg" })).rejects.toMatchObject({ code: "UNIDAD_INVALIDA" });
   });
 
   it("lanza CODIGO_BARRAS_DUPLICADO si el código ya existe", async () => {
-    const p = await crearProductoNuevoEnCatalogo({ nombre: "Arroz", codigoBarras: "7791234567890" });
+    const p = await crearProductoNuevoEnCatalogo({ categoriaId: arroz, marca: `Uno ${Date.now()}`, codigoBarras: "7791234567890" });
     creados.push(p.id);
 
     await expect(
-      crearProductoNuevoEnCatalogo({ nombre: "Arroz otra marca", codigoBarras: "7791234567890" })
+      crearProductoNuevoEnCatalogo({ categoriaId: arroz, marca: `Otra ${Date.now()}`, codigoBarras: "7791234567890" })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "CODIGO_BARRAS_DUPLICADO" });
   });
 });
@@ -46,16 +117,16 @@ describe("buscarEnCatalogo", () => {
     });
   });
 
-  it("encuentra por nombre parcial case-insensitive", async () => {
-    const p = await crearProductoNuevoEnCatalogo({ nombre: "Fideos Matarazzo 500g" });
+  it("encuentra por nombre compuesto, parcial y case-insensitive", async () => {
+    const p = await crearProductoNuevoEnCatalogo({ categoriaId: await categoriaDePrueba("Fideos test"), marca: "Matarazzo", contenido: 500, unidadContenido: "g" });
     creados.push(p.id);
 
-    const resultados = await buscarEnCatalogo({ q: "matarazzo" });
+    const resultados = await buscarEnCatalogo({ q: "fideos test matarazzo" });
     expect(resultados.some((r) => r.id === p.id)).toBe(true);
   });
 
   it("encuentra por código de barras exacto", async () => {
-    const p = await crearProductoNuevoEnCatalogo({ nombre: "Aceite", codigoBarras: "7790001112223" });
+    const p = await crearProductoNuevoEnCatalogo({ ...(await nuevoDePrueba("Aceite")), codigoBarras: "7790001112223" });
     creados.push(p.id);
 
     const resultados = await buscarEnCatalogo({ codigoBarras: "7790001112223" });
@@ -108,7 +179,9 @@ describe("asignarFotoCatalogo", () => {
   }
 
   async function entrada(imagenUrl: string | null = null) {
-    const p = await prisma.productoCatalogo.create({ data: { nombre: `Foto ${Date.now()}-${contador}`, imagenUrl } });
+    const p = await prisma.productoCatalogo.create({
+      data: { nombre: `Foto ${Date.now()}-${contador}`, imagenUrl, categoriaId: await categoriaDePrueba() },
+    });
     creados.push(p.id);
     return p;
   }
@@ -155,6 +228,10 @@ describe("sumarAlCatalogo (alta desde una lista de compras)", () => {
   const usuarios: string[] = [];
   const creados: string[] = [];
   let n = 0;
+  let fernet: string;
+  beforeAll(async () => {
+    fernet = await categoriaDePrueba("Fernet test");
+  });
   afterEach(async () => {
     await prisma.productoCatalogo.deleteMany({ where: { id: { in: creados.splice(0) } } });
     await prisma.usuario.deleteMany({ where: { id: { in: usuarios.splice(0) } } });
@@ -165,38 +242,38 @@ describe("sumarAlCatalogo (alta desde una lista de compras)", () => {
     usuarios.push(u.id);
     return u;
   }
-  const nombreUnico = () => `Fernet Branca 750ml ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const marcaUnica = () => `Branca ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-  it("crea la entrada con creadoPorId y la unidad indicada", async () => {
+  it("crea la entrada con creadoPorId, categoría y nombre compuesto", async () => {
     const u = await comprador();
-    const nombre = nombreUnico();
-    const { producto, creado } = await sumarAlCatalogo(u, { nombre: `  ${nombre} `, unidad: "unidad", categoria: "almacen" });
+    const marca = marcaUnica();
+    const { producto, creado } = await sumarAlCatalogo(u, { categoriaId: fernet, marca, contenido: 750, unidadContenido: "ml" });
     creados.push(producto.id);
     expect(creado).toBe(true);
-    expect(producto).toMatchObject({ nombre, unidad: "unidad", categoria: "almacen" });
+    expect(producto).toMatchObject({ nombre: `Fernet test ${marca} 750 ml`, unidad: "unidad", categoria: { id: fernet } });
     expect((await prisma.productoCatalogo.findUniqueOrThrow({ where: { id: producto.id } })).creadoPorId).toBe(u.id);
   });
 
-  it("no duplica: el mismo nombre (sin tildes ni mayúsculas) devuelve la entrada existente", async () => {
+  it("no duplica: la misma entrada (sin tildes ni mayúsculas) devuelve la existente", async () => {
     const u = await comprador();
-    const base = `Dulce de leche ${Date.now()}`;
-    const primero = await sumarAlCatalogo(u, { nombre: base });
+    const marca = `Dulce ${Date.now()}`;
+    const primero = await sumarAlCatalogo(u, { categoriaId: fernet, marca });
     creados.push(primero.producto.id);
-    const segundo = await sumarAlCatalogo(u, { nombre: base.toUpperCase().replace("DULCE", "DÚLCE") });
+    const segundo = await sumarAlCatalogo(u, { categoriaId: fernet, marca: marca.toUpperCase().replace("DULCE", "DÚLCE") });
     expect(segundo).toEqual({ producto: primero.producto, creado: false });
   });
 
-  it("rechaza groserías, nombres inválidos y más de 20 altas por día", async () => {
+  it("rechaza groserías, datos inválidos y más de 20 altas por día", async () => {
     const u = await comprador();
-    await expect(sumarAlCatalogo(u, { nombre: "pelotudo" })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
-    await expect(sumarAlCatalogo(u, { nombre: "Yerba", marca: "La puta" })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
-    await expect(sumarAlCatalogo(u, { nombre: "x" })).rejects.toMatchObject({ code: "NOMBRE_CATALOGO_INVALIDO" });
-    await expect(sumarAlCatalogo(u, { nombre: "Yerba", unidad: "litro" as "kg" })).rejects.toMatchObject({ code: "UNIDAD_INVALIDA" });
+    await expect(sumarAlCatalogo(u, { categoriaId: fernet, variante: "pelotudo" })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+    await expect(sumarAlCatalogo(u, { categoriaId: fernet, marca: "La puta" })).rejects.toMatchObject({ code: "TEXTO_NO_PERMITIDO" });
+    await expect(sumarAlCatalogo(u, { categoriaId: "" })).rejects.toMatchObject({ code: "CATEGORIA_NO_ENCONTRADA" });
+    await expect(sumarAlCatalogo(u, { categoriaId: fernet, unidad: "litro" as "kg" })).rejects.toMatchObject({ code: "UNIDAD_INVALIDA" });
 
-    const datos = Array.from({ length: 20 }, (_, i) => ({ nombre: `Alta ${Date.now()} ${i}`, creadoPorId: u.id }));
+    const datos = Array.from({ length: 20 }, (_, i) => ({ nombre: `Alta ${Date.now()} ${i}`, creadoPorId: u.id, categoriaId: fernet }));
     await prisma.productoCatalogo.createMany({ data: datos });
     const ids = await prisma.productoCatalogo.findMany({ where: { creadoPorId: u.id }, select: { id: true } });
     creados.push(...ids.map((x) => x.id));
-    await expect(sumarAlCatalogo(u, { nombre: nombreUnico() })).rejects.toMatchObject({ code: "LIMITE_ALTAS_CATALOGO" });
+    await expect(sumarAlCatalogo(u, { categoriaId: fernet, marca: marcaUnica() })).rejects.toMatchObject({ code: "LIMITE_ALTAS_CATALOGO" });
   });
 });

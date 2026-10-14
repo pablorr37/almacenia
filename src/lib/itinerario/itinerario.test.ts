@@ -5,6 +5,7 @@ import { crearTienda, type Tienda } from "@/lib/tiendas/tiendas";
 import { crearProducto } from "@/lib/productos/productos";
 import { crearLista } from "@/lib/listas/listas";
 import { compararItems, compararLista } from "./itinerario";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 // Zona inventada en el medio del océano para no chocar con tiendas de otros tests/seed.
 const LAT = -40.123;
@@ -41,9 +42,9 @@ describe("compararItems / compararLista (15-itinerario.md)", () => {
     comprador = await registrarUsuario({ email: `test-itinerario-c-${Date.now()}@almacenia.test`, password: "password123", nombre: "C" });
     usuarios.push(comprador.id);
 
-    const pYerbaA = await crearProducto(a.vendedor, a.tienda.id, { nuevo: { nombre: "Yerba itinerario" }, precio: 100, stock: 10 });
+    const pYerbaA = await crearProducto(a.vendedor, a.tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Yerba itinerario" }, precio: 100, stock: 10 });
     yerba = pYerbaA.catalogoId;
-    const pFideosA = await crearProducto(a.vendedor, a.tienda.id, { nuevo: { nombre: "Fideos itinerario" }, precio: 50, stock: 10 });
+    const pFideosA = await crearProducto(a.vendedor, a.tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Fideos itinerario" }, precio: 50, stock: 10 });
     fideos = pFideosA.catalogoId;
     // B: yerba en oferta más barata; fideos sin stock suficiente para 2.
     const pYerbaB = await crearProducto(b.vendedor, b.tienda.id, { catalogoId: yerba, precio: 90, stock: 10 });
@@ -70,7 +71,7 @@ describe("compararItems / compararLista (15-itinerario.md)", () => {
     const r = await compararItems({ items: ITEMS(), lat: LAT, lon: LON, radioKm: 5 });
 
     const filaYerba = r.comparativa.find((f) => f.catalogoId === yerba)!;
-    expect(filaYerba.nombre).toBe("Yerba itinerario");
+    expect(filaYerba.nombre).toBe("Prueba Yerba itinerario");
     expect(filaYerba.ofertas[0]).toMatchObject({ tiendaId: b.tienda.id, precioUnitario: 70 });
 
     // Fideos de B tiene stock 1 < 2: no cuenta como oferta.
@@ -111,7 +112,7 @@ describe("compararItems / compararLista (15-itinerario.md)", () => {
     });
 
     it("solo_cerradas: con soloAbiertas, un producto que solo vende una tienda cerrada", async () => {
-      const queso = await crearProducto(b.vendedor, b.tienda.id, { nuevo: { nombre: "Queso itinerario" }, precio: 10, stock: 5 });
+      const queso = await crearProducto(b.vendedor, b.tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Queso itinerario" }, precio: 10, stock: 5 });
       extras.push(queso.catalogoId);
       const r = await compararItems({
         items: [{ catalogoId: yerba, cantidad: 1 }, { catalogoId: queso.catalogoId, cantidad: 1 }],
@@ -125,7 +126,7 @@ describe("compararItems / compararLista (15-itinerario.md)", () => {
 
     it("fuera_de_radio: lo vende una tienda a ~11 km y el radio es 5 km", async () => {
       const lejos = await vendedorConTienda("Fiambrería Lejos", LAT + 0.1, abiertaSiempre);
-      const salame = await crearProducto(lejos.vendedor, lejos.tienda.id, { nuevo: { nombre: "Salame itinerario" }, precio: 10, stock: 5 });
+      const salame = await crearProducto(lejos.vendedor, lejos.tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Salame itinerario" }, precio: 10, stock: 5 });
       extras.push(salame.catalogoId);
       const r = await compararItems({
         items: [{ catalogoId: yerba, cantidad: 1 }, { catalogoId: salame.catalogoId, cantidad: 1 }],
@@ -139,7 +140,7 @@ describe("compararItems / compararLista (15-itinerario.md)", () => {
     });
 
     it("sin_oferta si nadie lo publica", async () => {
-      const cafe = await prisma.productoCatalogo.create({ data: { nombre: "Café itinerario" } });
+      const cafe = await prisma.productoCatalogo.create({ data: { categoriaId: await categoriaDePrueba(), nombre: "Café itinerario" } });
       extras.push(cafe.id);
       const r = await compararItems({ items: [{ catalogoId: cafe.id, cantidad: 1 }], lat: LAT, lon: LON });
       expect(r.motivos[cafe.id]).toEqual({ tipo: "sin_oferta" });

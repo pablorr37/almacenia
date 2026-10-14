@@ -85,7 +85,7 @@ model Tienda {
   activa         Boolean   @default(true)
   desactivadaEn  DateTime? @map("desactivada_en")
   imagenUrl      String?   @map("imagen_url")
-  rubro          Categoria?
+  rubroId        String?   @map("rubro_id")
   verificada     Boolean   @default(false)
   plan           Plan      @default(free)
   mediosDePago   MedioPago[] @default([]) @map("medios_de_pago")
@@ -94,6 +94,7 @@ model Tienda {
   actualizadaEn  DateTime  @default(now()) @updatedAt @map("actualizada_en")
 
   vendedor               Usuario                 @relation(fields: [vendedorId], references: [id])
+  rubro                  Rubro?                  @relation(fields: [rubroId], references: [id])
   productos              Producto[]
   pedidos                Pedido[]
   ventas                 Venta[]
@@ -119,18 +120,32 @@ enum MedioPago {
   @@map("medio_pago")
 }
 
-enum Categoria {
-  almacen
-  bebidas
-  lacteos
-  panaderia
-  limpieza
-  kiosco
-  verduleria
-  fiambreria
-  otros
+// ---------------------------------------------------------------------------
+// 17-rubros-categorias.md — listas que mantiene el admin
+// ---------------------------------------------------------------------------
 
-  @@map("categoria")
+model Rubro {
+  id                String   @id @default(uuid())
+  nombre            String
+  nombreNormalizado String   @unique @map("nombre_normalizado")
+  orden             Int      @default(0)
+  creadoEn          DateTime @default(now()) @map("creado_en")
+
+  tiendas Tienda[]
+
+  @@map("rubros")
+}
+
+model CategoriaProducto {
+  id                String   @id @default(uuid())
+  nombre            String
+  nombreNormalizado String   @unique @map("nombre_normalizado")
+  creadaEn          DateTime @default(now()) @map("creada_en")
+
+  entradasCatalogo ProductoCatalogo[]
+  productos        Producto[]
+
+  @@map("categorias_producto")
 }
 
 enum Plan {
@@ -186,7 +201,10 @@ model ProductoCatalogo {
   nombre       String
   descripcion  String?
   marca        String?
-  categoria    Categoria?
+  categoriaId  String    @map("categoria_id")
+  variante     String?
+  contenido    Decimal?  @db.Decimal(10, 3)
+  unidadContenido UnidadContenido? @map("unidad_contenido")
   codigoBarras String?   @unique @map("codigo_barras")
   imagenUrl    String?   @map("imagen_url")
   unidad       UnidadMedida @default(unidad)
@@ -195,10 +213,12 @@ model ProductoCatalogo {
   creadoPorId  String?   @map("creado_por_id")
 
   creadoPor   Usuario?   @relation("CatalogoCargado", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  categoria   CategoriaProducto @relation(fields: [categoriaId], references: [id])
   productos   Producto[]
   itemsListas ItemListaCompras[]
 
   @@index([nombre])
+  @@index([categoriaId])
   @@index([creadoPorId, creadoEn])
   @@map("productos_catalogo")
 }
@@ -211,6 +231,17 @@ enum UnidadMedida {
   @@map("unidad_medida")
 }
 
+// Unidad del contenido del envase (06-catalogo.md): "1 kg", "500 g", "1,5 l", "6 u".
+enum UnidadContenido {
+  g
+  kg
+  ml
+  l
+  u
+
+  @@map("unidad_contenido")
+}
+
 // ---------------------------------------------------------------------------
 // 03-productos.md
 // ---------------------------------------------------------------------------
@@ -221,25 +252,27 @@ model Producto {
   catalogoId    String   @map("catalogo_id")
   nombre        String
   descripcion   String?
-  categoria     Categoria?
+  categoriaId   String?  @map("categoria_id")
   imagenUrl     String?  @map("imagen_url")
   precio        Decimal  @db.Decimal(12, 2)
   precioOferta  Decimal? @map("precio_oferta") @db.Decimal(12, 2)
   destacado     Boolean  @default(false)
   stock         Decimal  @default(0) @db.Decimal(10, 3)
   disponible    Boolean  @default(true)
+  favorito      Boolean  @default(false)
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
 
-  tienda      Tienda           @relation(fields: [tiendaId], references: [id])
-  catalogo    ProductoCatalogo @relation(fields: [catalogoId], references: [id])
+  tienda      Tienda             @relation(fields: [tiendaId], references: [id])
+  catalogo    ProductoCatalogo   @relation(fields: [catalogoId], references: [id])
+  categoria   CategoriaProducto? @relation(fields: [categoriaId], references: [id])
   itemsPedido ItemPedido[]
   itemsVenta  ItemVenta[]
   resenas     Resena[]
 
   @@index([tiendaId])
   @@index([catalogoId])
-  @@index([categoria])
+  @@index([categoriaId])
   @@index([catalogoId, disponible])
   @@map("productos")
 }

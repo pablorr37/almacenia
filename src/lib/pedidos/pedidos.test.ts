@@ -12,6 +12,7 @@ import {
   type EstadoPedido,
   type AccionPedido,
 } from "./pedidos";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let contador = 0;
 async function crearUsuarioDePrueba(nombre = "Usuario de prueba"): Promise<Usuario> {
@@ -34,7 +35,7 @@ async function crearVendedorConTiendaYProducto(
     lon: -58.3816,
   });
   const producto = await crearProducto(vendedor, tienda.id, {
-    nuevo: { nombre: "Producto" },
+    nuevo: { categoriaId: await categoriaDePrueba(), variante: "Producto" },
     precio: 100,
     stock,
   });
@@ -126,13 +127,13 @@ describe("crearPedido", () => {
     expect(pedido.total).toBe(25);
   });
 
-  it("CANTIDAD_INVALIDA: fracción en producto por unidad o menos de 50 g en uno por kg", async () => {
+  it("CANTIDAD_INVALIDA: fracción en producto por unidad o fracción de gramo en uno por kg", async () => {
     await expect(
       crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 1.5 }] })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "CANTIDAD_INVALIDA" });
     await prisma.productoCatalogo.update({ where: { id: producto.catalogoId }, data: { unidad: "kg" } });
     await expect(
-      crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 0.03 }] })
+      crearPedido(comprador, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 0.0305 }] })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "CANTIDAD_INVALIDA" });
   });
 
@@ -178,7 +179,7 @@ describe("crearPedido", () => {
 
   it("lanza PRODUCTO_NO_COMPRABLE si el producto no está disponible", async () => {
     const noDisponible = await crearProducto(vendedor, tienda.id, {
-      nuevo: { nombre: "Pausado" },
+      nuevo: { categoriaId: await categoriaDePrueba(), variante: "Pausado" },
       precio: 50,
       stock: 5,
     });
@@ -237,13 +238,13 @@ describe("obtenerPedido", () => {
     expect(visto.comprador).toEqual({ nombre: "Comprador" });
     expect(JSON.stringify(visto)).not.toContain(comprador.email);
     expect(visto.creadoEn).toEqual(expect.any(String));
-    expect(visto.items[0]).toMatchObject({ nombre: "Producto", unidad: "unidad", cantidad: 2, precioUnitario: 100 });
+    expect(visto.items[0]).toMatchObject({ nombre: "Prueba Producto", unidad: "unidad", cantidad: 2, precioUnitario: 100 });
     expect(visto.nota).toBe("Sin bolsa");
 
     // El listado por tienda también trae el detalle.
     const lista = await listarPedidos(vendedor, { tiendaId: tienda.id });
     expect(lista.data[0]).toMatchObject({ comprador: { nombre: "Comprador" }, total: 200 });
-    expect(lista.data[0].items[0].nombre).toBe("Producto");
+    expect(lista.data[0].items[0].nombre).toBe("Prueba Producto");
   });
 
   it("el vendedor dueño de la tienda puede verlo", async () => {

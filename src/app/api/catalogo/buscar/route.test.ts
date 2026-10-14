@@ -4,6 +4,7 @@ import { registrarUsuario, type Usuario } from "@/lib/auth/auth";
 import { crearProductoNuevoEnCatalogo } from "@/lib/catalogo/catalogo";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { GET } from "./route";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 vi.mock("@/lib/auth/session", () => ({ obtenerUsuarioActual: vi.fn() }));
 const obtenerUsuarioActualMock = vi.mocked(obtenerUsuarioActual);
@@ -26,7 +27,7 @@ describe("GET /api/catalogo/buscar", () => {
       password: "password123",
       nombre: "Comprador",
     });
-    const p = await crearProductoNuevoEnCatalogo({ nombre: "Fideos Test API" });
+    const p = await crearProductoNuevoEnCatalogo({ categoriaId: await categoriaDePrueba(), variante: "Fideos Test API" });
     catalogoIds.push(p.id);
   });
 
@@ -47,7 +48,7 @@ describe("GET /api/catalogo/buscar", () => {
     const res = await GET(new NextRequest("http://localhost/api/catalogo/buscar?q=fideos test api"));
     const body = await res.json();
     expect(res.status).toBe(200);
-    expect(body.data.map((p: { nombre: string }) => p.nombre)).toContain("Fideos Test API");
+    expect(body.data.map((p: { nombre: string }) => p.nombre)).toContain("Prueba Fideos Test API");
   });
 
   it("200 devuelve coincidencias por nombre", async () => {

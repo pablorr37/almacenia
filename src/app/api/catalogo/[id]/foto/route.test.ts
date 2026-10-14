@@ -4,6 +4,7 @@ import { registrarUsuario, type Usuario } from "@/lib/auth/auth";
 import { crearTienda } from "@/lib/tiendas/tiendas";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { PATCH } from "./route";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 vi.mock("@/lib/auth/session", () => ({ obtenerUsuarioActual: vi.fn() }));
 const obtenerUsuarioActualMock = vi.mocked(obtenerUsuarioActual);
@@ -25,7 +26,7 @@ describe("PATCH /api/catalogo/:id/foto", () => {
     const tienda = await crearTienda(vendedor, { nombre: "T", direccion: "D", lat: -31.5, lon: -68.5 });
     await prisma.tienda.update({ where: { id: tienda.id }, data: { plan: "premium" } });
     vendedor = { ...vendedor, esVendedor: true };
-    catalogoId = (await prisma.productoCatalogo.create({ data: { nombre: "Sin foto" } })).id;
+    catalogoId = (await prisma.productoCatalogo.create({ data: { categoriaId: await categoriaDePrueba(), nombre: "Sin foto" } })).id;
   });
 
   afterEach(async () => {

@@ -22,6 +22,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       destacado: body.destacado,
       stock: body.stock,
       disponible: body.disponible,
+      favorito: body.favorito,
     });
     return respuestaExitosa(producto);
   } catch (error) {

@@ -23,10 +23,17 @@ describe("POST /api/catalogo", () => {
 
     vi.mocked(obtenerUsuarioActual).mockResolvedValue(u);
     vi.mocked(sumarAlCatalogo).mockResolvedValue({ producto: { id: "c1" } as never, creado: true });
-    const res = await POST(req({ nombre: "Fernet", unidad: "unidad" }));
+    const res = await POST(req({ categoriaId: "cat", marca: "Branca", contenido: 750, unidadContenido: "ml", unidad: "unidad" }));
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ data: { id: "c1" }, creado: true });
-    expect(sumarAlCatalogo).toHaveBeenCalledWith(u, { nombre: "Fernet", marca: undefined, categoria: undefined, unidad: "unidad" });
+    expect(sumarAlCatalogo).toHaveBeenCalledWith(u, {
+      categoriaId: "cat",
+      marca: "Branca",
+      variante: undefined,
+      contenido: 750,
+      unidadContenido: "ml",
+      unidad: "unidad",
+    });
 
     vi.mocked(sumarAlCatalogo).mockResolvedValue({ producto: { id: "c1" } as never, creado: false });
     expect((await POST(req({ nombre: "Fernet" }))).status).toBe(200);

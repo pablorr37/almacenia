@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, type Usuario } from "@/lib/auth/auth";
 import { AppError } from "@/lib/errors";
 import { imagenEfectiva, type Producto } from "@/lib/productos/productos";
-import type { Categoria } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAXIMO = 100;
@@ -14,7 +13,7 @@ export interface ProductoAdmin extends Producto {
 
 export interface ListarProductosAdminInput {
   tiendaId?: string;
-  categoria?: Categoria;
+  categoriaId?: string;
   q?: string;
   page?: number;
   pageSize?: number;
@@ -33,7 +32,7 @@ export async function listarProductosAdmin(
 
   const where = {
     ...(input.tiendaId ? { tiendaId: input.tiendaId } : {}),
-    ...(input.categoria ? { categoria: input.categoria } : {}),
+    ...(input.categoriaId ? { categoriaId: input.categoriaId } : {}),
     ...(input.q
       ? { OR: [{ nombre: { contains: input.q, mode: "insensitive" as const } }, { descripcion: { contains: input.q, mode: "insensitive" as const } }] }
       : {}),
@@ -45,6 +44,7 @@ export async function listarProductosAdmin(
       include: {
         tienda: { select: { nombre: true, plan: true, vendedor: { select: { nombre: true } } } },
         catalogo: { select: { imagenUrl: true, unidad: true } },
+        categoria: { select: { id: true, nombre: true } },
       },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -60,6 +60,7 @@ export async function listarProductosAdmin(
     nombre: p.nombre,
     descripcion: p.descripcion,
     categoria: p.categoria,
+    favorito: p.favorito,
     imagenUrl: p.imagenUrl,
     imagenCatalogoUrl: p.catalogo.imagenUrl,
     imagenEfectiva: imagenEfectiva(p.tienda, p, p.catalogo),

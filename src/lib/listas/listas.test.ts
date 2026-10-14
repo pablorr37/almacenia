@@ -9,6 +9,7 @@ import {
   actualizarLista,
   eliminarLista,
 } from "./listas";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 describe("normalizarItems", () => {
   it("suma cantidades de catalogoId repetidos", () => {
@@ -47,8 +48,8 @@ describe("listas de compras (14-listas-compras.md)", () => {
   beforeEach(async () => {
     comprador = await registrarUsuario({ email: `test-listas-c-${Date.now()}@almacenia.test`, password: "password123", nombre: "C" });
     otro = await registrarUsuario({ email: `test-listas-o-${Date.now()}@almacenia.test`, password: "password123", nombre: "O" });
-    yerba = (await prisma.productoCatalogo.create({ data: { nombre: "Yerba test listas", marca: "Playadito" } })).id;
-    fideos = (await prisma.productoCatalogo.create({ data: { nombre: "Fideos test listas" } })).id;
+    yerba = (await prisma.productoCatalogo.create({ data: { categoriaId: await categoriaDePrueba(), nombre: "Yerba test listas", marca: "Playadito" } })).id;
+    fideos = (await prisma.productoCatalogo.create({ data: { categoriaId: await categoriaDePrueba(), nombre: "Fideos test listas" } })).id;
   });
 
   afterEach(async () => {
@@ -78,9 +79,9 @@ describe("listas de compras (14-listas-compras.md)", () => {
     await expect(
       crearLista(comprador, { nombre: "X", items: [{ catalogoId: yerba, cantidad: 1.5 }] })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "CANTIDAD_INVALIDA" });
-    await expect(
-      crearLista(comprador, { nombre: "X", items: [{ catalogoId: fideos, cantidad: 0.03 }] })
-    ).rejects.toMatchObject<Partial<AppError>>({ code: "CANTIDAD_INVALIDA" });
+    // En kg se admiten gramos (03-productos.md); la lista redondea a 1 g.
+    const enGramos = await crearLista(comprador, { nombre: "Gramos", items: [{ catalogoId: fideos, cantidad: 0.2085 }] });
+    expect(enGramos.items[0].cantidad).toBe(0.209);
   });
 
   it("NOMBRE_LISTA_INVALIDO vacío o de más de 80 caracteres", async () => {

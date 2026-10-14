@@ -11,9 +11,11 @@ export async function POST(request: NextRequest) {
     if (!usuario) throw new AppError("NO_AUTENTICADO", "Necesitás iniciar sesión.");
     const body = await request.json().catch(() => ({}));
     const { producto, creado } = await sumarAlCatalogo(usuario, {
-      nombre: body.nombre,
-      marca: typeof body.marca === "string" ? body.marca : undefined,
-      categoria: body.categoria ?? undefined,
+      categoriaId: body.categoriaId,
+      marca: body.marca ?? undefined,
+      variante: body.variante ?? undefined,
+      contenido: body.contenido ?? undefined,
+      unidadContenido: body.unidadContenido ?? undefined,
       unidad: body.unidad ?? undefined,
     });
     return NextResponse.json({ data: producto, creado }, { status: creado ? 201 : 200 });

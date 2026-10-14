@@ -5,6 +5,7 @@ import { crearTienda, type Tienda } from "@/lib/tiendas/tiendas";
 import { crearProducto, type Producto } from "@/lib/productos/productos";
 import { crearVentaPresencial } from "@/lib/ventas/ventas";
 import { crearResena, listarResenas, ratingPromedioProducto } from "./resenas";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let contador = 0;
 async function armarEscenario(): Promise<{
@@ -31,7 +32,7 @@ async function armarEscenario(): Promise<{
     lon: -58.3816,
   });
   const producto = await crearProducto(vendedor, tienda.id, {
-    nuevo: { nombre: `Producto ${contador}` },
+    nuevo: { categoriaId: await categoriaDePrueba(), variante: `Producto ${contador}` },
     precio: 100,
     stock: 10,
   });

@@ -5,6 +5,7 @@ import { crearTienda, type Tienda } from "@/lib/tiendas/tiendas";
 import { crearProducto, type Producto } from "@/lib/productos/productos";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { POST, GET } from "./route";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 vi.mock("@/lib/auth/session", () => ({ obtenerUsuarioActual: vi.fn() }));
 const obtenerUsuarioActualMock = vi.mocked(obtenerUsuarioActual);
@@ -36,7 +37,7 @@ describe("/api/tiendas/[tiendaId]/ventas", () => {
       lat: -34.6037,
       lon: -58.3816,
     });
-    producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Producto" }, precio: 100, stock: 10 });
+    producto = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Producto" }, precio: 100, stock: 10 });
   });
 
   afterEach(async () => {

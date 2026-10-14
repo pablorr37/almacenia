@@ -10,8 +10,17 @@ import {
   eliminarProducto,
   debitarStock,
   imagenEfectiva,
+  listarParaVenta,
   type Producto,
 } from "./productos";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
+
+// Categoría de prueba compartida (17-rubros-categorias.md): las entradas nuevas del
+// catálogo se llaman "Prueba <variante>".
+let CAT: string;
+beforeAll(async () => {
+  CAT = await categoriaDePrueba();
+});
 
 let contador = 0;
 async function crearVendedorConTienda(): Promise<{ vendedor: Usuario; tienda: Tienda }> {
@@ -38,7 +47,7 @@ let contadorNombre = 0;
 function inputNuevo(overrides: { precio?: number; stock?: number; nombre?: string } = {}) {
   contadorNombre += 1;
   return {
-    nuevo: { nombre: overrides.nombre ?? `Producto de prueba ${contadorNombre}` },
+    nuevo: { categoriaId: CAT, variante: overrides.nombre ?? `Producto de prueba ${contadorNombre}` },
     precio: overrides.precio ?? 1,
     stock: overrides.stock ?? 1,
   };
@@ -65,6 +74,7 @@ describe("esComprable", () => {
     nombre: "Producto",
     descripcion: null,
     categoria: null,
+    favorito: false,
     imagenUrl: null,
     imagenCatalogoUrl: null,
     imagenEfectiva: null,
@@ -107,13 +117,15 @@ describe("crearProducto", () => {
 
   it("crea el producto con disponible=true por defecto, dando de alta en el catálogo", async () => {
     const producto = await crearProducto(vendedor, tienda.id, {
-      nuevo: { nombre: "Lechuga" },
+      nuevo: { categoriaId: CAT, variante: "Lechuga" },
       precio: 250.5,
       stock: 10,
     });
 
     expect(producto.tiendaId).toBe(tienda.id);
-    expect(producto.nombre).toBe("Lechuga");
+    expect(producto.nombre).toBe("Prueba Lechuga");
+    expect(producto.categoria).toEqual({ id: CAT, nombre: "Prueba" });
+    expect(producto.favorito).toBe(false);
     expect(producto.precio).toBe(250.5);
     expect(producto.stock).toBe(10);
     expect(producto.disponible).toBe(true);
@@ -121,7 +133,7 @@ describe("crearProducto", () => {
   });
 
   it("crea el producto adoptando un catalogoId existente", async () => {
-    const primero = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Fideos" }, precio: 5, stock: 1 });
+    const primero = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: CAT, variante: "Fideos" }, precio: 5, stock: 1 });
 
     const otraTienda = await crearTienda(otro, {
       nombre: "Otra tienda",
@@ -136,7 +148,7 @@ describe("crearProducto", () => {
     });
 
     expect(adoptado.catalogoId).toBe(primero.catalogoId);
-    expect(adoptado.nombre).toBe("Fideos");
+    expect(adoptado.nombre).toBe("Prueba Fideos");
     expect(adoptado.precio).toBe(6);
   });
 
@@ -203,7 +215,7 @@ describe("listarProductos", () => {
     const resultado = await listarProductos({ tiendaId: tienda.id, soloDisponibles: true });
 
     expect(resultado.data).toHaveLength(1);
-    expect(resultado.data[0].nombre).toBe("Disponible");
+    expect(resultado.data[0].nombre).toBe("Prueba Disponible");
   });
 
   it("pagina correctamente", async () => {
@@ -300,7 +312,7 @@ describe("actualizarProducto", () => {
 
     expect(actualizado.precio).toBe(150);
     expect(actualizado.stock).toBe(20);
-    expect(actualizado.nombre).toBe("Original");
+    expect(actualizado.nombre).toBe("Prueba Original");
   });
 
   it("lanza NO_ES_DUENO_DE_TIENDA si no es el dueño", async () => {
@@ -426,7 +438,7 @@ describe("fotos de producto (catálogo compartido + personalizadas premium)", ()
   async function catalogoConFoto() {
     contadorNombre += 1;
     return prisma.productoCatalogo.create({
-      data: { nombre: `Con foto ${contadorNombre}`, imagenUrl: FOTO_CATALOGO },
+      data: { nombre: `Con foto ${contadorNombre}`, imagenUrl: FOTO_CATALOGO, categoriaId: CAT },
     });
   }
 
@@ -451,7 +463,7 @@ describe("fotos de producto (catálogo compartido + personalizadas premium)", ()
 
   it("tienda free no puede dar de alta un producto nuevo con foto de catálogo (FOTOS_SOLO_PREMIUM)", async () => {
     await expect(
-      crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Con foto", imagenUrl: FOTO_CATALOGO }, precio: 10, stock: 1 })
+      crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: CAT, variante: "Con foto", imagenUrl: FOTO_CATALOGO }, precio: 10, stock: 1 })
     ).rejects.toMatchObject<Partial<AppError>>({ code: "FOTOS_SOLO_PREMIUM" });
   });
 
@@ -486,5 +498,99 @@ describe("fotos de producto (catálogo compartido + personalizadas premium)", ()
     expect(listado.data[0].id).toBe(producto.id);
     expect(listado.data[0].imagenUrl).toBe(FOTO_PROPIA);
     expect(listado.data[0].imagenEfectiva).toBe(FOTO_CATALOGO);
+  });
+});
+
+describe("categoría, favorito y gramos (03-productos.md / 17-rubros-categorias.md)", () => {
+  let vendedor: Usuario;
+  let tienda: Tienda;
+
+  beforeEach(async () => {
+    ({ vendedor, tienda } = await crearVendedorConTienda());
+  });
+  afterEach(() => limpiar([vendedor.id]));
+
+  it("alta nueva sin categoría da CATEGORIA_NO_ENCONTRADA", async () => {
+    await expect(
+      crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: "" }, precio: 1, stock: 1 })
+    ).rejects.toMatchObject({ code: "CATEGORIA_NO_ENCONTRADA" });
+  });
+
+  it("listarProductos filtra por categoriaId", async () => {
+    const otraCat = await categoriaDePrueba("Otra prueba");
+    const a = await crearProducto(vendedor, tienda.id, inputNuevo());
+    const b = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: otraCat, variante: "B" }, precio: 1, stock: 1 });
+    expect((await listarProductos({ tiendaId: tienda.id, categoriaId: otraCat })).data.map((p) => p.id)).toEqual([b.id]);
+    expect((await listarProductos({ tiendaId: tienda.id, categoriaId: CAT })).data.map((p) => p.id)).toEqual([a.id]);
+  });
+
+  it("el dueño marca y desmarca favorito; otro usuario no puede", async () => {
+    const producto = await crearProducto(vendedor, tienda.id, inputNuevo());
+    expect((await actualizarProducto(vendedor, producto.id, { favorito: true })).favorito).toBe(true);
+    expect((await actualizarProducto(vendedor, producto.id, { favorito: false })).favorito).toBe(false);
+    const { vendedor: otro } = await crearVendedorConTienda();
+    try {
+      await expect(actualizarProducto(otro, producto.id, { favorito: true })).rejects.toMatchObject({ code: "NO_ES_DUENO_DE_TIENDA" });
+    } finally {
+      await limpiar([otro.id]);
+    }
+  });
+
+  it("el stock por kg admite gramos", async () => {
+    const producto = await crearProducto(vendedor, tienda.id, {
+      nuevo: { categoriaId: CAT, variante: "Queso suelto", unidad: "kg" },
+      precio: 12000,
+      stock: 1.234,
+    });
+    expect(producto.stock).toBe(1.234);
+    expect(producto.unidad).toBe("kg");
+  });
+});
+
+describe("listarParaVenta (pestañas del punto de venta, 03-productos.md)", () => {
+  let vendedor: Usuario;
+  let tienda: Tienda;
+
+  beforeEach(async () => {
+    ({ vendedor, tienda } = await crearVendedorConTienda());
+  });
+  afterEach(() => limpiar([vendedor.id]));
+
+  it("devuelve todos los productos con vendidos30d (tickets) y ultimaVentaEn, sin contar anuladas", async () => {
+    const { crearVentaPresencial, transicionarVenta } = await import("@/lib/ventas/ventas");
+    const yerba = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Yerba", stock: 50 }));
+    const pan = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Pan", stock: 50 }));
+    const sinVentas = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Sal", stock: 50 }));
+
+    await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: yerba.id, cantidad: 3 }] });
+    await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: yerba.id, cantidad: 1 }, { productoId: pan.id, cantidad: 2 }] });
+    const anulada = await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: pan.id, cantidad: 1 }], cobrarAhora: false });
+    await transicionarVenta(vendedor, anulada.id, "anular");
+
+    // Una venta vieja (hace 40 días) cuenta para "Recientes" pero no para los 30 días.
+    const vieja = await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: sinVentas.id, cantidad: 1 }] });
+    const hace40 = new Date(Date.now() - 40 * 24 * 3600_000);
+    await prisma.venta.update({ where: { id: vieja.id }, data: { creadaEn: hace40 } });
+
+    const lista = await listarParaVenta(vendedor, tienda.id);
+    const porId = new Map(lista.map((p) => [p.id, p]));
+    expect(lista).toHaveLength(3);
+    expect(porId.get(yerba.id)!.vendidos30d).toBe(2);
+    expect(porId.get(pan.id)!.vendidos30d).toBe(1);
+    expect(porId.get(sinVentas.id)!.vendidos30d).toBe(0);
+    expect(new Date(porId.get(sinVentas.id)!.ultimaVentaEn!).getTime()).toBe(hace40.getTime());
+    expect(porId.get(yerba.id)!.ultimaVentaEn).not.toBeNull();
+  });
+
+  it("un producto sin ventas tiene ultimaVentaEn null; otro usuario no puede listar", async () => {
+    const producto = await crearProducto(vendedor, tienda.id, inputNuevo());
+    const [p] = await listarParaVenta(vendedor, tienda.id);
+    expect(p).toMatchObject({ id: producto.id, vendidos30d: 0, ultimaVentaEn: null });
+    const { vendedor: otro } = await crearVendedorConTienda();
+    try {
+      await expect(listarParaVenta(otro, tienda.id)).rejects.toMatchObject({ code: "NO_ES_DUENO_DE_TIENDA" });
+    } finally {
+      await limpiar([otro.id]);
+    }
   });
 });
