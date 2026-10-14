@@ -123,10 +123,15 @@ Request `{ confirmacionEmail: string }`. Response `200`: `{ data: { id: string }
 
 ### `GET /api/admin/productos`
 
-Query opcional `?tiendaId=&categoria=<Categoria>&q=<texto>&page&pageSize` — mismos
+Query opcional `?tiendaId=&categoriaId=<uuid>&q=<texto>&page&pageSize` — mismos
 filtros que `GET /api/tiendas/:tiendaId/productos` (`03-productos.md`) pero sin
 `tiendaId` obligatorio: cruza productos de todas las tiendas. Paginado. Response
 `200`: `{ data: ProductoAdmin[]; page; pageSize; total }`.
+
+### Rubros y categorías
+
+ABM de rubros de negocio y categorías de producto en `/admin/rubros-categorias`:
+endpoints, reglas y errores en `17-rubros-categorias.md`.
 
 ### `GET /api/admin/ventas`
 
@@ -192,7 +197,7 @@ interface ProductoAdmin extends Producto {
 
 interface ListarProductosAdminInput {
   tiendaId?: string;
-  categoria?: Categoria;
+  categoriaId?: string;
   q?: string;
   page?: number;
   pageSize?: number;

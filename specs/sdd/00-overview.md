@@ -28,6 +28,8 @@ Módulos agregados después del MVP inicial:
     [`docs/roadmap-itinerario.md`](../../docs/roadmap-itinerario.md)).
 15. [`16-banco-fotos.md`](16-banco-fotos.md) — banco de fotos curado (búsqueda de
     fotos libres en la web, aprobación por admin/testers, misma UI para todos).
+16. [`17-rubros-categorias.md`](17-rubros-categorias.md) — rubros de negocio y
+    categorías de producto que mantiene el admin.
 
 Todavía fuera de alcance (a especificar después): promociones, balance/reportes,
 entrega a domicilio (delivery), chat in-app, y las fases 2 a 6 del itinerario.

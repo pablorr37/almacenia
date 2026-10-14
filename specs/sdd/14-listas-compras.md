@@ -50,11 +50,12 @@ CREATE TABLE items_lista_compras (
   **Guardar** o **Buscar y comparar** el nombre sigue siendo ese automático, la UI
   pide uno en un diálogo (se puede dejar el automático). Desde "Mis listas" se
   puede renombrar (`PATCH` con `nombre`).
-- Ítems: cada `catalogoId` debe existir; `cantidad` válida según la unidad del producto (entero ≥ 1, o kg en pasos de 50 g — `03-productos.md`); sin `catalogoId`
+- Ítems: cada `catalogoId` debe existir; `cantidad` válida según la unidad del producto (entero ≥ 1, o kg hasta gramos — `03-productos.md`); sin `catalogoId`
   repetidos en la misma lista (si vienen repetidos en el request, se suman las
   cantidades). Máximo 100 ítems por lista.
 - **Producto que no está en el catálogo**: si la búsqueda del editor no lo encuentra,
-  el comprador lo puede agregar ("+ Agregar «texto» al catálogo"): se crea en el
+  el comprador lo puede agregar ("+ Agregar «texto» al catálogo"): elige la
+  categoría y completa marca, variante y contenido; se crea en el
   catálogo compartido con `POST /api/catalogo` (`06-catalogo.md`, con filtro de
   groserías y sin duplicar) y queda en la lista. "Buscar y comparar" lo compara
   apenas alguna tienda lo venda; mientras tanto figura como faltante `sin_oferta`.
@@ -100,7 +101,7 @@ interface ItemListaCompras {
   id: string;
   catalogoId: string;
   cantidad: number;
-  producto: { nombre: string; marca: string | null; imagenUrl: string | null; categoria: Categoria | null };
+  producto: { nombre: string; marca: string | null; imagenUrl: string | null; categoria: { id: string; nombre: string } };
 }
 
 interface ListaCompras {

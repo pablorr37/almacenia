@@ -11,7 +11,10 @@ CREATE TABLE productos_catalogo (
   nombre        TEXT NOT NULL,
   descripcion   TEXT,
   marca         TEXT,
-  categoria     categoria,
+  categoria_id  UUID NOT NULL REFERENCES categorias_producto(id), -- 17-rubros-categorias.md
+  variante      TEXT,           -- ej. "largo fino", "sabor naranja", "sin TACC"
+  contenido     NUMERIC(10, 3), -- tamaño del envase; NULL en productos sueltos por kg
+  unidad_contenido unidad_contenido, -- 'g' | 'kg' | 'ml' | 'l' | 'u'
   codigo_barras TEXT UNIQUE,
   imagen_url    TEXT,
   unidad        unidad_medida NOT NULL DEFAULT 'unidad', -- 'unidad' | 'kg' 
@@ -19,7 +22,16 @@ CREATE TABLE productos_catalogo (
 );
 
 CREATE INDEX productos_catalogo_nombre_idx ON productos_catalogo (nombre);
+CREATE TYPE unidad_contenido AS ENUM ('g', 'kg', 'ml', 'l', 'u');
 ```
+
+**Identidad de una entrada = categoría + marca + variante + contenido.** La categoría
+la elige el usuario de la lista que mantiene el admin (`17-rubros-categorias.md`); el
+resto lo completa él. `nombre` ya no se tipea: se **compone**
+(`componerNombreCatalogo`, pura) uniendo con espacios, en este orden, los que haya:
+nombre de la categoría, marca, variante y contenido formateado
+(`1 kg`, `500 g`, `1,5 l`, `6 u`). Ej.: Arroz + Gallo Oro + largo fino + 1 kg →
+"Arroz Gallo Oro largo fino 1 kg"; Queso (suelto, por kg) + "cremoso" → "Queso cremoso".
 
 `unidad` dice cómo se vende el producto en **todas** las tiendas (es identidad del
 producto, no decisión de cada tienda): `'unidad'` (se cuenta: 1, 2, 3…) o `'kg'`
@@ -40,6 +52,16 @@ precio ni stock**: eso es siempre propio de cada `Producto` por tienda (ver
 - `codigoBarras`, cuando se informa, es único en todo el catálogo — no puede haber
   dos entradas con el mismo código. Es opcional (hay productos sin código de barras
   legible, ej. productos sueltos de verdulería).
+- **Datos de una entrada nueva** (`NuevaEntradaCatalogo`): `categoriaId` obligatorio
+  (`404 CATEGORIA_NO_ENCONTRADA`), `marca?` y `variante?` (≤ 40 caracteres cada una,
+  filtro de groserías), `contenido?` > 0 con `unidadContenido` obligatoria si hay
+  contenido (`400 CONTENIDO_INVALIDO`), `unidad` de venta (`'unidad'` | `'kg'`) y
+  `codigoBarras?`. Un producto por kg (suelto) no lleva contenido
+  (`CONTENIDO_INVALIDO` si se manda).
+- **Sin duplicados**: si ya existe una entrada con la misma categoría, unidad de venta,
+  contenido y unidad de contenido, y la misma marca y variante normalizadas (sin
+  tildes, mayúsculas ni espacios de más), se reutiliza esa en vez de crear otra — tanto
+  en el alta del vendedor como en la del comprador.
 - Al cargar un producto nuevo en una tienda (`crearProducto`, `03-productos.md`), el
   vendedor primero busca en el catálogo por nombre o código de barras
   (`buscarEnCatalogo`). Si encuentra una coincidencia, **adopta** esa entrada
@@ -68,10 +90,10 @@ precio ni stock**: eso es siempre propio de cada `Producto` por tienda (ver
 
 - **Alta desde una lista de compras** (`14-listas-compras.md`): cualquier usuario
   autenticado puede sumar al catálogo compartido un producto que no encuentra.
-  - Campos: `nombre` (2–80), `marca?`, `categoria?`, `unidad` (`unidad` | `kg`).
-  - Si ya existe una entrada con el mismo nombre y marca normalizados (sin tildes
-    ni mayúsculas ni espacios de más), se devuelve esa y no se duplica.
-  - Filtro de groserías en nombre y marca (`TEXTO_NO_PERMITIDO`, `src/lib/moderacion`).
+  - Campos: los de `NuevaEntradaCatalogo` (categoría obligatoria, marca, variante,
+    contenido, unidad de venta).
+  - Si ya existe la misma entrada (regla "Sin duplicados"), se devuelve esa.
+  - Filtro de groserías en marca y variante (`TEXTO_NO_PERMITIDO`, `src/lib/moderacion`).
   - Máximo 20 altas por usuario por día (`LIMITE_ALTAS_CATALOGO`).
   - Se guarda `creado_por_id` (columna nueva, `ON DELETE SET NULL`) para que el
     admin pueda revisar y borrar las entradas sin uso cargadas por compradores.
@@ -80,7 +102,7 @@ precio ni stock**: eso es siempre propio de cada `Producto` por tienda (ver
 
 ### `POST /api/catalogo`
 
-Requiere sesión. Request: `{ nombre: string; marca?: string; categoria?: Categoria; unidad?: 'unidad' | 'kg' }`.
+Requiere sesión. Request: `NuevaEntradaCatalogo` (sin `codigoBarras`).
 Response `201`: `{ data: ProductoCatalogo; creado: boolean }` (`creado: false` si ya
 existía y se devolvió esa).
 
@@ -110,10 +132,30 @@ interface ProductoCatalogo {
   nombre: string;
   descripcion: string | null;
   marca: string | null;
-  categoria: Categoria | null;
+  categoria: { id: string; nombre: string };
+  variante: string | null;
+  contenido: number | null;
+  unidadContenido: 'g' | 'kg' | 'ml' | 'l' | 'u' | null;
+  unidad: 'unidad' | 'kg';
   codigoBarras: string | null;
   imagenUrl: string | null;
 }
+
+interface NuevaEntradaCatalogo {
+  categoriaId: string;
+  marca?: string;
+  variante?: string;
+  contenido?: number;
+  unidadContenido?: 'g' | 'kg' | 'ml' | 'l' | 'u';
+  unidad?: 'unidad' | 'kg'; // default 'unidad'
+  codigoBarras?: string;
+}
+
+// Pura.
+function componerNombreCatalogo(partes: {
+  categoria: string; marca?: string | null; variante?: string | null;
+  contenido?: number | null; unidadContenido?: string | null;
+}): string;
 
 interface BuscarEnCatalogoInput {
   q?: string;
@@ -124,14 +166,7 @@ async function buscarEnCatalogo(input: BuscarEnCatalogoInput): Promise<ProductoC
 
 async function obtenerProductoCatalogo(id: string): Promise<ProductoCatalogo | null>;
 
-interface CrearProductoNuevoEnCatalogoInput {
-  nombre: string;
-  descripcion?: string;
-  marca?: string;
-  categoria?: Categoria;
-  codigoBarras?: string;
-  imagenUrl?: string;
-}
+type CrearProductoNuevoEnCatalogoInput = NuevaEntradaCatalogo & { descripcion?: string; imagenUrl?: string };
 
 async function crearProductoNuevoEnCatalogo(
   input: CrearProductoNuevoEnCatalogoInput
@@ -152,8 +187,10 @@ async function asignarFotoCatalogo(
 | `BUSQUEDA_CATALOGO_INVALIDA`   | `buscarEnCatalogo` sin `q` ni `codigoBarras`.                    |
 | `CODIGO_BARRAS_DUPLICADO`      | `crearProductoNuevoEnCatalogo` con un `codigoBarras` que ya existe. |
 | `UNIDAD_INVALIDA`              | `unidad` no es `'unidad'` ni `'kg'` al crear una entrada.         |
-| `NOMBRE_CATALOGO_INVALIDO`     | `nombre` vacío, de menos de 2 o más de 80 caracteres (alta desde lista). |
-| `TEXTO_NO_PERMITIDO`           | Nombre o marca con palabras no permitidas.                     |
+| `CATEGORIA_NO_ENCONTRADA`      | `categoriaId` vacío o inexistente (`404`).                       |
+| `CONTENIDO_INVALIDO`           | `contenido` ≤ 0, sin `unidadContenido`, o contenido en un producto por kg. |
+| `TEXTO_INVALIDO`               | Marca o variante de más de 40 caracteres.                        |
+| `TEXTO_NO_PERMITIDO`           | Marca o variante con palabras no permitidas.                   |
 | `LIMITE_ALTAS_CATALOGO`        | El usuario ya sumó 20 productos al catálogo hoy (`429`).       |
 | `CATALOGO_YA_TIENE_FOTO`       | Un vendedor premium (no admin) intenta reemplazar una foto de catálogo existente (`409`). |
 | `FOTOS_SOLO_PREMIUM`           | Un vendedor `free` (o un usuario sin tienda que no es admin) intenta asignar foto de catálogo (`403`). |
