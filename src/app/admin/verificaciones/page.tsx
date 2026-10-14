@@ -19,14 +19,6 @@ type SolicitudVerificacion = {
   };
 };
 
-const RUBRO: Record<string, string> = {
-  almacen: "Almacén",
-  verduleria: "Verdulería",
-  kiosco: "Kiosco",
-  panaderia: "Panadería",
-  fiambreria: "Fiambrería",
-};
-
 const fecha = (iso: string) =>
   new Date(iso).toLocaleString("es-AR", {
     day: "numeric",
@@ -119,7 +111,7 @@ export default function AdminVerificacionesPage() {
               <div className="flex min-w-0 flex-col">
                 <span className="text-[15px] font-semibold">{s.tienda.nombre}</span>
                 <span className="text-[12px] text-text-2">
-                  {s.tienda.rubro ? `${RUBRO[s.tienda.rubro] ?? s.tienda.rubro} · ` : ""}
+                  {s.tienda.rubro ? `${s.tienda.rubro} · ` : ""}
                   {s.tienda.direccion}
                 </span>
               </div>

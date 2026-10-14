@@ -22,16 +22,8 @@ type Tienda = {
   abierto24hs?: boolean;
 };
 
-type Categoria =
-  | "almacen"
-  | "bebidas"
-  | "lacteos"
-  | "panaderia"
-  | "limpieza"
-  | "kiosco"
-  | "verduleria"
-  | "fiambreria"
-  | "otros";
+// 17-rubros-categorias.md: lista que mantiene el admin.
+type Categoria = { id: string; nombre: string };
 
 type Producto = {
   id: string;
@@ -46,18 +38,6 @@ type Producto = {
 
 type Sort = "precio_asc" | "precio_desc" | "alfabetico" | "mas_vendidos" | "rating";
 type Tab = "todos" | "ofertas" | "nuevos" | "destacados";
-
-const CATEGORIAS: Array<{ valor: Categoria; etiqueta: string }> = [
-  { valor: "almacen", etiqueta: "Almacén" },
-  { valor: "bebidas", etiqueta: "Bebidas" },
-  { valor: "lacteos", etiqueta: "Lácteos" },
-  { valor: "panaderia", etiqueta: "Panadería" },
-  { valor: "limpieza", etiqueta: "Limpieza" },
-  { valor: "kiosco", etiqueta: "Kiosco" },
-  { valor: "verduleria", etiqueta: "Verdulería" },
-  { valor: "fiambreria", etiqueta: "Fiambrería" },
-  { valor: "otros", etiqueta: "Otros" },
-];
 
 const TABS: Array<{ valor: Tab; etiqueta: string }> = [
   { valor: "todos", etiqueta: "Todos" },
@@ -96,7 +76,8 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
   const [enviando, setEnviando] = useState(false);
 
   const [q, setQ] = useState("");
-  const [categoria, setCategoria] = useState<Categoria | "">("");
+  const [categoria, setCategoria] = useState("");
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [precioMin, setPrecioMin] = useState("");
   const [precioMax, setPrecioMax] = useState("");
   const [sort, setSort] = useState<Sort | "">("");
@@ -105,6 +86,10 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
   useEffect(() => {
     apiGet<Tienda>(`/api/tiendas/${id}`).then(setTienda).catch(() => {});
   }, [id]);
+
+  useEffect(() => {
+    apiGet<Categoria[]>("/api/categorias").then(setCategorias).catch(() => {});
+  }, []);
 
   // Visita a la página (12-gamificacion.md): 1 vez por mes por tienda.
   useEffect(() => {
@@ -151,7 +136,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
   useEffect(() => {
     const sp = new URLSearchParams({ soloDisponibles: "true" });
     if (q.trim()) sp.set("q", q.trim());
-    if (categoria) sp.set("categoria", categoria);
+    if (categoria) sp.set("categoriaId", categoria);
     if (precioMin) sp.set("precioMin", precioMin);
     if (precioMax) sp.set("precioMax", precioMax);
     if (sort) sp.set("sort", sort);
@@ -263,13 +248,14 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
         <div className="flex gap-2">
           <select
             value={categoria}
-            onChange={(e) => setCategoria(e.target.value as Categoria | "")}
+            onChange={(e) => setCategoria(e.target.value)}
+            aria-label="Categoría"
             className="min-w-0 flex-grow rounded-control border border-border bg-surface px-2.5 py-2 text-[13px]"
           >
             <option value="">Todas las categorías</option>
-            {CATEGORIAS.map((c) => (
-              <option key={c.valor} value={c.valor}>
-                {c.etiqueta}
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
               </option>
             ))}
           </select>
@@ -346,6 +332,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
                 valor={qty}
                 max={p.stock}
                 nombre={p.nombre}
+                precio={precioMostrado}
                 onChange={(v) => cambiarCantidad(p, v)}
               />
             </div>

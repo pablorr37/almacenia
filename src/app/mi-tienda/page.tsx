@@ -15,6 +15,14 @@ import { ValoracionCliente } from "@/components/ui/ValoracionCliente";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { useCodigoBarras } from "@/lib/scanner/useCodigoBarras";
+import {
+  CamposEntradaCatalogo,
+  ENTRADA_VACIA,
+  aNuevaEntrada,
+  type EntradaCatalogoForm,
+} from "@/components/catalogo/CamposEntradaCatalogo";
+
+type Rubro = { id: string; nombre: string };
 
 type ProductoCatalogo = {
   id: string;
@@ -42,6 +50,7 @@ type Tienda = {
   lon: number;
   activa: boolean;
   imagenUrl: string | null;
+  rubro: Rubro | null;
   verificada: boolean;
   plan: "free" | "premium";
   mediosDePago: MedioPago[];
@@ -125,9 +134,11 @@ export default function MiTiendaPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [error, setError] = useState<string | null>(null);
-  // Unidad de venta de un producto NUEVO en el catálogo; si se adopta uno existente,
-  // manda la del catálogo (03-productos.md, "Cantidades y unidades").
-  const [unidadNueva, setUnidadNueva] = useState<UnidadMedida>("unidad");
+  // Datos de un producto NUEVO en el catálogo (06-catalogo.md: categoría + marca +
+  // variante + contenido); si se adopta uno existente, mandan los del catálogo.
+  const [entradaNueva, setEntradaNueva] = useState<EntradaCatalogoForm>(ENTRADA_VACIA);
+  const [rubros, setRubros] = useState<Rubro[]>([]);
+  const [rubroForm, setRubroForm] = useState("");
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
 
   const [nombreForm, setNombreForm] = useState("");
@@ -188,6 +199,10 @@ export default function MiTiendaPage() {
   }, [busquedaCatalogo, catalogoSeleccionado]);
 
   useEffect(() => {
+    apiGet<Rubro[]>("/api/rubros").then(setRubros).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (status !== "authenticated") {
       setCargandoTienda(false);
       return;
@@ -211,6 +226,7 @@ export default function MiTiendaPage() {
     setMediosForm(tienda.mediosDePago);
     setHorariosForm(tienda.horarios.length > 0 ? tienda.horarios : horarioPorDefecto());
     setAbierto24hsForm(tienda.abierto24hs);
+    setRubroForm(tienda.rubro?.id ?? "");
   }, [tienda]);
 
   // Sin horarios ni 24 hs la tienda no aparece en "Solo abiertas ahora" y los
@@ -239,6 +255,7 @@ export default function MiTiendaPage() {
         mediosDePago: mediosForm,
         horarios: horariosForm,
         abierto24hs: abierto24hsForm,
+        rubroId: rubroForm || undefined,
       });
       setTienda(actualizada);
       setTiendaGuardada(true);
@@ -263,6 +280,7 @@ export default function MiTiendaPage() {
         direccion: form.get("direccion"),
         lat: posicion.coords.latitude,
         lon: posicion.coords.longitude,
+        rubroId: form.get("rubroId") || undefined,
       });
       setTienda(nueva);
     } catch (err) {
@@ -281,10 +299,12 @@ export default function MiTiendaPage() {
     const form = new FormData(formEl);
     setErrorProducto(null);
     try {
+      // Un código escaneado que no estaba en el catálogo queda guardado en la entrada nueva.
+      const codigoBarras = /^\d{8,14}$/.test(busquedaCatalogo.trim()) ? busquedaCatalogo.trim() : undefined;
       const nuevo = await apiPost<Producto>(`/api/tiendas/${tienda.id}/productos`, {
         ...(catalogoSeleccionado
           ? { catalogoId: catalogoSeleccionado.id }
-          : { nuevo: { nombre: busquedaCatalogo, unidad: unidadNueva } }),
+          : { nuevo: { ...aNuevaEntrada(entradaNueva), codigoBarras } }),
         precio: Number(form.get("precio")),
         stock: Number(form.get("stock")),
       });
@@ -293,14 +313,14 @@ export default function MiTiendaPage() {
       setBusquedaCatalogo("");
       setCatalogoSeleccionado(null);
       setResultadosCatalogo([]);
-      setUnidadNueva("unidad");
+      setEntradaNueva(ENTRADA_VACIA);
     } catch (err) {
       setErrorProducto(err instanceof ApiError ? err.message : "No se pudo agregar el producto.");
     }
   }
 
   function recargarProductos(tiendaId: string) {
-    apiGet<Producto[]>(`/api/tiendas/${tiendaId}/productos`).then(setProductos).catch(() => {});
+    apiGet<Producto[]>(`/api/tiendas/${tiendaId}/productos?pageSize=100`).then(setProductos).catch(() => {});
   }
 
   async function transicionar(pedidoId: string, accion: AccionPedido) {
@@ -338,6 +358,24 @@ export default function MiTiendaPage() {
           <Input id="nombre" name="nombre" label="Nombre de la tienda" required />
           <Input id="direccion" name="direccion" label="Dirección" required />
           <Input id="descripcion" name="descripcion" label="Descripción (opcional)" />
+          <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-text">
+            Rubro
+            <select
+              name="rubroId"
+              required
+              defaultValue=""
+              className="h-11 rounded-control border border-border bg-surface px-3 text-[14px] font-normal"
+            >
+              <option value="" disabled>
+                Elegí el rubro de tu negocio
+              </option>
+              {rubros.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
           {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}
           <Button type="submit">Crear tienda</Button>
         </form>
@@ -405,6 +443,21 @@ export default function MiTiendaPage() {
                 onChange={(e) => setDescripcionForm(e.target.value)}
                 placeholder="Contale a tus clientes qué vendés"
               />
+              <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-text">
+                Rubro
+                <select
+                  value={rubroForm}
+                  onChange={(e) => setRubroForm(e.target.value)}
+                  className="h-11 rounded-control border border-border bg-surface px-3 text-[14px] font-normal"
+                >
+                  <option value="">Sin rubro</option>
+                  {rubros.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="text-[13px] text-text-2">{tienda.direccion}</div>
               <ImageUploadField
                 tipo="tienda"
@@ -563,7 +616,6 @@ export default function MiTiendaPage() {
           <PuntoDeVenta
             tiendaId={tienda.id}
             mediosDePago={tienda.mediosDePago}
-            productos={productos}
             onStockCambiado={() => recargarProductos(tienda.id)}
           />
         )}
@@ -579,8 +631,7 @@ export default function MiTiendaPage() {
                     setBusquedaCatalogo(e.target.value);
                     setCatalogoSeleccionado(null);
                   }}
-                  placeholder="Nombre o código de barras del producto"
-                  required
+                  placeholder="Buscar en el catálogo (nombre o código de barras)"
                   className="flex-grow"
                 />
                 <button
@@ -638,33 +689,21 @@ export default function MiTiendaPage() {
                   ))}
                 </div>
               )}
-              {!catalogoSeleccionado && busquedaCatalogo.trim().length >= 2 && resultadosCatalogo.length === 0 && (
-                <p className="text-[12px] text-text-2">
-                  No está en el catálogo compartido — se va a crear como producto nuevo.
-                </p>
+              {!catalogoSeleccionado && (
+                <div className="flex flex-col gap-2 border-t border-border pt-2">
+                  <p className="text-[12px] text-text-2">
+                    {busquedaCatalogo.trim().length >= 2 && resultadosCatalogo.length === 0
+                      ? "No está en el catálogo compartido: cargalo como producto nuevo."
+                      : "¿No está en el catálogo? Cargalo como producto nuevo:"}
+                  </p>
+                  <CamposEntradaCatalogo valor={entradaNueva} onChange={setEntradaNueva} />
+                </div>
               )}
 
               {(() => {
-                const unidad = catalogoSeleccionado?.unidad ?? unidadNueva;
+                const unidad = catalogoSeleccionado?.unidad ?? entradaNueva.unidad;
                 return (
                   <>
-                    <div className="flex items-center gap-2 text-[13px]">
-                      <span className="font-semibold text-text">Se vende por</span>
-                      {(["unidad", "kg"] as const).map((u) => (
-                        <button
-                          key={u}
-                          type="button"
-                          disabled={!!catalogoSeleccionado}
-                          aria-pressed={unidad === u}
-                          onClick={() => setUnidadNueva(u)}
-                          className={`press rounded-pill px-3 py-1.5 font-semibold disabled:opacity-70 ${
-                            unidad === u ? "bg-primary text-white" : "border border-border bg-surface text-text"
-                          }`}
-                        >
-                          {u === "kg" ? "kg (peso)" : "unidad"}
-                        </button>
-                      ))}
-                    </div>
                     <div className="flex gap-2">
                       <Input
                         id="p-precio"
@@ -680,7 +719,7 @@ export default function MiTiendaPage() {
                         name="stock"
                         type="number"
                         min="0"
-                        step={unidad === "kg" ? "0.05" : "1"}
+                        step={unidad === "kg" ? "0.001" : "1"}
                         placeholder={unidad === "kg" ? "Stock (kg)" : "Stock"}
                         required
                       />

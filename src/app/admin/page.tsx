@@ -122,6 +122,9 @@ export default function AdminPage() {
         <Link href="/admin/catalogo" className="text-[13px] font-semibold text-accent-text">
           Catálogo de compradores →
         </Link>
+        <Link href="/admin/rubros-categorias" className="text-[13px] font-semibold text-accent-text">
+          Rubros y categorías →
+        </Link>
       </div>
 
       {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}

@@ -8,8 +8,8 @@ import { exigirTextoPermitido } from "@/lib/moderacion/moderacion";
 import { normalizarNombre } from "@/lib/rubros-categorias/rubros-categorias";
 import type { Prisma } from "@/generated-prisma/client";
 
-export const UNIDADES_CONTENIDO = ["g", "kg", "ml", "l", "u"] as const;
-export type UnidadContenido = (typeof UNIDADES_CONTENIDO)[number];
+import { UNIDADES_CONTENIDO, componerNombreCatalogo, type UnidadContenido } from "./nombre";
+export { UNIDADES_CONTENIDO, componerNombreCatalogo, type UnidadContenido };
 
 export interface ProductoCatalogo {
   id: string;
@@ -42,24 +42,6 @@ export function aProductoCatalogo(p: FilaCatalogo): ProductoCatalogo {
     imagenUrl: p.imagenUrl,
     unidad: p.unidad,
   };
-}
-
-// Pura (06-catalogo.md): "Arroz Gallo Oro largo fino 1 kg".
-export function componerNombreCatalogo(partes: {
-  categoria: string;
-  marca?: string | null;
-  variante?: string | null;
-  contenido?: number | null;
-  unidadContenido?: string | null;
-}): string {
-  const contenido =
-    partes.contenido && partes.unidadContenido
-      ? `${partes.contenido.toLocaleString("es-AR", { maximumFractionDigits: 3 })} ${partes.unidadContenido}`
-      : null;
-  return [partes.categoria, partes.marca, partes.variante, contenido]
-    .map((p) => (p ?? "").replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .join(" ");
 }
 
 export interface BuscarEnCatalogoInput {
