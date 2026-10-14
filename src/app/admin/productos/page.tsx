@@ -12,7 +12,7 @@ type ProductoAdmin = {
   precio: number;
   stock: number;
   disponible: boolean;
-  categoria: string | null;
+  categoria: { id: string; nombre: string } | null;
   tiendaNombre: string;
   vendedorNombre: string;
 };
@@ -114,7 +114,7 @@ function AdminProductosContent() {
             </div>
             <div className="flex items-center gap-2 text-[12px] text-text-2">
               <span>Stock: {p.stock}</span>
-              {p.categoria && <span>· {p.categoria}</span>}
+              {p.categoria && <span>· {p.categoria.nombre}</span>}
               {!p.disponible && <span className="font-semibold text-estado-rechazado-text">· Pausado</span>}
             </div>
           </div>

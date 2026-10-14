@@ -12,6 +12,13 @@ fuera de este MVP). Toda venta tiene un origen:
   — es un mini punto de venta interno para ventas de mostrador (pestaña "Vender" de
   mi-tienda). Tiene estado de cobro: puede quedar *por cobrar* (fiado, transferencia
   que todavía no llegó) hasta que el vendedor marca el pago recibido.
+  **UI del punto de venta**: arriba, cuatro pestañas — Todos, Frecuentes, Recientes y
+  Favoritos (`GET /api/tiendas/:id/productos?paraVenta=1`, `03-productos.md`) — y
+  debajo el buscador, que filtra dentro de la pestaña activa. La lista muestra 3
+  productos a la vista con scroll si hay más, y un botón "Ocultar lista" / "Mostrar
+  lista" (se recuerda por navegador) para que el ticket quede arriba. Cada fila tiene
+  una estrella para marcar favorito. En productos por kg se puede cargar por importe
+  ("$ Importe", ver `03-productos.md`).
 - **A distancia**: se genera automáticamente cuando un `Pedido` pasa a `entregado`
   (ver `04-pedidos.md`). No existe una forma de crear manualmente una venta "a
   distancia" — siempre nace de esa transición.

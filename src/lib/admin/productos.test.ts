@@ -4,6 +4,7 @@ import { registrarUsuario, type Usuario } from "@/lib/auth/auth";
 import { crearTienda, type Tienda } from "@/lib/tiendas/tiendas";
 import { crearProducto, type Producto } from "@/lib/productos/productos";
 import { listarProductosAdmin, listarCatalogoDeCompradores, eliminarEntradaCatalogo } from "./productos";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let contador = 0;
 async function crearAdmin(): Promise<Usuario> {
@@ -56,8 +57,8 @@ describe("listarProductosAdmin", () => {
     const admin = await crearAdmin();
     const { vendedor: v1, tienda: t1 } = await crearVendedorConTienda();
     const { vendedor: v2, tienda: t2 } = await crearVendedorConTienda();
-    const p1 = await crearProducto(v1, t1.id, { nuevo: { nombre: `Manzana ${contador}` }, precio: 100, stock: 5 });
-    const p2 = await crearProducto(v2, t2.id, { nuevo: { nombre: `Banana ${contador}` }, precio: 50, stock: 3 });
+    const p1 = await crearProducto(v1, t1.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `Manzana ${contador}` }, precio: 100, stock: 5 });
+    const p2 = await crearProducto(v2, t2.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `Banana ${contador}` }, precio: 50, stock: 3 });
 
     try {
       const resultado = await listarProductosAdmin(admin, {});
@@ -77,8 +78,8 @@ describe("listarProductosAdmin", () => {
     const admin = await crearAdmin();
     const { vendedor: v1, tienda: t1 } = await crearVendedorConTienda();
     const { vendedor: v2, tienda: t2 } = await crearVendedorConTienda();
-    const p1 = await crearProducto(v1, t1.id, { nuevo: { nombre: `Solo t1 ${contador}` }, precio: 10, stock: 1 });
-    const p2 = await crearProducto(v2, t2.id, { nuevo: { nombre: `Solo t2 ${contador}` }, precio: 10, stock: 1 });
+    const p1 = await crearProducto(v1, t1.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `Solo t1 ${contador}` }, precio: 10, stock: 1 });
+    const p2 = await crearProducto(v2, t2.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `Solo t2 ${contador}` }, precio: 10, stock: 1 });
 
     try {
       const resultado = await listarProductosAdmin(admin, { tiendaId: t1.id });
@@ -93,8 +94,8 @@ describe("listarProductosAdmin", () => {
   it("filtra por q (nombre)", async () => {
     const admin = await crearAdmin();
     const { vendedor, tienda } = await crearVendedorConTienda();
-    const p1 = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Yerba especial" }, precio: 10, stock: 1 });
-    const p2 = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Arroz" }, precio: 10, stock: 1 });
+    const p1 = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Yerba especial" }, precio: 10, stock: 1 });
+    const p2 = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Arroz" }, precio: 10, stock: 1 });
 
     try {
       const resultado = await listarProductosAdmin(admin, { q: "yerba" });
@@ -112,7 +113,7 @@ describe("catálogo cargado por compradores", () => {
     const admin = await registrarUsuario({ email: `test-cat-comp-a-${Date.now()}@almacenia.test`, password: "password123", nombre: "A" });
     await prisma.usuario.update({ where: { id: admin.id }, data: { esAdmin: true } });
     const comprador = await registrarUsuario({ email: `test-cat-comp-c-${Date.now()}@almacenia.test`, password: "password123", nombre: "C" });
-    const entrada = await prisma.productoCatalogo.create({ data: { nombre: `Cargado ${Date.now()}`, creadoPorId: comprador.id } });
+    const entrada = await prisma.productoCatalogo.create({ data: { categoriaId: await categoriaDePrueba(), nombre: `Cargado ${Date.now()}`, creadoPorId: comprador.id } });
     const lista = await prisma.listaCompras.create({
       data: { compradorId: comprador.id, nombre: "L", items: { create: [{ catalogoId: entrada.id, cantidad: 1 }] } },
     });
@@ -137,7 +138,7 @@ describe("catálogo cargado por compradores", () => {
     await prisma.usuario.update({ where: { id: admin.id }, data: { esAdmin: true } });
     const vendedor = await registrarUsuario({ email: `test-cat-uso-v-${Date.now()}@almacenia.test`, password: "password123", nombre: "V" });
     const tienda = await crearTienda(vendedor, { nombre: "T", direccion: "D", lat: -31.5, lon: -68.5 });
-    const producto = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: `En uso ${Date.now()}` }, precio: 10, stock: 1 });
+    const producto = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `En uso ${Date.now()}` }, precio: 10, stock: 1 });
     try {
       await expect(eliminarEntradaCatalogo({ ...admin, esAdmin: true }, producto.catalogoId)).rejects.toMatchObject({ code: "CATALOGO_EN_USO" });
     } finally {

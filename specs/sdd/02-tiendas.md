@@ -6,11 +6,6 @@ Convenciones comunes: ver [`00-overview.md`](00-overview.md). Depende de
 ## Modelo de datos
 
 ```sql
-CREATE TYPE categoria AS ENUM (
-  'almacen', 'bebidas', 'lacteos', 'panaderia', 'limpieza', 'kiosco', 'verduleria',
-  'fiambreria', 'otros'
-);
-
 CREATE TYPE plan AS ENUM ('free', 'premium');
 
 CREATE TABLE tiendas (
@@ -23,7 +18,7 @@ CREATE TABLE tiendas (
   activa        BOOLEAN NOT NULL DEFAULT true,
   desactivada_en TIMESTAMPTZ,
   imagen_url    TEXT,
-  rubro         categoria,
+  rubro_id      UUID REFERENCES rubros(id), -- 17-rubros-categorias.md
   verificada    BOOLEAN NOT NULL DEFAULT false,
   plan          plan NOT NULL DEFAULT 'free',
   creada_en     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -84,9 +79,11 @@ CREATE INDEX solicitudes_verificacion_tienda_id_idx ON solicitudes_verificacion 
   no se puede reconstruir un histórico confiable a partir del solo booleano `activa`.
 - `imagen_url` es la foto de portada de la tienda, subida vía `08-archivos.md`. Nace
   en `null`.
-- `rubro` es la categoría general de la tienda (almacén, kiosco, verdulería, etc.),
-  informativa para el mapa/búsqueda — no limita qué `categoria` pueden tener sus
-  productos individuales (ver `03-productos.md`).
+- `rubro_id` es el rubro de la tienda (almacén, kiosco, verdulería, vivero…), de la
+  lista que mantiene el admin (`17-rubros-categorias.md`). Es informativo — no limita
+  qué categorías de producto vende (ver `03-productos.md`). Se elige al crear la
+  tienda (opcional en la API, la UI lo pide) y se cambia con `PATCH`. Un `rubroId`
+  inexistente → `404 RUBRO_NO_ENCONTRADO`.
 - `verificada` nace en `false` en toda alta automática de tienda. Solo cambia a
   `true` cuando un admin aprueba una `SolicitudVerificacion` (ver más abajo) — nunca
   se auto-verifica.
@@ -165,6 +162,7 @@ Request:
   mediosDePago?: MedioPago[];
   horarios?: Array<{ diaSemana: number; abre: string | null; cierra: string | null }>;
   abierto24hs?: boolean; // default false
+  rubroId?: string; // 17-rubros-categorias.md; 404 RUBRO_NO_ENCONTRADO si no existe
 }
 ```
 
@@ -203,7 +201,7 @@ no creó su tienda.
 Requiere ser el dueño de la tienda (`vendedor_id === usuario.id`).
 
 Request (todos los campos opcionales): igual forma que `POST`, más `activa?: boolean`,
-`imagenUrl?: string`, `rubro?: Categoria`.
+`imagenUrl?: string`, `rubroId?: string`.
 
 Response `200`: `{ data: Tienda }`. Si `activa` pasa de `true` a `false`, setea
 `desactivadaEn = now()`; si pasa a `true`, limpia `desactivadaEn = null`.
@@ -232,10 +230,6 @@ interface HorarioTienda {
   cierra: string | null;
 }
 
-type Categoria =
-  | 'almacen' | 'bebidas' | 'lacteos' | 'panaderia' | 'limpieza' | 'kiosco'
-  | 'verduleria' | 'fiambreria' | 'otros';
-
 type Plan = 'free' | 'premium';
 
 interface Tienda {
@@ -249,7 +243,7 @@ interface Tienda {
   activa: boolean;
   desactivadaEn: string | null; // ISO datetime
   imagenUrl: string | null;
-  rubro: Categoria | null;
+  rubro: { id: string; nombre: string } | null;
   verificada: boolean;
   plan: Plan;
   mediosDePago: MedioPago[];
@@ -278,6 +272,7 @@ interface CrearTiendaInput {
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[]; // si se manda, cubre los 7 días (franjas)
   abierto24hs?: boolean;
+  rubroId?: string; // 17-rubros-categorias.md
 }
 
 // Valida la forma de `horarios`: los 7 días presentes; por día, una entrada cerrada
@@ -311,7 +306,7 @@ interface ActualizarTiendaInput {
   lon?: number;
   activa?: boolean;
   imagenUrl?: string;
-  rubro?: Categoria;
+  rubroId?: string;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[]; // si se manda, reemplaza las 7 filas existentes
   abierto24hs?: boolean;

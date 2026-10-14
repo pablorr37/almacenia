@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
       mediosDePago: body.mediosDePago,
       abierto24hs: body.abierto24hs,
       horarios: body.horarios,
+      rubroId: body.rubroId,
     });
     return respuestaExitosa(tienda, 201);
   } catch (error) {

@@ -4,7 +4,7 @@ import { exigirTextoPermitido } from "@/lib/moderacion/moderacion";
 import { Prisma } from "@/generated-prisma/client";
 import type { Usuario } from "@/lib/auth/auth";
 import { requireAdmin } from "@/lib/auth/auth";
-import type { Categoria, Plan, EstadoVerificacion } from "@/generated-prisma/client";
+import type { Plan, EstadoVerificacion } from "@/generated-prisma/client";
 
 const RADIO_KM_DEFAULT = 5;
 const RADIO_KM_MAXIMO = 50;
@@ -26,7 +26,7 @@ export interface Tienda {
   activa: boolean;
   desactivadaEn: string | null;
   imagenUrl: string | null;
-  rubro: Categoria | null;
+  rubro: { id: string; nombre: string } | null; // 17-rubros-categorias.md
   verificada: boolean;
   plan: Plan;
   mediosDePago: MedioPago[];
@@ -55,7 +55,7 @@ interface FilaTienda {
   activa: boolean;
   desactivada_en: Date | null;
   imagen_url: string | null;
-  rubro: Categoria | null;
+  rubro: { id: string; nombre: string } | null; // json_build_object, ver COLUMNA_RUBRO
   verificada: boolean;
   plan: Plan;
   // node-postgres no trae un parser por default para arrays de enums custom
@@ -93,12 +93,16 @@ function aTienda(fila: FilaTienda, horarios: HorarioTienda[] = []): Tienda {
   };
 }
 
+// Rubro de la tienda como { id, nombre } (17-rubros-categorias.md). Subquery sobre la
+// fila actual, también válida en RETURNING.
+const COLUMNA_RUBRO = Prisma.sql`(SELECT json_build_object('id', r.id, 'nombre', r.nombre) FROM rubros r WHERE r.id = rubro_id) AS rubro`;
+
 // Columnas comunes a todas las queries de lectura: ST_Y/ST_X extraen lat/lon del
 // punto geográfico, ya que Prisma no puede tipar la columna `ubicacion` (geography).
 const SELECT_TIENDA = Prisma.sql`
   SELECT
     id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-    imagen_url, rubro, verificada, plan, medios_de_pago, abierto_24hs,
+    imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
     ST_Y(ubicacion::geometry) AS lat,
     ST_X(ubicacion::geometry) AS lon
   FROM tiendas
@@ -197,6 +201,13 @@ export interface CrearTiendaInput {
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[];
   abierto24hs?: boolean;
+  rubroId?: string;
+}
+
+async function validarRubroId(rubroId: unknown): Promise<void> {
+  if (rubroId === undefined || rubroId === null) return;
+  const existe = typeof rubroId === "string" && (await prisma.rubro.findUnique({ where: { id: rubroId } }));
+  if (!existe) throw new AppError("RUBRO_NO_ENCONTRADO", "El rubro elegido no existe.");
 }
 
 export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Promise<Tienda> {
@@ -210,6 +221,7 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
       "Revisá los horarios: tienen que estar los 7 días, hasta 3 franjas por día, sin superponerse y con la apertura antes del cierre."
     );
   }
+  await validarRubroId(input.rubroId);
 
   const existente = await prisma.tienda.findUnique({ where: { vendedorId: usuario.id } });
   if (existente) {
@@ -223,7 +235,7 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
     // de la columna en Postgres — al insertar con SQL crudo hay que generarlo acá.
     const id = crypto.randomUUID();
     const filas = await tx.$queryRaw<FilaTienda[]>`
-      INSERT INTO tiendas (id, vendedor_id, nombre, descripcion, direccion, ubicacion, medios_de_pago, abierto_24hs)
+      INSERT INTO tiendas (id, vendedor_id, nombre, descripcion, direccion, ubicacion, medios_de_pago, abierto_24hs, rubro_id)
       VALUES (
         ${id},
         ${usuario.id},
@@ -232,11 +244,12 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
         ${input.direccion},
         ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography,
         ${mediosDePago}::medio_pago[],
-        ${input.abierto24hs ?? false}
+        ${input.abierto24hs ?? false},
+        ${input.rubroId ?? null}
       )
       RETURNING
         id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-        imagen_url, rubro, verificada, plan, medios_de_pago, abierto_24hs,
+        imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
         ST_Y(ubicacion::geometry) AS lat,
         ST_X(ubicacion::geometry) AS lon
     `;
@@ -280,7 +293,7 @@ export async function buscarTiendasCercanas(
   const filas = await prisma.$queryRaw<Array<FilaTienda & { distancia_km: number }>>`
     SELECT
       id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-      imagen_url, rubro, verificada, plan, medios_de_pago, abierto_24hs,
+      imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
       ST_Y(ubicacion::geometry) AS lat,
       ST_X(ubicacion::geometry) AS lon,
       ST_Distance(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography) / 1000 AS distancia_km
@@ -337,7 +350,7 @@ export interface ActualizarTiendaInput {
   lon?: number;
   activa?: boolean;
   imagenUrl?: string;
-  rubro?: Categoria;
+  rubroId?: string;
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[];
   abierto24hs?: boolean;
@@ -370,6 +383,7 @@ export async function actualizarTienda(
       "Revisá los horarios: tienen que estar los 7 días, hasta 3 franjas por día, sin superponerse y con la apertura antes del cierre."
     );
   }
+  await validarRubroId(input.rubroId);
 
   const mediosDePago = input.mediosDePago ?? actual.mediosDePago;
   const nuevaActiva = input.activa ?? actual.activa;
@@ -393,14 +407,14 @@ export async function actualizarTienda(
         activa = ${nuevaActiva},
         desactivada_en = ${desactivadaEn},
         imagen_url = ${input.imagenUrl ?? actual.imagenUrl},
-        rubro = ${input.rubro ?? actual.rubro}::categoria,
+        rubro_id = ${input.rubroId ?? actual.rubro?.id ?? null},
         medios_de_pago = ${mediosDePago}::medio_pago[],
         abierto_24hs = ${input.abierto24hs ?? actual.abierto24hs},
         actualizada_en = now()
       WHERE id = ${tiendaId}
       RETURNING
         id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-        imagen_url, rubro, verificada, plan, medios_de_pago, abierto_24hs,
+        imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
         ST_Y(ubicacion::geometry) AS lat,
         ST_X(ubicacion::geometry) AS lon
     `;

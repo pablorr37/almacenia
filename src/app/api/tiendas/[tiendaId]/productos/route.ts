@@ -2,10 +2,10 @@ import { NextRequest } from "next/server";
 import {
   crearProducto,
   listarProductos,
+  listarParaVenta,
   type SortProductos,
   type TabProductos,
 } from "@/lib/productos/productos";
-import type { Categoria } from "@/generated-prisma/client";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { respuestaExitosa, respuestaError } from "@/lib/api-response";
 import { AppError } from "@/lib/errors";
@@ -53,10 +53,16 @@ export async function GET(
   try {
     const { tiendaId } = await params;
     const sp = request.nextUrl.searchParams;
+    // Pestañas del punto de venta (03-productos.md): solo el dueño, sin paginar.
+    if (sp.get("paraVenta") === "1") {
+      const usuario = await obtenerUsuarioActual();
+      if (!usuario) throw new AppError("NO_AUTENTICADO", "Necesitás iniciar sesión.");
+      return respuestaExitosa(await listarParaVenta(usuario, tiendaId));
+    }
     const resultado = await listarProductos({
       tiendaId,
       soloDisponibles: sp.get("soloDisponibles") === "true",
-      categoria: (sp.get("categoria") as Categoria) ?? undefined,
+      categoriaId: sp.get("categoriaId") ?? undefined,
       q: sp.get("q") ?? undefined,
       precioMin: sp.get("precioMin") ? Number(sp.get("precioMin")) : undefined,
       precioMax: sp.get("precioMax") ? Number(sp.get("precioMax")) : undefined,

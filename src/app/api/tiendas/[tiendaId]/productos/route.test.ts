@@ -5,6 +5,7 @@ import { crearTienda, type Tienda } from "@/lib/tiendas/tiendas";
 import { crearProducto } from "@/lib/productos/productos";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { POST, GET } from "./route";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 vi.mock("@/lib/auth/session", () => ({ obtenerUsuarioActual: vi.fn() }));
 const obtenerUsuarioActualMock = vi.mocked(obtenerUsuarioActual);
@@ -55,13 +56,13 @@ describe("/api/tiendas/[tiendaId]/productos", () => {
 
     it("401 sin sesión", async () => {
       obtenerUsuarioActualMock.mockResolvedValue(null);
-      const res = await POST(req({ nuevo: { nombre: "X" }, precio: 10, stock: 5 }), params(tienda.id));
+      const res = await POST(req({ nuevo: { categoriaId: await categoriaDePrueba(), variante: "X" }, precio: 10, stock: 5 }), params(tienda.id));
       expect(res.status).toBe(401);
     });
 
     it("403 NO_ES_DUENO_DE_TIENDA si no es el dueño", async () => {
       obtenerUsuarioActualMock.mockResolvedValue(otro);
-      const res = await POST(req({ nuevo: { nombre: "X" }, precio: 10, stock: 5 }), params(tienda.id));
+      const res = await POST(req({ nuevo: { categoriaId: await categoriaDePrueba(), variante: "X" }, precio: 10, stock: 5 }), params(tienda.id));
       const body = await res.json();
       expect(res.status).toBe(403);
       expect(body.error.code).toBe("NO_ES_DUENO_DE_TIENDA");
@@ -70,20 +71,20 @@ describe("/api/tiendas/[tiendaId]/productos", () => {
     it("201 crea el producto, disponible=true por defecto", async () => {
       obtenerUsuarioActualMock.mockResolvedValue(dueno);
       const res = await POST(
-        req({ nuevo: { nombre: "Lechuga fresca" }, precio: 250, stock: 12 }),
+        req({ nuevo: { categoriaId: await categoriaDePrueba(), variante: "Lechuga fresca" }, precio: 250, stock: 12 }),
         params(tienda.id),
       );
       const body = await res.json();
 
       expect(res.status).toBe(201);
-      expect(body.data).toMatchObject({ nombre: "Lechuga fresca", precio: 250, stock: 12, disponible: true });
+      expect(body.data).toMatchObject({ nombre: "Prueba Lechuga fresca", precio: 250, stock: 12, disponible: true });
     });
   });
 
   describe("GET", () => {
     it("200 público, paginado, con soloDisponibles filtrando por comprable", async () => {
-      await crearProducto(dueno, tienda.id, { nuevo: { nombre: "Disponible" }, precio: 100, stock: 5 });
-      await crearProducto(dueno, tienda.id, { nuevo: { nombre: "Sin stock" }, precio: 100, stock: 0 });
+      await crearProducto(dueno, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Disponible" }, precio: 100, stock: 5 });
+      await crearProducto(dueno, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Sin stock" }, precio: 100, stock: 0 });
 
       const res = await GET(
         new NextRequest(`http://localhost/api/tiendas/x/productos?soloDisponibles=true`),
@@ -95,7 +96,25 @@ describe("/api/tiendas/[tiendaId]/productos", () => {
       expect(body.page).toBe(1);
       expect(body.pageSize).toBe(20);
       expect(body.data).toHaveLength(1);
-      expect(body.data[0].nombre).toBe("Disponible");
+      expect(body.data[0].nombre).toBe("Prueba Disponible");
+    });
+
+    it("?paraVenta=1: 401 sin sesión, 403 si no es el dueño, 200 con datos de venta para el dueño", async () => {
+      await crearProducto(dueno, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Para vender" }, precio: 100, stock: 5 });
+      const url = "http://localhost/api/tiendas/x/productos?paraVenta=1";
+
+      obtenerUsuarioActualMock.mockResolvedValue(null);
+      expect((await GET(new NextRequest(url), params(tienda.id))).status).toBe(401);
+
+      obtenerUsuarioActualMock.mockResolvedValue(otro);
+      expect((await GET(new NextRequest(url), params(tienda.id))).status).toBe(403);
+
+      obtenerUsuarioActualMock.mockResolvedValue(dueno);
+      const res = await GET(new NextRequest(url), params(tienda.id));
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0]).toMatchObject({ nombre: "Prueba Para vender", vendidos30d: 0, ultimaVentaEn: null, favorito: false });
     });
   });
 });

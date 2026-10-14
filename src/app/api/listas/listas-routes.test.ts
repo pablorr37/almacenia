@@ -6,6 +6,7 @@ import { GET as LISTAR, POST as CREAR } from "./route";
 import { GET as OBTENER, PATCH as ACTUALIZAR, DELETE as ELIMINAR } from "./[id]/route";
 import { POST as COMPARAR_LISTA } from "./[id]/comparar/route";
 import { POST as COMPARAR } from "@/app/api/itinerario/comparar/route";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 vi.mock("@/lib/auth/session", () => ({ obtenerUsuarioActual: vi.fn() }));
 const obtenerUsuarioActualMock = vi.mocked(obtenerUsuarioActual);
@@ -21,7 +22,7 @@ describe("rutas de listas de compras e itinerario", () => {
   beforeEach(async () => {
     comprador = await registrarUsuario({ email: `test-listas-api-c-${Date.now()}@almacenia.test`, password: "password123", nombre: "C" });
     otro = await registrarUsuario({ email: `test-listas-api-o-${Date.now()}@almacenia.test`, password: "password123", nombre: "O" });
-    catalogoId = (await prisma.productoCatalogo.create({ data: { nombre: "Leche listas api" } })).id;
+    catalogoId = (await prisma.productoCatalogo.create({ data: { categoriaId: await categoriaDePrueba(), nombre: "Leche listas api" } })).id;
   });
 
   afterEach(async () => {

@@ -3,7 +3,6 @@ import { listarProductosAdmin } from "@/lib/admin/productos";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { respuestaExitosa, respuestaError } from "@/lib/api-response";
 import { AppError } from "@/lib/errors";
-import type { Categoria } from "@/generated-prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +14,7 @@ export async function GET(request: NextRequest) {
     const sp = request.nextUrl.searchParams;
     const resultado = await listarProductosAdmin(usuario, {
       tiendaId: sp.get("tiendaId") ?? undefined,
-      categoria: (sp.get("categoria") as Categoria) ?? undefined,
+      categoriaId: sp.get("categoriaId") ?? undefined,
       q: sp.get("q") ?? undefined,
       page: sp.get("page") ? Number(sp.get("page")) : undefined,
       pageSize: sp.get("pageSize") ? Number(sp.get("pageSize")) : undefined,

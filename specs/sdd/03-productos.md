@@ -13,13 +13,14 @@ CREATE TABLE productos (
   catalogo_id    UUID NOT NULL REFERENCES productos_catalogo(id),
   nombre         TEXT NOT NULL,
   descripcion    TEXT,
-  categoria      categoria,
+  categoria_id   UUID REFERENCES categorias_producto(id), -- copia del catálogo (17-rubros-categorias.md)
   imagen_url     TEXT,
   precio         NUMERIC(12, 2) NOT NULL,
   precio_oferta  NUMERIC(12, 2),
   destacado      BOOLEAN NOT NULL DEFAULT false,
   stock          NUMERIC(10, 3) NOT NULL DEFAULT 0, -- unidades o kg según catálogo
   disponible     BOOLEAN NOT NULL DEFAULT true,
+  favorito       BOOLEAN NOT NULL DEFAULT false, -- estrella del vendedor en el punto de venta
   creado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
   actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT precio_no_negativo CHECK (precio >= 0),
@@ -30,10 +31,10 @@ CREATE TABLE productos (
 
 CREATE INDEX productos_tienda_id_idx ON productos (tienda_id);
 CREATE INDEX productos_catalogo_id_idx ON productos (catalogo_id);
-CREATE INDEX productos_categoria_idx ON productos (categoria);
+CREATE INDEX productos_categoria_id_idx ON productos (categoria_id);
 ```
 
-- `nombre`, `descripcion` y `categoria` nacen copiados del `ProductoCatalogo`
+- `nombre`, `descripcion` y `categoria_id` nacen copiados del `ProductoCatalogo`
   elegido al crear el producto (denormalizados para no pagar un join en cada listado
   del storefront) pero son editables por tienda después — cada vendedor puede
   ajustar su propia descripción sin afectar el catálogo compartido ni a otras
@@ -74,7 +75,7 @@ La unidad de venta viene del producto de catálogo (`productos_catalogo.unidad`,
 | `unidad` | Precio | Cantidades válidas (pedido, venta, lista, stock) | Se muestra |
 |---|---|---|---|
 | `'unidad'` | por unidad | enteros ≥ 1 (stock: entero ≥ 0) | "3 u." |
-| `'kg'` | **por kg** | múltiplos de 0,05 kg (50 g), ≥ 0,05 (stock: múltiplo de 0,05, ≥ 0) | "250 g", "1,5 kg" |
+| `'kg'` | **por kg** | hasta gramos (3 decimales), ≥ 0,001 (stock: 3 decimales, ≥ 0) | "250 g", "1,5 kg" |
 
 - Todas las columnas de cantidad (`productos.stock`, `items_pedido.cantidad`,
   `items_venta.cantidad`, `items_lista_compras.cantidad`) son `NUMERIC(10, 3)`.
@@ -83,8 +84,13 @@ La unidad de venta viene del producto de catálogo (`productos_catalogo.unidad`,
 - La validación es una función pura compartida, `validarCantidad(unidad, cantidad,
   { permitirCero })` en `src/lib/productos/unidades.ts`; error `CANTIDAD_INVALIDA`
   (`400`). `formatearCantidad(unidad, cantidad)` arma el texto para la UI.
-- La UI para productos por kg ofrece atajos de 100 g, 250 g, 500 g y 1 kg y un
-  paso de ±50 g.
+- La UI para productos por kg ofrece atajos de 100 g, 250 g, 500 g y 1 kg, un
+  paso de ±50 g y la opción **"$ Importe"**: se escribe un monto y se calcula el peso
+  equivalente con `pesoPorImporte(importe, precioPorKg)` (pura, en
+  `src/lib/productos/unidades.ts`): `importe / precioPorKg` redondeado a 1 g; `0` si
+  alguno de los dos no es positivo. Ej.: $3.000 de un queso a $12.000/kg → 0,25 kg.
+  Disponible en el punto de venta (`05-ventas.md`) y en el pedido del comprador
+  (`04-pedidos.md`). Por eso las cantidades en kg admiten gramos, no solo pasos de 50 g.
 
 ## Reglas de negocio
 
@@ -125,7 +131,7 @@ o dando de alta un producto nuevo en el catálogo compartido en la misma operaci
 
 ```ts
 {
-  nuevo: { nombre: string; marca?: string; codigoBarras?: string; categoria?: Categoria; imagenUrl?: string };
+  nuevo: NuevaEntradaCatalogo & { imagenUrl?: string }; // 06-catalogo.md: categoriaId obligatorio
   precio: number;
   stock: number;
   descripcion?: string;
@@ -143,7 +149,7 @@ Público. Query params opcionales:
 - `soloDisponibles=true` (para el catálogo del comprador, filtra por la regla de
   "comprable" de arriba; sin el query param devuelve todo, para el panel de gestión
   del vendedor).
-- `categoria=<Categoria>`, `q=<texto>` (busca en `nombre`/`descripcion`),
+- `categoriaId=<uuid>`, `q=<texto>` (busca en `nombre`/`descripcion`),
   `precioMin=<number>`, `precioMax=<number>`.
 - `tab=ofertas|nuevos|destacados` — `ofertas` filtra `precioOferta IS NOT NULL`;
   `nuevos` ordena por `creadoEn desc`; `destacados` filtra `destacado = true`
@@ -154,6 +160,23 @@ Paginado (ver `00-overview.md`).
 
 Response `200`: `{ data: Producto[]; page; pageSize; total }`.
 
+### `GET /api/tiendas/:tiendaId/productos?paraVenta=1`
+
+Solo el dueño de la tienda (`403 FORBIDDEN` si no). Alimenta las pestañas del punto de
+venta (`05-ventas.md`): devuelve **todos** los productos de la tienda (sin paginar),
+cada uno con dos datos de venta calculados sobre `items_venta` de ventas **no
+anuladas** de esa tienda:
+
+- `vendidos30d`: cantidad de ventas (tickets) de los últimos 30 días en las que
+  aparece el producto → pestaña **Frecuentes** (mayor primero; solo los > 0).
+- `ultimaVentaEn`: fecha de la última venta que lo incluye, o `null` → pestaña
+  **Recientes** (más nueva primero; solo los vendidos alguna vez).
+
+La pestaña **Favoritos** muestra los `favorito = true` (estrella que el vendedor
+alterna con `PATCH /api/productos/:id { favorito }`). **Todos** muestra todo.
+
+Response `200`: `{ data: Array<Producto & { vendidos30d: number; ultimaVentaEn: string | null }> }`.
+
 ### `PATCH /api/productos/:id`
 
 Requiere ser el dueño de la tienda del producto. Setear `imagenUrl` (foto
@@ -161,8 +184,8 @@ personalizada) requiere `plan = premium` — `403 FOTOS_SOLO_PREMIUM` si no (pon
 `imagenUrl: null` para quitarla está permitido en cualquier plan).
 
 Request (todos opcionales):
-`{ nombre?; descripcion?; imagenUrl?; precio?; precioOferta?; destacado?; stock?; disponible? }`.
-`categoria` y `catalogoId` no son editables por `PATCH` — están atados al producto
+`{ nombre?; descripcion?; imagenUrl?; precio?; precioOferta?; destacado?; stock?; disponible?; favorito? }`.
+`categoriaId` y `catalogoId` no son editables por `PATCH` — están atados al producto
 de catálogo elegido al crear (ver `06-catalogo.md` si el catálogo mismo necesita
 corrección).
 
@@ -184,7 +207,9 @@ interface Producto {
   catalogoId: string;
   nombre: string;
   descripcion: string | null;
-  categoria: Categoria | null;
+  categoria: { id: string; nombre: string } | null;
+  favorito: boolean;
+  unidad: 'unidad' | 'kg';
   imagenUrl: string | null; // foto personalizada de la tienda (premium)
   imagenCatalogoUrl: string | null; // foto compartida del catálogo
   imagenEfectiva: string | null; // la que se muestra (ver regla de fotos)
@@ -207,7 +232,7 @@ function esComprable(producto: Producto): boolean; // disponible && stock > 0
 type CrearProductoInput =
   | { catalogoId: string; precio: number; stock: number; imagenUrl?: string; descripcion?: string }
   | {
-      nuevo: { nombre: string; marca?: string; codigoBarras?: string; categoria?: Categoria; imagenUrl?: string };
+      nuevo: NuevaEntradaCatalogo & { imagenUrl?: string };
       precio: number;
       stock: number;
       descripcion?: string;
@@ -222,7 +247,7 @@ async function crearProducto(
 interface ListarProductosInput {
   tiendaId: string;
   soloDisponibles?: boolean;
-  categoria?: Categoria;
+  categoriaId?: string;
   q?: string;
   precioMin?: number;
   precioMax?: number;
@@ -236,6 +261,13 @@ async function listarProductos(
   input: ListarProductosInput
 ): Promise<{ data: Producto[]; page: number; pageSize: number; total: number }>;
 
+interface ProductoParaVenta extends Producto {
+  vendidos30d: number;
+  ultimaVentaEn: string | null; // ISO
+}
+
+async function listarParaVenta(vendedor: Usuario, tiendaId: string): Promise<ProductoParaVenta[]>;
+
 interface ActualizarProductoInput {
   nombre?: string;
   descripcion?: string;
@@ -245,6 +277,7 @@ interface ActualizarProductoInput {
   destacado?: boolean;
   stock?: number;
   disponible?: boolean;
+  favorito?: boolean;
 }
 
 async function actualizarProducto(
@@ -269,7 +302,7 @@ async function debitarStock(productoId: string, cantidad: number): Promise<Produ
 | `PRODUCTO_NO_ENCONTRADO`    | `:id` no existe.                                                  |
 | `PRECIO_INVALIDO`           | `precio < 0`.                                                     |
 | `STOCK_INVALIDO`            | `stock < 0` (en creación o edición manual).                      |
-| `CANTIDAD_INVALIDA`         | Stock o cantidad que no respeta la unidad del producto (fracción en un producto por unidad, o no múltiplo de 50 g en uno por kg). |
+| `CANTIDAD_INVALIDA`         | Stock o cantidad que no respeta la unidad del producto (fracción en un producto por unidad, o más de 3 decimales en uno por kg). |
 | `STOCK_INSUFICIENTE`        | `debitarStock` pide debitar más de lo disponible (usado por `ventas`). |
 | `PRECIO_OFERTA_INVALIDO`    | `precioOferta` negativo o mayor/igual a `precio`.                  |
 | `CATALOGO_NO_ENCONTRADO`    | `catalogoId` no existe (ver `06-catalogo.md`).                     |

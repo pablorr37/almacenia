@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
-import { crearProductoNuevoEnCatalogo } from "@/lib/catalogo/catalogo";
+import { crearProductoNuevoEnCatalogo, type NuevaEntradaCatalogo } from "@/lib/catalogo/catalogo";
 import { tienePermiso, type Plan } from "@/lib/planes/planes";
 import { validarCantidad, type UnidadMedida } from "./unidades";
 import { sinRomper, otorgarPorProductoCargado, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
-import type { Categoria, Producto as ProductoDb } from "@/generated-prisma/client";
+import type { Producto as ProductoDb } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAXIMO = 100;
@@ -16,7 +16,8 @@ export interface Producto {
   catalogoId: string;
   nombre: string;
   descripcion: string | null;
-  categoria: Categoria | null;
+  categoria: { id: string; nombre: string } | null; // 17-rubros-categorias.md
+  favorito: boolean; // estrella del vendedor en el punto de venta
   imagenUrl: string | null; // foto personalizada de la tienda (premium)
   imagenCatalogoUrl: string | null; // foto compartida del catálogo
   imagenEfectiva: string | null; // la que se muestra (03-productos.md, regla de fotos)
@@ -43,11 +44,13 @@ export function imagenEfectiva(
 const INCLUDE_IMAGEN = {
   tienda: { select: { plan: true } },
   catalogo: { select: { imagenUrl: true, unidad: true } },
+  categoria: { select: { id: true, nombre: true } },
 } as const;
 
 type ProductoConImagen = ProductoDb & {
   tienda: { plan: Plan };
   catalogo: { imagenUrl: string | null; unidad: UnidadMedida };
+  categoria: { id: string; nombre: string } | null;
 };
 
 function exigirFotosPremium(tienda: { plan: Plan }): void {
@@ -67,6 +70,7 @@ function aProducto(producto: ProductoConImagen): Producto {
     nombre: producto.nombre,
     descripcion: producto.descripcion,
     categoria: producto.categoria,
+    favorito: producto.favorito,
     imagenUrl: producto.imagenUrl,
     imagenCatalogoUrl: producto.catalogo.imagenUrl,
     imagenEfectiva: imagenEfectiva(producto.tienda, producto, producto.catalogo),
@@ -100,7 +104,7 @@ function validarPrecio(precio: number): void {
   }
 }
 
-// El stock respeta la unidad del producto de catálogo (entero, o kg de a 50 g).
+// El stock respeta la unidad del producto de catálogo (entero, o kg hasta gramos).
 function validarStockDe(unidad: UnidadMedida, stock: number): number {
   validarCantidad(unidad, stock, { permitirCero: true });
   return stock;
@@ -121,14 +125,7 @@ interface CrearProductoDesdeCatalogoInput {
 }
 
 interface CrearProductoNuevoInput {
-  nuevo: {
-    nombre: string;
-    marca?: string;
-    codigoBarras?: string;
-    categoria?: Categoria;
-    imagenUrl?: string;
-    unidad?: UnidadMedida;
-  };
+  nuevo: NuevaEntradaCatalogo & { imagenUrl?: string }; // 06-catalogo.md
   precio: number;
   stock: number;
   descripcion?: string;
@@ -166,7 +163,7 @@ export async function crearProducto(
       catalogoId: catalogo.id,
       nombre: catalogo.nombre,
       descripcion: input.descripcion ?? null,
-      categoria: catalogo.categoria,
+      categoriaId: catalogo.categoriaId,
       // La foto del catálogo NO se copia: se resuelve en imagenEfectiva. Esta
       // columna es solo la foto personalizada (premium).
       imagenUrl: "catalogoId" in input ? (input.imagenUrl ?? null) : null,
@@ -189,7 +186,7 @@ export type TabProductos = "ofertas" | "nuevos" | "destacados";
 export interface ListarProductosInput {
   tiendaId: string;
   soloDisponibles?: boolean;
-  categoria?: Categoria;
+  categoriaId?: string;
   q?: string;
   precioMin?: number;
   precioMax?: number;
@@ -243,7 +240,7 @@ export async function listarProductos(
   const where = {
     tiendaId: input.tiendaId,
     ...(input.soloDisponibles ? { disponible: true, stock: { gt: 0 } } : {}),
-    ...(input.categoria ? { categoria: input.categoria } : {}),
+    ...(input.categoriaId ? { categoriaId: input.categoriaId } : {}),
     ...(input.q ? { OR: [{ nombre: { contains: input.q, mode: "insensitive" as const } }, { descripcion: { contains: input.q, mode: "insensitive" as const } }] } : {}),
     ...(input.precioMin !== undefined || input.precioMax !== undefined
       ? { precio: { ...(input.precioMin !== undefined ? { gte: input.precioMin } : {}), ...(input.precioMax !== undefined ? { lte: input.precioMax } : {}) } }
@@ -279,6 +276,40 @@ export async function listarProductos(
   return { data: productos.map(aProducto), page, pageSize, total };
 }
 
+// Pestañas del punto de venta (03-productos.md, `?paraVenta=1`): todos los productos
+// de la tienda con cuántos tickets no anulados los incluyeron en los últimos 30 días y
+// la fecha de la última venta (cualquier fecha) que los incluyó.
+export interface ProductoParaVenta extends Producto {
+  vendidos30d: number;
+  ultimaVentaEn: string | null;
+}
+
+export async function listarParaVenta(vendedor: Usuario, tiendaId: string): Promise<ProductoParaVenta[]> {
+  await verificarPropiedad(vendedor, tiendaId);
+  const desde = new Date(Date.now() - 30 * 24 * 3600_000);
+  const [productos, ventas] = await Promise.all([
+    prisma.producto.findMany({ where: { tiendaId }, include: INCLUDE_IMAGEN, orderBy: { nombre: "asc" } }),
+    prisma.$queryRaw<Array<{ producto_id: string; vendidos_30d: number; ultima_venta_en: Date }>>`
+      SELECT iv.producto_id,
+             COUNT(DISTINCT v.id) FILTER (WHERE v.creada_en >= ${desde})::int AS vendidos_30d,
+             MAX(v.creada_en) AS ultima_venta_en
+      FROM items_venta iv
+      JOIN ventas v ON v.id = iv.venta_id
+      WHERE v.tienda_id = ${tiendaId} AND v.estado <> 'anulada'
+      GROUP BY iv.producto_id
+    `,
+  ]);
+  const porProducto = new Map(ventas.map((v) => [v.producto_id, v]));
+  return productos.map((p) => {
+    const venta = porProducto.get(p.id);
+    return {
+      ...aProducto(p),
+      vendidos30d: venta?.vendidos_30d ?? 0,
+      ultimaVentaEn: venta ? venta.ultima_venta_en.toISOString() : null,
+    };
+  });
+}
+
 export interface ActualizarProductoInput {
   nombre?: string;
   descripcion?: string;
@@ -288,6 +319,7 @@ export interface ActualizarProductoInput {
   destacado?: boolean;
   stock?: number;
   disponible?: boolean;
+  favorito?: boolean;
 }
 
 function validarPrecioOferta(precioOferta: number | null | undefined, precio: number): void {
@@ -330,6 +362,9 @@ export async function actualizarProducto(
   const precioFinal = input.precio ?? Number(actual.precio);
   validarPrecioOferta(input.precioOferta, precioFinal);
   if (input.imagenUrl) exigirFotosPremium(actual.tienda);
+  if (input.favorito !== undefined && typeof input.favorito !== "boolean") {
+    throw new AppError("FAVORITO_INVALIDO", "favorito debe ser true o false.");
+  }
 
   const producto = await prisma.producto.update({
     where: { id: productoId },
@@ -342,6 +377,7 @@ export async function actualizarProducto(
       destacado: input.destacado,
       stock: input.stock,
       disponible: input.disponible,
+      favorito: input.favorito,
     },
     include: INCLUDE_IMAGEN,
   });

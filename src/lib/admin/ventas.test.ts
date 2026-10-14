@@ -5,6 +5,7 @@ import { crearTienda, type Tienda } from "@/lib/tiendas/tiendas";
 import { crearProducto } from "@/lib/productos/productos";
 import { crearVentaPresencial } from "@/lib/ventas/ventas";
 import { listarVentasAdmin } from "./ventas";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let contador = 0;
 async function crearAdmin(): Promise<Usuario> {
@@ -59,8 +60,8 @@ describe("listarVentasAdmin", () => {
     const admin = await crearAdmin();
     const { vendedor: v1, tienda: t1 } = await crearVendedorConTienda();
     const { vendedor: v2, tienda: t2 } = await crearVendedorConTienda();
-    const p1 = await crearProducto(v1, t1.id, { nuevo: { nombre: `P1 ${contador}` }, precio: 100, stock: 5 });
-    const p2 = await crearProducto(v2, t2.id, { nuevo: { nombre: `P2 ${contador}` }, precio: 50, stock: 5 });
+    const p1 = await crearProducto(v1, t1.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `P1 ${contador}` }, precio: 100, stock: 5 });
+    const p2 = await crearProducto(v2, t2.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `P2 ${contador}` }, precio: 50, stock: 5 });
     const venta1 = await crearVentaPresencial(v1, t1.id, { items: [{ productoId: p1.id, cantidad: 2 }] });
     const venta2 = await crearVentaPresencial(v2, t2.id, { items: [{ productoId: p2.id, cantidad: 1 }] });
 
@@ -84,8 +85,8 @@ describe("listarVentasAdmin", () => {
     const admin = await crearAdmin();
     const { vendedor: v1, tienda: t1 } = await crearVendedorConTienda();
     const { vendedor: v2, tienda: t2 } = await crearVendedorConTienda();
-    const p1 = await crearProducto(v1, t1.id, { nuevo: { nombre: `Filtro P1 ${contador}` }, precio: 10, stock: 5 });
-    const p2 = await crearProducto(v2, t2.id, { nuevo: { nombre: `Filtro P2 ${contador}` }, precio: 10, stock: 5 });
+    const p1 = await crearProducto(v1, t1.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `Filtro P1 ${contador}` }, precio: 10, stock: 5 });
+    const p2 = await crearProducto(v2, t2.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: `Filtro P2 ${contador}` }, precio: 10, stock: 5 });
     const venta1 = await crearVentaPresencial(v1, t1.id, { items: [{ productoId: p1.id, cantidad: 1 }] });
     const venta2 = await crearVentaPresencial(v2, t2.id, { items: [{ productoId: p2.id, cantidad: 1 }] });
 

@@ -11,6 +11,7 @@ import {
   listarVentas,
   transicionarVenta,
 } from "./ventas";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let contador = 0;
 async function crearUsuarioDePrueba(nombre = "Usuario de prueba"): Promise<Usuario> {
@@ -33,7 +34,7 @@ async function crearVendedorConTiendaYProducto(
     lon: -58.3816,
   });
   const producto = await crearProducto(vendedor, tienda.id, {
-    nuevo: { nombre: "Producto" },
+    nuevo: { categoriaId: await categoriaDePrueba(), variante: "Producto" },
     precio: 100,
     stock,
   });
@@ -146,7 +147,7 @@ describe("crearVentaPresencial", () => {
 
   it("lanza STOCK_INSUFICIENTE y no debita nada si algún producto no alcanza (atomicidad)", async () => {
     const otroProducto = await crearProducto(vendedor, tienda.id, {
-      nuevo: { nombre: "Otro producto" },
+      nuevo: { categoriaId: await categoriaDePrueba(), variante: "Otro producto" },
       precio: 50,
       stock: 2,
     });
@@ -460,7 +461,7 @@ describe("venta de mostrador: estado de cobro", () => {
 
   it("los ítems traen nombre y unidad del producto", async () => {
     const venta = await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }] });
-    expect(venta.items[0]).toMatchObject({ nombre: "Producto", unidad: "unidad" });
+    expect(venta.items[0]).toMatchObject({ nombre: "Prueba Producto", unidad: "unidad" });
   });
 
   it("listarVentas filtra por estado", async () => {

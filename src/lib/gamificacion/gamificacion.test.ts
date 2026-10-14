@@ -17,6 +17,7 @@ import {
   otorgarPorCheckIn,
   registrarVisitaPagina,
 } from "./gamificacion";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let contador = 0;
 async function crearUsuarioDePrueba(prefijo = "u"): Promise<Usuario> {
@@ -210,7 +211,7 @@ describe("puntos del vendedor", () => {
   afterEach(() => limpiarUsuarios([vendedor.id]));
 
   it("producto_cargado: +1 al crear un producto, una sola vez por producto de catálogo", async () => {
-    const p = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Yerba" }, precio: 10, stock: 1 });
+    const p = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Yerba" }, precio: 10, stock: 1 });
     await crearProducto(vendedor, tienda.id, { catalogoId: p.catalogoId, precio: 12, stock: 1 });
 
     const eventos = await prisma.eventoPuntos.findMany({ where: { usuarioId: vendedor.id, tipo: "producto_cargado" } });
@@ -221,7 +222,7 @@ describe("puntos del vendedor", () => {
 
   it("foto_cargada: +1 al poner la primera foto propia (premium), una vez por producto", async () => {
     await prisma.tienda.update({ where: { id: tienda.id }, data: { plan: "premium" } });
-    const p = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Queso" }, precio: 10, stock: 1 });
+    const p = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Queso" }, precio: 10, stock: 1 });
     await actualizarProducto(vendedor, p.id, { imagenUrl: "http://s3/a.jpg" });
     await actualizarProducto(vendedor, p.id, { imagenUrl: "http://s3/b.jpg" });
 
@@ -240,8 +241,8 @@ describe("puntos por venta / compra", () => {
     vendedor = await crearUsuarioDePrueba("vendedor");
     comprador = await crearUsuarioDePrueba("comprador");
     tienda = await crearTienda(vendedor, { nombre: "Almacén Ventas", direccion: "D", lat: -31.53, lon: -68.52 });
-    arroz = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Arroz" }, precio: 10, stock: 100 });
-    gaseosa = await crearProducto(vendedor, tienda.id, { nuevo: { nombre: "Gaseosa" }, precio: 10, stock: 100 });
+    arroz = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Arroz" }, precio: 10, stock: 100 });
+    gaseosa = await crearProducto(vendedor, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Gaseosa" }, precio: 10, stock: 100 });
   });
   afterEach(async () => {
     await prisma.configuracionSistema.deleteMany({});

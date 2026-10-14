@@ -31,6 +31,7 @@ import {
   permisosFotos,
   catalogoSinFoto,
 } from "./banco";
+import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 const JPG = { contentType: "image/jpeg", buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
 const PREFIJO = `test-banco-${Date.now()}`;
@@ -124,7 +125,7 @@ describe("banco de fotos (DB)", () => {
 
   async function catalogo(imagenUrl: string | null = null) {
     n += 1;
-    const c = await prisma.productoCatalogo.create({ data: { nombre: `${PREFIJO} catálogo ${n}`, imagenUrl } });
+    const c = await prisma.productoCatalogo.create({ data: { categoriaId: await categoriaDePrueba(), nombre: `${PREFIJO} catálogo ${n}`, imagenUrl } });
     catalogos.push(c.id);
     return c;
   }
@@ -396,8 +397,8 @@ describe("permisos, filtro por estado y catálogo sin foto", () => {
   it("catalogoSinFoto: solo curadores, entradas sin foto filtradas por q", async () => {
     const tester = await usuario({ esTester: true });
     const comprador = await usuario();
-    const sin = await prisma.productoCatalogo.create({ data: { nombre: `${PREFIJO} Sin foto` } });
-    const con = await prisma.productoCatalogo.create({ data: { nombre: `${PREFIJO} Con foto`, imagenUrl: "http://x.jpg" } });
+    const sin = await prisma.productoCatalogo.create({ data: { categoriaId: await categoriaDePrueba(), nombre: `${PREFIJO} Sin foto` } });
+    const con = await prisma.productoCatalogo.create({ data: { categoriaId: await categoriaDePrueba(), nombre: `${PREFIJO} Con foto`, imagenUrl: "http://x.jpg" } });
     catalogos.push(sin.id, con.id);
 
     const r = await catalogoSinFoto(tester, { q: PREFIJO });

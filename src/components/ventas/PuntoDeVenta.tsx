@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiGet, apiGetPaginado, apiPost, ApiError } from "@/lib/api-client";
+import { apiGet, apiGetPaginado, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
 import { Toast } from "@/components/ui/Toast";
@@ -24,6 +24,59 @@ export interface ProductoVendible {
   unidad: UnidadMedida;
   disponible: boolean;
   imagenEfectiva: string | null;
+  favorito: boolean;
+  // GET /api/tiendas/:id/productos?paraVenta=1 (03-productos.md)
+  vendidos30d: number;
+  ultimaVentaEn: string | null;
+}
+
+// Pestañas de la lista de productos (05-ventas.md, "UI del punto de venta").
+type Pestana = "todos" | "frecuentes" | "recientes" | "favoritos";
+const PESTANAS: Array<{ valor: Pestana; etiqueta: string }> = [
+  { valor: "todos", etiqueta: "Todos" },
+  { valor: "frecuentes", etiqueta: "Frecuentes" },
+  { valor: "recientes", etiqueta: "Recientes" },
+  { valor: "favoritos", etiqueta: "Favoritos" },
+];
+const VACIO_POR_PESTANA: Record<Pestana, string> = {
+  todos: "No hay productos con stock que coincidan.",
+  frecuentes: "Todavía no hay ventas en los últimos 30 días.",
+  recientes: "Todavía no vendiste productos.",
+  favoritos: "Marcá productos con la estrella para tenerlos a mano.",
+};
+const CLAVE_LISTA_OCULTA = "almacenia:pdv-lista-oculta";
+
+function leerListaOculta(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_LISTA_OCULTA) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function guardarListaOculta(oculta: boolean) {
+  try {
+    localStorage.setItem(CLAVE_LISTA_OCULTA, oculta ? "1" : "0");
+  } catch {
+    // Sin almacenamiento (modo privado): solo dura esta visita.
+  }
+}
+
+// Ordena y filtra según la pestaña. Solo productos comprables (disponible y con stock).
+function productosDePestana(productos: ProductoVendible[], pestana: Pestana): ProductoVendible[] {
+  const comprables = productos.filter((p) => p.disponible && p.stock > 0);
+  switch (pestana) {
+    case "frecuentes":
+      return comprables.filter((p) => p.vendidos30d > 0).sort((a, b) => b.vendidos30d - a.vendidos30d);
+    case "recientes":
+      return comprables
+        .filter((p) => p.ultimaVentaEn)
+        .sort((a, b) => (b.ultimaVentaEn ?? "").localeCompare(a.ultimaVentaEn ?? ""));
+    case "favoritos":
+      return comprables.filter((p) => p.favorito);
+    default:
+      return comprables;
+  }
 }
 
 interface Venta {
@@ -68,15 +121,17 @@ function mensajeDe(err: unknown, porDefecto: string): string {
 export function PuntoDeVenta({
   tiendaId,
   mediosDePago,
-  productos,
   onStockCambiado,
 }: {
   tiendaId: string;
   mediosDePago: MedioPago[];
-  productos: ProductoVendible[];
   onStockCambiado: () => void;
 }) {
   const medios = mediosDePago.length > 0 ? mediosDePago : TODOS_LOS_MEDIOS;
+  const [productos, setProductos] = useState<ProductoVendible[]>([]);
+  const [cargandoProductos, setCargandoProductos] = useState(true);
+  const [pestana, setPestana] = useState<Pestana>("todos");
+  const [listaOculta, setListaOculta] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [ticket, setTicket] = useState<Record<string, number>>({});
   const [medio, setMedio] = useState<MedioPago>(medios.includes("efectivo") ? "efectivo" : medios[0]);
@@ -137,10 +192,45 @@ export function PuntoDeVenta({
     }
   }, [tiendaId]);
 
+  const cargarProductos = useCallback(async () => {
+    try {
+      setProductos(await apiGet<ProductoVendible[]>(`/api/tiendas/${tiendaId}/productos?paraVenta=1`));
+    } catch {
+      // Sin la lista no se puede vender, pero el resto del panel sigue usable.
+    } finally {
+      setCargandoProductos(false);
+    }
+  }, [tiendaId]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial desde la API (el setState ocurre después del fetch)
     cargarVentas();
-  }, [cargarVentas]);
+    cargarProductos();
+  }, [cargarVentas, cargarProductos]);
+
+  useEffect(() => {
+    // Preferencia por navegador: se lee después de montar (localStorage no existe en el server).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza con localStorage una sola vez
+    setListaOculta(leerListaOculta());
+  }, []);
+
+  function alternarLista() {
+    setListaOculta((oculta) => {
+      guardarListaOculta(!oculta);
+      return !oculta;
+    });
+  }
+
+  async function alternarFavorito(producto: ProductoVendible) {
+    const favorito = !producto.favorito;
+    setProductos((prev) => prev.map((p) => (p.id === producto.id ? { ...p, favorito } : p)));
+    try {
+      await apiPatch(`/api/productos/${producto.id}`, { favorito });
+    } catch (err) {
+      setProductos((prev) => prev.map((p) => (p.id === producto.id ? { ...p, favorito: !favorito } : p)));
+      setError(mensajeDe(err, "No se pudo marcar el favorito."));
+    }
+  }
 
   const porId = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos]);
   const lineas = Object.entries(ticket)
@@ -150,10 +240,9 @@ export function PuntoDeVenta({
   const total = Math.round(lineas.reduce((s, l) => s + l.cantidad * precioDe(l.producto), 0) * 100) / 100;
 
   const termino = busqueda.trim().toLowerCase();
-  const visibles = productos
-    .filter((p) => p.disponible && p.stock > 0)
+  const visibles = productosDePestana(productos, pestana)
     .filter((p) => !termino || p.nombre.toLowerCase().includes(termino))
-    .slice(0, termino ? 30 : 12);
+    .slice(0, 200);
 
   function fijar(id: string, cantidad: number) {
     setTicket((prev) => ({ ...prev, [id]: cantidad }));
@@ -179,6 +268,7 @@ export function PuntoDeVenta({
       setToast(cobrarAhora ? `Venta cobrada: ${formatoARS(total)}` : `Venta por cobrar: ${formatoARS(total)}`);
       onStockCambiado();
       cargarVentas();
+      cargarProductos();
     } catch (err) {
       setError(mensajeDe(err, "No se pudo registrar la venta."));
     } finally {
@@ -197,6 +287,7 @@ export function PuntoDeVenta({
       setToast(accion === "cobrar" ? "Pago registrado" : "Venta anulada, el stock volvió");
       if (accion === "anular") onStockCambiado();
       cargarVentas();
+      cargarProductos();
     } catch (err) {
       setError(mensajeDe(err, "No se pudo actualizar la venta."));
     } finally {
@@ -208,43 +299,94 @@ export function PuntoDeVenta({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Buscador de productos */}
+      {/* Productos: pestañas, buscador y lista compacta (3 filas con scroll) */}
       <section className="flex flex-col gap-2.5">
-        <input
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar producto para vender"
-          aria-label="Buscar producto para vender"
-          className="h-12 rounded-control border border-border bg-surface px-4 text-[15px] focus:border-primary focus:outline-none"
-        />
-        {productos.length === 0 ? (
+        <div className="flex gap-1" role="tablist" aria-label="Lista de productos">
+            {PESTANAS.map((t) => (
+              <button
+                key={t.valor}
+                type="button"
+                role="tab"
+                aria-selected={pestana === t.valor}
+                onClick={() => {
+                  setPestana(t.valor);
+                  if (listaOculta) alternarLista();
+                }}
+                className={`press min-w-0 flex-1 rounded-pill px-1.5 py-1.5 text-[12px] font-semibold ${
+                  pestana === t.valor ? "bg-primary text-white" : "border border-border bg-surface text-text"
+                }`}
+              >
+                {t.etiqueta}
+              </button>
+            ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={busqueda}
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              if (listaOculta && e.target.value) alternarLista();
+            }}
+            placeholder="Buscar producto para vender"
+            aria-label="Buscar producto para vender"
+            className="h-12 min-w-0 flex-1 rounded-control border border-border bg-surface px-4 text-[15px] focus:border-primary focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={alternarLista}
+            aria-expanded={!listaOculta}
+            className="press h-12 flex-shrink-0 rounded-control border border-border bg-surface px-3 text-[12px] font-semibold text-accent-text"
+          >
+            {listaOculta ? "Mostrar lista" : "Ocultar lista"}
+          </button>
+        </div>
+        {listaOculta ? null : cargandoProductos ? (
+          <p className="text-[13px] text-text-2">Cargando productos…</p>
+        ) : productos.length === 0 ? (
           <p className="text-[13px] text-text-2">Todavía no cargaste productos. Agregalos en la pestaña Productos.</p>
         ) : visibles.length === 0 ? (
-          <p className="text-[13px] text-text-2">No hay productos con stock que coincidan.</p>
+          <p className="text-[13px] text-text-2">{termino ? "No hay productos con stock que coincidan." : VACIO_POR_PESTANA[pestana]}</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul
+            className="flex max-h-[13.5rem] flex-col gap-2 overflow-y-auto overscroll-contain pr-0.5"
+            data-testid="lista-productos-venta"
+          >
             {visibles.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 rounded-card border border-border bg-surface p-2.5">
+              <li key={p.id} className="flex flex-shrink-0 flex-wrap items-center gap-2.5 rounded-card border border-border bg-surface p-2.5">
                 {p.imagenEfectiva ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={p.imagenEfectiva} alt="" className="h-11 w-11 flex-shrink-0 rounded-control object-cover" />
                 ) : (
                   <div className="h-11 w-11 flex-shrink-0 rounded-control bg-placeholder" />
                 )}
-                <div className="flex min-w-0 flex-grow flex-col">
+                <div className="flex min-w-0 flex-1 basis-32 flex-col">
                   <span className="truncate text-[14px] font-semibold">{p.nombre}</span>
                   <span className="text-[12px] text-text-2">
                     {formatoARS(precioDe(p))}
                     {p.unidad === "kg" ? " / kg" : ""} · stock {formatearCantidad(p.unidad, p.stock)}
                   </span>
                 </div>
-                <SelectorCantidad
-                  unidad={p.unidad}
-                  valor={ticket[p.id] ?? 0}
-                  max={p.stock}
-                  nombre={p.nombre}
-                  onChange={(v) => fijar(p.id, v)}
-                />
+                <button
+                  type="button"
+                  onClick={() => alternarFavorito(p)}
+                  aria-pressed={p.favorito}
+                  aria-label={p.favorito ? `Quitar ${p.nombre} de favoritos` : `Marcar ${p.nombre} como favorito`}
+                  className={`press flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-pill text-[18px] ${
+                    p.favorito ? "text-accent" : "text-text-2"
+                  }`}
+                >
+                  {p.favorito ? "★" : "☆"}
+                </button>
+                <div className="ml-auto">
+                  <SelectorCantidad
+                    unidad={p.unidad}
+                    valor={ticket[p.id] ?? 0}
+                    max={p.stock}
+                    nombre={p.nombre}
+                    precio={precioDe(p)}
+                    onChange={(v) => fijar(p.id, v)}
+                  />
+                </div>
               </li>
             ))}
           </ul>
