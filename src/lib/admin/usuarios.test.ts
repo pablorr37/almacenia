@@ -112,7 +112,7 @@ describe("listarUsuarios", () => {
     try {
       const resultado = await listarUsuarios(admin, { rol: "vendedor" });
       const fila = resultado.data.find((u) => u.id === vendedor.id);
-      expect(fila?.tienda?.id).toBe(tienda.id);
+      expect(fila?.tiendas.map((t) => t.id)).toEqual([tienda.id]);
       expect(fila?.cantidadVentas).toBe(1);
     } finally {
       await limpiar([admin.id, vendedor.id]);
@@ -137,7 +137,7 @@ describe("listarUsuarios", () => {
     try {
       const resultado = await listarUsuarios(admin, { rol: "comprador" });
       const fila = resultado.data.find((u) => u.id === comprador.id);
-      expect(fila?.tienda).toBeNull();
+      expect(fila?.tiendas).toEqual([]);
       expect(fila?.cantidadVentas).toBe(1);
     } finally {
       await limpiar([admin.id, vendedor.id, comprador.id]);
@@ -152,7 +152,7 @@ describe("marcarTester", () => {
     const comprador = await crearComprador();
     try {
       const marcado = await marcarTester(admin, comprador.id, true);
-      expect(marcado).toMatchObject({ id: comprador.id, esTester: true, tienda: null });
+      expect(marcado).toMatchObject({ id: comprador.id, esTester: true, tiendas: [] });
       expect((await marcarTester(admin, comprador.id, false)).esTester).toBe(false);
     } finally {
       await limpiar([admin.id, comprador.id]);
@@ -345,6 +345,23 @@ describe("cambiarPlanUsuario", () => {
       await expect(cambiarPlanUsuario(admin, "00000000-0000-0000-0000-000000000000", "premium")).rejects.toMatchObject({ code: "USUARIO_NO_ENCONTRADO" });
     } finally {
       await prisma.usuario.deleteMany({ where: { id: { in: [admin.id, comprador.id] } } });
+    }
+  });
+});
+
+// 19-equipo-tienda.md: un usuario puede tener varias tiendas.
+describe("usuarios con varias tiendas", () => {
+  it("UsuarioAdmin lista todas sus tiendas y eliminarUsuario las borra todas", async () => {
+    const admin = await crearAdmin();
+    const { vendedor, tienda } = await crearVendedorConTienda();
+    const segunda = await crearTienda(vendedor, { nombre: `Sucursal admin ${contador}`, direccion: "D", lat: -31.5, lon: -68.5 });
+    try {
+      const fila = (await listarUsuarios(admin, { q: vendedor.email })).data[0];
+      expect(fila.tiendas.map((t) => t.id).sort()).toEqual([tienda.id, segunda.id].sort());
+      await eliminarUsuario(admin, vendedor.id, vendedor.email);
+      expect(await prisma.tienda.count({ where: { id: { in: [tienda.id, segunda.id] } } })).toBe(0);
+    } finally {
+      await limpiar([admin.id, vendedor.id]);
     }
   });
 });

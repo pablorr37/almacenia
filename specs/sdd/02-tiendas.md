@@ -10,7 +10,7 @@ CREATE TYPE plan AS ENUM ('free', 'premium');
 
 CREATE TABLE tiendas (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  vendedor_id   UUID NOT NULL UNIQUE REFERENCES usuarios(id),
+  vendedor_id   UUID NOT NULL REFERENCES usuarios(id),      -- propietario; varias tiendas por usuario (19-equipo-tienda.md)
   nombre        TEXT NOT NULL,
   descripcion   TEXT,
   direccion     TEXT NOT NULL,
@@ -63,8 +63,10 @@ CREATE TABLE solicitudes_verificacion (
 CREATE INDEX solicitudes_verificacion_tienda_id_idx ON solicitudes_verificacion (tienda_id);
 ```
 
-- `vendedor_id UNIQUE` implementa la relación 1:1 vendedor–tienda del MVP (ver
-  `00-overview.md`).
+- `vendedor_id` es el **propietario**. Desde la ronda 2 un usuario puede tener varias
+  tiendas y sumar encargados/empleados con permisos: ver
+  [`19-equipo-tienda.md`](19-equipo-tienda.md). Donde este documento dice "solo el
+  dueño", vale lo que defina el permiso correspondiente de ese módulo.
 - `ubicacion` guarda `(longitud, latitud)` como `POINT` geográfico — permite usar
   `ST_DWithin`/`ST_Distance` de PostGIS para búsquedas por cercanía sin calcular
   Haversine a mano en la aplicación.
@@ -192,10 +194,9 @@ Público. Response `200`: `{ data: Tienda }`. `404 TIENDA_NO_ENCONTRADA` si no e
 
 ### `GET /api/tiendas/mia`
 
-Requiere sesión válida. Devuelve la tienda del usuario autenticado (relación 1:1
-vendedor–tienda del MVP, ver arriba) — es la forma en la que el panel del vendedor
-resuelve su propia tienda sin conocer de antemano el `id`, en vez de guardarlo por su
-cuenta (ej. `localStorage`) en el cliente.
+Requiere sesión válida. Devuelve una tienda del usuario autenticado (propia o donde
+es miembro): la de `?tiendaId=` si se manda, si no la primera de
+`GET /api/tiendas/mias`. Detalle en [`19-equipo-tienda.md`](19-equipo-tienda.md).
 
 Response `200`: `{ data: Tienda }`. `404 TIENDA_NO_ENCONTRADA` si el usuario todavía
 no creó su tienda.
@@ -340,7 +341,6 @@ async function revisarSolicitudVerificacion(
 
 | Código                      | Cuándo                                                        |
 | ---------------------------- | ---------------------------------------------------------------|
-| `USUARIO_YA_TIENE_TIENDA`    | El usuario ya tiene una tienda creada (`POST /api/tiendas`). |
 | `UBICACION_INVALIDA`         | `lat`/`lon` fuera de rango o faltantes al crear.               |
 | `TIENDA_NO_ENCONTRADA`       | `:id` no existe.                                                |
 | `NO_ES_DUENO_DE_TIENDA`      | El usuario autenticado intenta editar una tienda que no es la suya. |

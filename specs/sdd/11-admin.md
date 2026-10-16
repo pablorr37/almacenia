@@ -177,8 +177,9 @@ async function listarSolicitudesVerificacion(
 type RolUsuario = 'comprador' | 'vendedor' | 'admin';
 
 interface UsuarioAdmin extends Usuario {
-  tienda: { id: string; nombre: string; plan: Plan; verificada: boolean } | null;
-  cantidadVentas: number; // vendedor: ventas de su tienda; sin tienda: compras propias
+  plan: Plan; // plan del usuario (18-alcance.md)
+  tiendas: Array<{ id: string; nombre: string; plan: Plan; verificada: boolean }>; // propias (19-equipo-tienda.md)
+  cantidadVentas: number; // con tiendas: ventas cobradas de todas; sin tienda: compras propias
 }
 
 interface ListarUsuariosInput {

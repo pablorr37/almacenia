@@ -224,11 +224,7 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
   }
   await validarRubroId(input.rubroId);
 
-  const existente = await prisma.tienda.findUnique({ where: { vendedorId: usuario.id } });
-  if (existente) {
-    throw new AppError("USUARIO_YA_TIENE_TIENDA", "El usuario ya tiene una tienda creada.");
-  }
-
+  // Un usuario puede tener varias tiendas (19-equipo-tienda.md).
   const mediosDePago = input.mediosDePago ?? [];
 
   const [fila] = await prisma.$transaction(async (tx) => {
@@ -341,15 +337,6 @@ export async function obtenerTiendaPublica(id: string): Promise<Tienda | null> {
   });
   if (!dueno || dueno.vendedor.estadoCuenta !== "activa") return null;
   return obtenerTienda(id);
-}
-
-export async function obtenerTiendaPorVendedor(vendedorId: string): Promise<Tienda | null> {
-  const filas = await prisma.$queryRaw<FilaTienda[]>`
-    ${SELECT_TIENDA} WHERE vendedor_id = ${vendedorId}
-  `;
-  if (!filas[0]) return null;
-  const horarios = await obtenerHorarios(filas[0].id);
-  return aTienda(filas[0], horarios);
 }
 
 export interface ActualizarTiendaInput {

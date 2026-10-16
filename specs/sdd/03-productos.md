@@ -305,7 +305,8 @@ async function debitarStock(productoId: string, cantidad: number): Promise<Produ
 | Código                     | Cuándo                                                           |
 | --------------------------- | ------------------------------------------------------------------|
 | `TIENDA_NO_ENCONTRADA`      | `tiendaId` no existe al crear/listar productos.                  |
-| `NO_ES_DUENO_DE_TIENDA`     | El usuario autenticado no es dueño de la tienda del producto.    |
+| `NO_ES_DUENO_DE_TIENDA`     | El usuario no es propietario ni miembro de la tienda del producto. |
+| `SIN_PERMISO`               | Es miembro, pero le falta el permiso (`productos`, `precios`, `stock`, `fotos`, `vender`; ver `19-equipo-tienda.md`). |
 | `PRODUCTO_NO_ENCONTRADO`    | `:id` no existe.                                                  |
 | `PRECIO_INVALIDO`           | `precio < 0`.                                                     |
 | `STOCK_INVALIDO`            | `stock < 0` (en creación o edición manual).                      |

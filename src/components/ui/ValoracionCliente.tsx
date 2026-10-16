@@ -12,7 +12,16 @@ type Resumen = {
 
 // Reputación del cliente para el vendedor (13-valoraciones-clientes.md): promedio
 // entre todas las tiendas + la valoración propia, editable si `puedeValorar`.
-export function ValoracionCliente({ compradorId, puedeValorar }: { compradorId: string; puedeValorar: boolean }) {
+export function ValoracionCliente({
+  compradorId,
+  puedeValorar,
+  tiendaId,
+}: {
+  compradorId: string;
+  puedeValorar: boolean;
+  tiendaId?: string; // con varias tiendas: desde cuál se valora (19-equipo-tienda.md)
+}) {
+  const url = `/api/clientes/${compradorId}/valoracion${tiendaId ? `?tiendaId=${tiendaId}` : ""}`;
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [abierto, setAbierto] = useState(false);
   const [puntuacion, setPuntuacion] = useState(0);
@@ -21,22 +30,22 @@ export function ValoracionCliente({ compradorId, puedeValorar }: { compradorId: 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiGet<Resumen>(`/api/clientes/${compradorId}/valoracion`)
+    apiGet<Resumen>(url)
       .then((r) => {
         setResumen(r);
         setPuntuacion(r.miValoracion?.puntuacion ?? 0);
         setComentario(r.miValoracion?.comentario ?? "");
       })
       .catch(() => {});
-  }, [compradorId]);
+  }, [url]);
 
   async function guardar() {
     if (puntuacion === 0) return;
     setGuardando(true);
     setError(null);
     try {
-      await apiPut(`/api/clientes/${compradorId}/valoracion`, { puntuacion, comentario });
-      const r = await apiGet<Resumen>(`/api/clientes/${compradorId}/valoracion`);
+      await apiPut(`/api/clientes/${compradorId}/valoracion`, { puntuacion, comentario, tiendaId });
+      const r = await apiGet<Resumen>(url);
       setResumen(r);
       setAbierto(false);
     } catch (err) {

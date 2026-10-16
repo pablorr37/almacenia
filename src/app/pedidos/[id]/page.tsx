@@ -53,9 +53,9 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
     apiGet<Pedido>(`/api/pedidos/${id}`)
       .then(async (p) => {
         setPedido(p);
-        // ¿Lo está mirando el dueño de la tienda? (el comprador no tiene tienda propia con ese id)
-        const mia = await apiGet<{ id: string }>("/api/tiendas/mia").catch(() => null);
-        setEsVendedor(mia?.id === p.tiendaId);
+        // ¿Lo está mirando alguien que atiende los pedidos de esa tienda? (19-equipo-tienda.md)
+        const mias = await apiGet<Array<{ tienda: { id: string }; permisos: string[] }>>("/api/tiendas/mias").catch(() => []);
+        setEsVendedor(mias.some((m) => m.tienda.id === p.tiendaId && m.permisos.includes("pedidos")));
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Error al cargar el pedido."));
   }, [id]);
@@ -83,8 +83,11 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-5 bg-bg px-5 py-6">
-      <Link href={esVendedor ? "/mi-tienda" : "/"} className="text-[13px] font-semibold text-accent-text">
-        {esVendedor ? "← Volver a mi tienda" : "← Volver al mapa"}
+      <Link
+        href={esVendedor && pedido ? `/mi-tienda?tienda=${pedido.tiendaId}&seccion=pedidos` : "/perfil/pedidos"}
+        className="text-[13px] font-semibold text-accent-text"
+      >
+        {esVendedor ? "← Volver a los pedidos de la tienda" : "← Volver a mis pedidos"}
       </Link>
 
       {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}

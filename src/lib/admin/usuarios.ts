@@ -12,7 +12,8 @@ export interface UsuarioAdmin extends Usuario {
   plan: Plan; // plan del usuario (18-alcance.md); el de la tienda va en `tienda.plan`
   estadoCuenta: EstadoCuenta;
   motivoSuspension: string | null;
-  tienda: { id: string; nombre: string; plan: Plan; verificada: boolean } | null;
+  // Tiendas propias (19-equipo-tienda.md: puede tener varias).
+  tiendas: Array<{ id: string; nombre: string; plan: Plan; verificada: boolean }>;
   cantidadVentas: number;
 }
 
@@ -36,13 +37,15 @@ type UsuarioConTienda = Awaited<ReturnType<typeof buscarConTienda>>;
 function buscarConTienda(id: string) {
   return prisma.usuario.findUniqueOrThrow({
     where: { id },
-    include: { tienda: { select: { id: true, nombre: true, plan: true, verificada: true } } },
+    include: { tiendas: { select: SELECT_TIENDA_ADMIN, orderBy: { creadaEn: "asc" } } },
   });
 }
 
+const SELECT_TIENDA_ADMIN = { id: true, nombre: true, plan: true, verificada: true } as const;
+
 async function aUsuarioAdmin(u: UsuarioConTienda): Promise<UsuarioAdmin> {
-  const cantidadVentas = u.tienda
-    ? await prisma.venta.count({ where: { tiendaId: u.tienda.id, estado: "cobrada" } })
+  const cantidadVentas = u.tiendas.length > 0
+    ? await prisma.venta.count({ where: { tiendaId: { in: u.tiendas.map((t) => t.id) }, estado: "cobrada" } })
     : await prisma.venta.count({ where: { compradorId: u.id, estado: "cobrada" } });
   return {
     id: u.id,
@@ -56,7 +59,7 @@ async function aUsuarioAdmin(u: UsuarioConTienda): Promise<UsuarioAdmin> {
     plan: u.plan,
     estadoCuenta: u.estadoCuenta,
     motivoSuspension: u.motivoSuspension,
-    tienda: u.tienda,
+    tiendas: u.tiendas,
     cantidadVentas,
   };
 }
@@ -138,9 +141,9 @@ export async function eliminarUsuario(
     throw new AppError("CONFIRMACION_INVALIDA", "Para eliminar la cuenta, escribí exactamente el email del usuario.");
   }
 
-  const tienda = await prisma.tienda.findUnique({ where: { vendedorId: usuarioId }, select: { id: true } });
+  const tiendas = await prisma.tienda.findMany({ where: { vendedorId: usuarioId }, select: { id: true } });
   await prisma.$transaction(async (tx) => {
-    if (tienda) {
+    for (const tienda of tiendas) {
       const t = tienda.id;
       await tx.itemVenta.deleteMany({ where: { OR: [{ venta: { tiendaId: t } }, { producto: { tiendaId: t } }] } });
       await tx.venta.deleteMany({ where: { tiendaId: t } });
@@ -182,14 +185,14 @@ export async function listarUsuarios(
       input.rol ? { [CAMPO_POR_ROL[input.rol]]: true } : {},
       input.estadoCuenta ? { estadoCuenta: input.estadoCuenta } : {},
       // Filtrar por plan implica ser vendedor con tienda de ese plan.
-      input.plan ? { esVendedor: true, tienda: { plan: input.plan } } : {},
+      input.plan ? { esVendedor: true, tiendas: { some: { plan: input.plan } } } : {},
       // Búsqueda libre por nombre, email o nombre de la tienda (11-admin.md).
       q
         ? {
             OR: [
               { nombre: { contains: q, mode: "insensitive" as const } },
               { email: { contains: q, mode: "insensitive" as const } },
-              { tienda: { nombre: { contains: q, mode: "insensitive" as const } } },
+              { tiendas: { some: { nombre: { contains: q, mode: "insensitive" as const } } } },
             ],
           }
         : {},
@@ -199,7 +202,7 @@ export async function listarUsuarios(
   const [usuarios, total] = await Promise.all([
     prisma.usuario.findMany({
       where,
-      include: { tienda: { select: { id: true, nombre: true, plan: true, verificada: true } } },
+      include: { tiendas: { select: SELECT_TIENDA_ADMIN, orderBy: { creadaEn: "asc" } } },
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy: { creadoEn: "desc" },

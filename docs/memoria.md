@@ -4,14 +4,14 @@ Lista viva. **Antes de empezar una tarea, leé este archivo. Al terminarla, actu
 estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
 [`docs/rondas/`](rondas/).
 
-Última actualización: 2026-10-16.
+Última actualización: 2026-10-17.
 
 ## Estado de las rondas
 
 | Ronda | Alcance | Estado | PR |
 | --- | --- | --- | --- |
 | 1 | Bugs (escáner, editar/eliminar productos, × descentrada) + radio de alcance en el mapa | Hecha | [#8](https://github.com/pablorr37/almacenia/pull/8) |
-| 2 | [Inicio del vendedor y menú de inicio, varias tiendas, empleados y permisos](rondas/ronda-2-inicio-vendedor.md) | Pendiente | — |
+| 2 | [Inicio del vendedor y menú de inicio, varias tiendas, empleados y permisos](rondas/ronda-2-inicio-vendedor.md) | Hecha | [#9](https://github.com/pablorr37/almacenia/pull/9) |
 | 3 | [Precio = costo + ganancia + impuestos, datos para facturar, balance por plan, plan Plata](rondas/ronda-3-precios-balance.md) | Pendiente | — |
 | 4 | [Publicidad: Google + otros proveedores + motor propio de Almacenia](rondas/ronda-4-publicidad.md) | Pendiente | — |
 | — | Plan Gold ("casi admin") | Para otra ronda | — |
@@ -88,6 +88,33 @@ Aclaraciones posteriores del usuario:
   - Los invitados no se limitan: su lista es una vitrina de hasta 50 km desde el centro de San Juan.
 - **Plan por usuario vs. por tienda:** el enum `plan` ya tiene `plata`. Desde el admin, la tienda sigue siendo free/premium hasta la ronda 3.
 
+## Ronda 2: qué quedó hecho
+
+Spec: `specs/sdd/19-equipo-tienda.md`.
+
+- **Pantalla de inicio:**
+  - sin sesión, la lista de negocios cercanos (`HomeInvitado`);
+  - con sesión, un **menú** con "Mi negocio" (si gestiona alguna tienda), "Comprar" (Mapa, Listas, Mis pedidos, Mis puntos) y la cuenta.
+  - El mapa pasó a `/mapa`.
+- **Mi negocio:**
+  - selector de tienda activa (se recuerda en el navegador);
+  - accesos según permisos: Nueva venta, Stock, Pedidos, Usuarios, Balance, Datos de la tienda;
+  - Nueva sucursal.
+- **Varias tiendas por usuario:** se quitó el UNIQUE de `tiendas.vendedor_id`; `GET /api/tiendas/mias`.
+- **Equipo** (`miembros_tienda`):
+  - el propietario (o alguien con permiso `usuarios`) suma usuarios por email o con el QR de "Compartir mis datos", como encargado o empleado;
+  - los permisos se marcan uno por uno;
+  - por defecto: encargado tiene todos menos `usuarios`; empleado tiene vender y cobrar.
+  - Todos los chequeos de "dueño" pasan por `exigirPermiso`.
+- **Balance básico** (`/mi-tienda/balance`):
+  - cobrado, por cobrar y anuladas;
+  - por día, por medio de pago y por quién vendió (`ventas.vendida_por_id`).
+  - La ronda 3 le suma costo, ganancia e impuestos.
+- **Decisiones de esta ronda:**
+  - los puntos por venta siguen yendo al propietario aunque venda un empleado;
+  - valorar clientes y editar los datos de la tienda son solo del propietario;
+  - cobrar en el momento pide el permiso `cobrar`.
+
 ## Preguntas abiertas
 
 - **Facturación (ronda 3):**
@@ -96,4 +123,4 @@ Aclaraciones posteriores del usuario:
 - **Publicidad (ronda 4):**
   - IDs de Google AdSense/Ad Manager y qué otros proveedores (los configura el usuario);
   - precio y forma de pago de la publicidad en el mapa.
-- **Empleados (ronda 2):** lista final de permisos asignables. Propuestos: vender, cobrar, anular, cambiar precios, editar stock, alta y baja de productos, fotos, ver balance, gestionar empleados.
+- **Empleados (ronda 2, resuelta con la lista propuesta):** vender, cobrar, anular, precios, stock, productos, fotos, pedidos, balance, usuarios. Si el usuario quiere otros permisos (por ejemplo, separar "ver" de "editar" el stock), se agregan al enum `permiso_tienda` sin cambiar el modelo.

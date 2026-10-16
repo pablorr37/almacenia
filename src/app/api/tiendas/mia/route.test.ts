@@ -28,14 +28,14 @@ describe("GET /api/tiendas/mia", () => {
   it("401 sin sesión", async () => {
     obtenerUsuarioActualMock.mockResolvedValue(null);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/tiendas/mia"));
     expect(res.status).toBe(401);
   });
 
   it("404 TIENDA_NO_ENCONTRADA si el usuario no tiene tienda", async () => {
     obtenerUsuarioActualMock.mockResolvedValue(usuario);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/tiendas/mia"));
     const body = await res.json();
 
     expect(res.status).toBe(404);
@@ -51,7 +51,7 @@ describe("GET /api/tiendas/mia", () => {
     });
     obtenerUsuarioActualMock.mockResolvedValue(usuario);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/tiendas/mia"));
     const body = await res.json();
 
     expect(res.status).toBe(200);

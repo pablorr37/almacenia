@@ -1,5 +1,6 @@
 // Valoración de clientes por el dueño de la tienda (specs/sdd/13-valoraciones-clientes.md).
 import { prisma } from "@/lib/prisma";
+import { exigirPermiso, PERMISOS } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import type { ValoracionCliente as ValoracionClienteDb } from "@/generated-prisma/client";
@@ -17,6 +18,7 @@ export interface ValoracionCliente {
 export interface ValorarClienteInput {
   puntuacion: number;
   comentario?: string;
+  tiendaId?: string; // con varias tiendas (19-equipo-tienda.md); default: la primera propia
 }
 
 export interface ResumenCliente {
@@ -40,10 +42,18 @@ function redondear(promedio: number | null): number | null {
   return promedio === null ? null : Math.round(promedio * 10) / 10;
 }
 
-// La tienda del vendedor autenticado. Se resuelve por DB (relación 1:1 del MVP) en
-// vez de confiar en el flag esVendedor del objeto en memoria.
-async function tiendaDelVendedor(vendedor: Usuario): Promise<{ id: string }> {
-  const tienda = await prisma.tienda.findUnique({ where: { vendedorId: vendedor.id }, select: { id: true } });
+// Tienda desde la que valora el propietario (19-equipo-tienda.md): la pedida, o la
+// primera propia. Valorar clientes es solo del propietario.
+async function tiendaDelVendedor(vendedor: Usuario, tiendaId?: string): Promise<{ id: string }> {
+  if (tiendaId) {
+    await exigirPermiso(vendedor, tiendaId, "propietario");
+    return { id: tiendaId };
+  }
+  const tienda = await prisma.tienda.findFirst({
+    where: { vendedorId: vendedor.id },
+    select: { id: true },
+    orderBy: { creadaEn: "asc" },
+  });
   if (!tienda) {
     throw new AppError("FORBIDDEN", "Solo los dueños de una tienda pueden valorar clientes.");
   }
@@ -58,7 +68,7 @@ export async function valorarCliente(
   if (!Number.isInteger(input.puntuacion) || input.puntuacion < 1 || input.puntuacion > 5) {
     throw new AppError("PUNTUACION_INVALIDA", "La puntuación debe ser un entero entre 1 y 5.");
   }
-  const tienda = await tiendaDelVendedor(vendedor);
+  const tienda = await tiendaDelVendedor(vendedor, input.tiendaId);
   if (compradorId === vendedor.id) {
     throw new AppError("VALORACION_PROPIA", "No podés valorarte a vos mismo.");
   }
@@ -84,7 +94,12 @@ export async function resumenesClientes(
   vendedor: Usuario,
   compradorIds: string[]
 ): Promise<Record<string, ResumenCliente>> {
-  await tiendaDelVendedor(vendedor);
+  // Lo ve cualquiera que gestione una tienda: propietario o parte de un equipo.
+  const gestiona = await prisma.tienda.findFirst({
+    where: { OR: [{ vendedorId: vendedor.id }, { miembros: { some: { usuarioId: vendedor.id } } }] },
+    select: { id: true },
+  });
+  if (!gestiona) throw new AppError("FORBIDDEN", "Solo quienes gestionan una tienda pueden ver esto.");
   const ids = [...new Set(compradorIds)];
   const agregados = await prisma.valoracionCliente.groupBy({
     by: ["compradorId"],
@@ -103,9 +118,12 @@ export async function resumenesClientes(
 
 export async function resumenCliente(
   vendedor: Usuario,
-  compradorId: string
+  compradorId: string,
+  tiendaId?: string
 ): Promise<ResumenCliente & { miValoracion: ValoracionCliente | null }> {
-  const tienda = await tiendaDelVendedor(vendedor);
+  // Leer el resumen lo puede cualquiera del equipo; valorar, solo el propietario.
+  if (tiendaId) await exigirPermiso(vendedor, tiendaId, PERMISOS.slice());
+  const tienda = tiendaId ? { id: tiendaId } : await tiendaDelVendedor(vendedor);
   const resumen = (await resumenesClientes(vendedor, [compradorId]))[compradorId];
   const propia = await prisma.valoracionCliente.findUnique({
     where: { tiendaId_compradorId: { tiendaId: tienda.id, compradorId } },

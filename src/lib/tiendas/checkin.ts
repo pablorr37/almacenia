@@ -32,7 +32,12 @@ export async function hacerCheckIn(
   if (!tienda) {
     throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
   }
-  if (tienda.vendedor_id === comprador.id) {
+  // Propia o donde es parte del equipo (19-equipo-tienda.md).
+  const esMiembro = await prisma.miembroTienda.findUnique({
+    where: { tiendaId_usuarioId: { tiendaId, usuarioId: comprador.id } },
+    select: { rol: true },
+  });
+  if (tienda.vendedor_id === comprador.id || esMiembro) {
     throw new AppError("CHECKIN_TIENDA_PROPIA", "No podés hacer check-in en tu propia tienda.");
   }
   const distanciaM = Math.round(Number(tienda.distancia_m) * 10) / 10;

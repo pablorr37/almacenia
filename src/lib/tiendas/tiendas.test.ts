@@ -5,7 +5,6 @@ import {
   crearTienda,
   buscarTiendasCercanas,
   obtenerTienda,
-  obtenerTiendaPorVendedor,
   obtenerTiendaPublica,
   actualizarTienda,
   horarioValido,
@@ -85,22 +84,22 @@ describe("crearTienda", () => {
     expect(actualizado?.esVendedor).toBe(true);
   });
 
-  it("lanza USUARIO_YA_TIENE_TIENDA si el usuario ya tiene una tienda", async () => {
-    await crearTienda(usuario, {
+  it("un usuario puede crear una segunda tienda (19-equipo-tienda.md)", async () => {
+    const primera = await crearTienda(usuario, {
       nombre: "Primera tienda",
       direccion: "Dirección 1",
       lat: LAT_BASE,
       lon: LON_BASE,
     });
 
-    await expect(
-      crearTienda(usuario, {
-        nombre: "Segunda tienda",
-        direccion: "Dirección 2",
-        lat: LAT_BASE,
-        lon: LON_BASE,
-      })
-    ).rejects.toMatchObject<Partial<AppError>>({ code: "USUARIO_YA_TIENE_TIENDA" });
+    const segunda = await crearTienda(usuario, {
+      nombre: "Segunda tienda",
+      direccion: "Dirección 2",
+      lat: LAT_BASE,
+      lon: LON_BASE,
+    });
+    expect(segunda.id).not.toBe(primera.id);
+    expect(segunda.vendedorId).toBe(usuario.id);
   });
 
   it.each([
@@ -330,7 +329,7 @@ describe("buscarTiendasCercanas", () => {
     const resultado = await buscarTiendasCercanas({ lat: LAT_BASE, lon: LON_BASE, radioKm: 5 });
     expect(resultado.map((t) => t.nombre)).not.toContain("Tienda cercana");
 
-    const tienda = await obtenerTiendaPorVendedor(cercana.id);
+    const tienda = await prisma.tienda.findFirst({ where: { vendedorId: cercana.id } });
     expect(await obtenerTiendaPublica(tienda!.id)).toBeNull();
     await prisma.usuario.update({ where: { id: cercana.id }, data: { estadoCuenta: "activa" } });
     expect((await obtenerTiendaPublica(tienda!.id))?.nombre).toBe("Tienda cercana");
@@ -430,36 +429,6 @@ describe("obtenerTienda", () => {
 
     expect(encontrada?.mediosDePago).toEqual(["debito"]);
     expect(encontrada?.horarios).toHaveLength(7);
-  });
-});
-
-describe("obtenerTiendaPorVendedor", () => {
-  let usuario: Usuario;
-
-  beforeEach(async () => {
-    usuario = await crearUsuarioDePrueba();
-  });
-
-  afterEach(() => limpiar([usuario.id]));
-
-  it("devuelve la tienda del vendedor dado", async () => {
-    const creada = await crearTienda(usuario, {
-      nombre: "Mi tienda",
-      direccion: "Dirección",
-      lat: LAT_BASE,
-      lon: LON_BASE,
-    });
-
-    const encontrada = await obtenerTiendaPorVendedor(usuario.id);
-
-    expect(encontrada?.id).toBe(creada.id);
-    expect(encontrada?.vendedorId).toBe(usuario.id);
-  });
-
-  it("devuelve null si el usuario no tiene tienda", async () => {
-    const encontrada = await obtenerTiendaPorVendedor(usuario.id);
-
-    expect(encontrada).toBeNull();
   });
 });
 

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { exigirPermiso, accesoATienda } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
 import { esComprable } from "@/lib/productos/productos";
 import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
@@ -168,7 +169,7 @@ export async function obtenerPedido(usuario: Usuario, pedidoId: string): Promise
   if (!pedido) return null;
 
   const esComprador = pedido.compradorId === usuario.id;
-  const esVendedor = pedido.tienda.vendedorId === usuario.id;
+  const esVendedor = (await accesoATienda(usuario.id, pedido.tiendaId))?.permisos.includes("pedidos") ?? false;
   if (!esComprador && !esVendedor) {
     throw new AppError("NO_AUTORIZADO_PEDIDO", "No tenés acceso a este pedido.");
   }
@@ -187,7 +188,7 @@ export async function transicionarPedido(
   }
 
   const esComprador = pedido.compradorId === usuario.id;
-  const esVendedor = pedido.tienda.vendedorId === usuario.id;
+  const esVendedor = (await accesoATienda(usuario.id, pedido.tiendaId))?.permisos.includes("pedidos") ?? false;
   if (!esComprador && !esVendedor) {
     throw new AppError("NO_AUTORIZADO_PEDIDO", "No tenés acceso a este pedido.");
   }
@@ -236,13 +237,7 @@ export async function listarPedidos(
   const where: { tiendaId?: string; compradorId?: string; estado?: EstadoPedido } = {};
 
   if (input.tiendaId) {
-    const tienda = await prisma.tienda.findUnique({ where: { id: input.tiendaId } });
-    if (!tienda) {
-      throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
-    }
-    if (tienda.vendedorId !== usuario.id) {
-      throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
-    }
+    await exigirPermiso(usuario, input.tiendaId, "pedidos");
     where.tiendaId = input.tiendaId;
   }
 

@@ -64,7 +64,7 @@ function AdminProductosContent() {
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 px-6 text-center">
         <p className="text-text-2">Esta sección es solo para administradores.</p>
         <Link href="/" className="font-semibold text-accent-text">
-          Volver al mapa
+          Volver al inicio
         </Link>
       </div>
     );

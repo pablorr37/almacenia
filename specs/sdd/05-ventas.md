@@ -205,6 +205,7 @@ interface Venta {
   total: number;
   items: ItemVenta[]; // cada ítem incluye nombre y unidad del producto
   comprador: { nombre: string; email: string } | null;
+  vendidaPor: { id: string; nombre: string } | null; // quién la registró (19-equipo-tienda.md)
   creadaEn: string;
   cobradaEn: string | null;
   anuladaEn: string | null;
@@ -258,7 +259,8 @@ async function listarVentas(
 | Código                       | Cuándo                                                              |
 | ------------------------------| -----------------------------------------------------------------------|
 | `TIENDA_NO_ENCONTRADA`        | `tiendaId` no existe al crear/listar ventas.                        |
-| `NO_ES_DUENO_DE_TIENDA`       | El usuario autenticado no es el vendedor dueño de la tienda.        |
+| `NO_ES_DUENO_DE_TIENDA`       | El usuario no es propietario ni miembro de la tienda (`19-equipo-tienda.md`). |
+| `SIN_PERMISO`                 | Es miembro, pero no tiene el permiso (`vender`, `cobrar`, `anular`). |
 | `PRODUCTOS_DE_OTRA_TIENDA`    | Algún `productoId` de la venta presencial no pertenece a `tiendaId`. |
 | `STOCK_INSUFICIENTE`          | Stock no alcanza para debitar la cantidad pedida de algún producto (venta presencial o al confirmar entrega de un pedido). Ver regla de atomicidad. |
 | `ITEMS_VACIOS`                | `items` es un array vacío al crear una venta presencial.             |
