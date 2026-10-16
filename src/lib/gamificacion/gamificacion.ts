@@ -57,6 +57,7 @@ const DESCRIPCION_POR_TIPO: Record<string, string> = {
   producto_cargado: "Cargaste un producto",
   foto_cargada: "Cargaste una foto de producto",
   venta_realizada: "Venta realizada",
+  venta_realizada_equipo: "Venta que hiciste en el equipo de una tienda",
   compra_realizada: "Compra realizada",
   visita_compra: "Visitaste la tienda y compraste",
   checkin_gps: "Check-in en la tienda",
@@ -90,6 +91,14 @@ export function puntosVentaVendedor(items: LineaVenta[]): number {
   const porProducto = agruparPorProducto(items);
   const unidadesGrandes = [...porProducto.values()].filter((c) => c > 3).reduce((s, c) => s + c, 0);
   return redondear1(1 + 0.1 * porProducto.size + 0.1 * unidadesGrandes);
+}
+
+// Reparto de venta_realizada entre el miembro del equipo que vendió y el propietario
+// (12-gamificacion.md): el equipo se lleva pctEquipo % redondeado a 1 decimal y el
+// propietario el resto, así la suma es exacta.
+export function repartirPuntosVenta(puntos: number, pctEquipo: number): { equipo: number; propietario: number } {
+  const equipo = redondear1((puntos * pctEquipo) / 100);
+  return { equipo, propietario: redondear1(puntos - equipo) };
 }
 
 // compra_realizada: ≥2 productos distintos o alguna línea con más de 5 unidades.
@@ -297,7 +306,7 @@ export async function otorgarPorVenta(ventaId: string): Promise<void> {
     where: { id: ventaId },
     include: {
       items: { include: { producto: { select: { catalogo: { select: { unidad: true } } } } } },
-      tienda: { select: { id: true, vendedorId: true } },
+      tienda: { select: { id: true, vendedorId: true, porcentajePuntosEquipo: true } },
     },
   });
   // Solo puntúan las ventas cobradas (12-gamificacion.md).
@@ -308,15 +317,35 @@ export async function otorgarPorVenta(ventaId: string): Promise<void> {
     unidad: i.producto.catalogo.unidad,
   }));
 
-  await registrarEvento(venta.tienda.vendedorId, "venta_realizada", puntosVentaVendedor(lineas), {
-    tiendaId: venta.tiendaId,
-    contraparteUsuarioId: venta.compradorId,
-    claveUnica: `venta_realizada:${venta.id}`,
-    metadata: { ventaId: venta.id },
-  });
+  const puntos = puntosVentaVendedor(lineas);
+  const propietarioId = venta.tienda.vendedorId;
+  // Venta registrada por alguien del equipo: se reparte según la tienda o, si no lo
+  // configuró, según el default del sistema (19-equipo-tienda.md).
+  const miembroId = venta.vendidaPorId && venta.vendidaPorId !== propietarioId ? venta.vendidaPorId : null;
+  const pctEquipo = miembroId
+    ? venta.tienda.porcentajePuntosEquipo ?? (await obtenerConfig("gamificacion.porcentaje_puntos_equipo"))
+    : 0;
+  const reparto = repartirPuntosVenta(puntos, pctEquipo);
+
+  if (miembroId && reparto.equipo > 0) {
+    await registrarEvento(miembroId, "venta_realizada_equipo", reparto.equipo, {
+      tiendaId: venta.tiendaId,
+      contraparteUsuarioId: venta.compradorId,
+      claveUnica: `venta_realizada_equipo:${venta.id}`,
+      metadata: { ventaId: venta.id, porcentajeEquipo: pctEquipo },
+    });
+  }
+  if (reparto.propietario > 0) {
+    await registrarEvento(propietarioId, "venta_realizada", reparto.propietario, {
+      tiendaId: venta.tiendaId,
+      contraparteUsuarioId: venta.compradorId,
+      claveUnica: `venta_realizada:${venta.id}`,
+      metadata: { ventaId: venta.id },
+    });
+  }
 
   const compradorId = venta.compradorId;
-  if (!compradorId || compradorId === venta.tienda.vendedorId) return;
+  if (!compradorId || compradorId === propietarioId || compradorId === venta.vendidaPorId) return;
 
   if (compraPuntua(lineas)) {
     await registrarEvento(compradorId, "compra_realizada", 1, {

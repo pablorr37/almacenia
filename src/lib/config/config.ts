@@ -10,6 +10,13 @@ export const CLAVES_CONFIG = {
     descripcion:
       "Gamificación: productos distintos que tiene que superar una 2ª compra del día en la misma tienda para volver a sumar el punto de 'tienda visitada'.",
   },
+  "gamificacion.porcentaje_puntos_equipo": {
+    porDefecto: 50,
+    entero: true,
+    maximo: 100,
+    descripcion:
+      "Gamificación: % de los puntos de una venta que se lleva el miembro del equipo que la registró (el resto, el dueño). Cada tienda puede definir el suyo.",
+  },
   "itinerario.costo_km": {
     porDefecto: 300,
     entero: false,
@@ -55,12 +62,17 @@ export async function actualizarConfig(admin: Usuario, clave: string, valor: num
   if (!esClave(clave)) {
     throw new AppError("CLAVE_CONFIG_INVALIDA", "Esa clave de configuración no existe.");
   }
-  const def = CLAVES_CONFIG[clave];
-  if (typeof valor !== "number" || !Number.isFinite(valor) || valor < 0 || (def.entero && !Number.isInteger(valor))) {
-    throw new AppError(
-      "VALOR_CONFIG_INVALIDO",
-      def.entero ? "El valor debe ser un entero mayor o igual a 0." : "El valor debe ser un número mayor o igual a 0."
-    );
+  const def: { entero: boolean; maximo?: number; porDefecto: number; descripcion: string } = CLAVES_CONFIG[clave];
+  const maximo = def.maximo ?? Infinity;
+  if (
+    typeof valor !== "number" ||
+    !Number.isFinite(valor) ||
+    valor < 0 ||
+    valor > maximo ||
+    (def.entero && !Number.isInteger(valor))
+  ) {
+    const rango = Number.isFinite(maximo) ? `entre 0 y ${maximo}` : "mayor o igual a 0";
+    throw new AppError("VALOR_CONFIG_INVALIDO", def.entero ? `El valor debe ser un entero ${rango}.` : `El valor debe ser un número ${rango}.`);
   }
   await prisma.configuracionSistema.upsert({ where: { clave }, create: { clave, valor }, update: { valor } });
   return { clave, valor, porDefecto: def.porDefecto, descripcion: def.descripcion };

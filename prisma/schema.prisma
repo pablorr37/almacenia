@@ -93,6 +93,9 @@ model Tienda {
   plan           Plan      @default(free)
   mediosDePago   MedioPago[] @default([]) @map("medios_de_pago")
   abierto24hs    Boolean   @default(false) @map("abierto_24hs")
+  // 12-gamificacion.md: % de los puntos de una venta para el miembro que la registró.
+  // null = default del sistema (gamificacion.porcentaje_puntos_equipo).
+  porcentajePuntosEquipo Int? @map("porcentaje_puntos_equipo") @db.SmallInt
   creadaEn       DateTime  @default(now()) @map("creada_en")
   actualizadaEn  DateTime  @default(now()) @updatedAt @map("actualizada_en")
 

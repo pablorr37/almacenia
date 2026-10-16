@@ -111,7 +111,7 @@ Spec: `specs/sdd/19-equipo-tienda.md`.
   - por día, por medio de pago y por quién vendió (`ventas.vendida_por_id`).
   - La ronda 3 le suma costo, ganancia e impuestos.
 - **Decisiones de esta ronda:**
-  - los puntos por venta siguen yendo al propietario aunque venda un empleado;
+  - ~~los puntos por venta siguen yendo al propietario aunque venda un empleado~~ → **corregido por el usuario (ronda 3):** se reparten entre quien vendió y el dueño; la proporción la configura el dueño en su tienda (por defecto 50/50, valor del sistema editable por el admin, nada fijo en el código);
   - valorar clientes y editar los datos de la tienda son solo del propietario;
   - cobrar en el momento pide el permiso `cobrar`.
 

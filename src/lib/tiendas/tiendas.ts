@@ -33,6 +33,7 @@ export interface Tienda {
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[];
   abierto24hs: boolean;
+  porcentajePuntosEquipo: number | null; // 12-gamificacion.md; null = default del sistema
 }
 
 export interface SolicitudVerificacion {
@@ -63,6 +64,7 @@ interface FilaTienda {
   // (medio_pago[]) — llega como el literal crudo de Postgres, ej. "{efectivo,qr}".
   medios_de_pago: string;
   abierto_24hs: boolean;
+  porcentaje_puntos_equipo: number | null;
 }
 
 // Convierte el literal de array de Postgres ("{}", "{efectivo,qr}") a string[].
@@ -91,6 +93,7 @@ function aTienda(fila: FilaTienda, horarios: HorarioTienda[] = []): Tienda {
     mediosDePago: parsearMediosDePago(fila.medios_de_pago),
     horarios,
     abierto24hs: fila.abierto_24hs,
+    porcentajePuntosEquipo: fila.porcentaje_puntos_equipo,
   };
 }
 
@@ -98,16 +101,17 @@ function aTienda(fila: FilaTienda, horarios: HorarioTienda[] = []): Tienda {
 // fila actual, también válida en RETURNING.
 const COLUMNA_RUBRO = Prisma.sql`(SELECT json_build_object('id', r.id, 'nombre', r.nombre) FROM rubros r WHERE r.id = rubro_id) AS rubro`;
 
-// Columnas comunes a todas las queries de lectura: ST_Y/ST_X extraen lat/lon del
+// Columnas de una Tienda, comunes a SELECT y RETURNING: ST_Y/ST_X extraen lat/lon del
 // punto geográfico, ya que Prisma no puede tipar la columna `ubicacion` (geography).
-const SELECT_TIENDA = Prisma.sql`
-  SELECT
-    id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-    imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
-    ST_Y(ubicacion::geometry) AS lat,
-    ST_X(ubicacion::geometry) AS lon
-  FROM tiendas
+const COLUMNAS_TIENDA = Prisma.sql`
+  id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
+  imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
+  porcentaje_puntos_equipo,
+  ST_Y(ubicacion::geometry) AS lat,
+  ST_X(ubicacion::geometry) AS lon
 `;
+
+const SELECT_TIENDA = Prisma.sql`SELECT ${COLUMNAS_TIENDA} FROM tiendas`;
 
 export function validarUbicacion(lat: number, lon: number): void {
   if (typeof lat !== "number" || Number.isNaN(lat) || lat < -90 || lat > 90) {
@@ -245,10 +249,7 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
         ${input.rubroId ?? null}
       )
       RETURNING
-        id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-        imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
-        ST_Y(ubicacion::geometry) AS lat,
-        ST_X(ubicacion::geometry) AS lon
+        ${COLUMNAS_TIENDA}
     `;
 
     await tx.usuario.update({ where: { id: usuario.id }, data: { esVendedor: true } });
@@ -298,10 +299,7 @@ export async function buscarTiendasCercanas(
 
   const filas = await prisma.$queryRaw<Array<FilaTienda & { distancia_km: number }>>`
     SELECT
-      id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-      imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
-      ST_Y(ubicacion::geometry) AS lat,
-      ST_X(ubicacion::geometry) AS lon,
+      ${COLUMNAS_TIENDA},
       ST_Distance(ubicacion, ${origen}) / 1000 AS distancia_km
     FROM tiendas
     WHERE activa = true
@@ -351,6 +349,14 @@ export interface ActualizarTiendaInput {
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[];
   abierto24hs?: boolean;
+  porcentajePuntosEquipo?: number | null;
+}
+
+function validarPorcentajePuntosEquipo(valor: unknown): void {
+  if (valor === undefined || valor === null) return;
+  if (typeof valor !== "number" || !Number.isInteger(valor) || valor < 0 || valor > 100) {
+    throw new AppError("PORCENTAJE_INVALIDO", "El porcentaje de puntos del equipo tiene que ser un entero entre 0 y 100.");
+  }
 }
 
 export async function actualizarTienda(
@@ -366,6 +372,7 @@ export async function actualizarTienda(
     throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
   }
   if (typeof input.nombre === "string") exigirTextoPermitido(input.nombre, "El nombre de la tienda");
+  validarPorcentajePuntosEquipo(input.porcentajePuntosEquipo);
 
   const lat = input.lat ?? actual.lat;
   const lon = input.lon ?? actual.lon;
@@ -407,13 +414,13 @@ export async function actualizarTienda(
         rubro_id = ${input.rubroId ?? actual.rubro?.id ?? null},
         medios_de_pago = ${mediosDePago}::medio_pago[],
         abierto_24hs = ${input.abierto24hs ?? actual.abierto24hs},
+        porcentaje_puntos_equipo = ${
+          input.porcentajePuntosEquipo !== undefined ? input.porcentajePuntosEquipo : actual.porcentajePuntosEquipo
+        }::smallint,
         actualizada_en = now()
       WHERE id = ${tiendaId}
       RETURNING
-        id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
-        imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
-        ST_Y(ubicacion::geometry) AS lat,
-        ST_X(ubicacion::geometry) AS lon
+        ${COLUMNAS_TIENDA}
     `;
 
     if (input.horarios) {

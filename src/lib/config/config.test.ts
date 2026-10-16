@@ -34,9 +34,19 @@ describe("configuración del sistema (11-admin.md)", () => {
   it("listarConfig devuelve todas las claves con valor, default y descripción", async () => {
     await actualizarConfig(admin, "itinerario.costo_km", 150.5);
     const items = await listarConfig(admin);
-    expect(items.map((i) => i.clave).sort()).toEqual(["gamificacion.umbral_items_compra_extra", "itinerario.costo_km"]);
+    expect(items.map((i) => i.clave).sort()).toEqual([
+      "gamificacion.porcentaje_puntos_equipo",
+      "gamificacion.umbral_items_compra_extra",
+      "itinerario.costo_km",
+    ]);
     expect(items.find((i) => i.clave === "itinerario.costo_km")?.valor).toBe(150.5);
     expect(items.every((i) => i.descripcion.length > 0)).toBe(true);
+  });
+
+  it("gamificacion.porcentaje_puntos_equipo: entero entre 0 y 100, default 50 (12-gamificacion.md)", async () => {
+    expect((await listarConfig(admin)).find((i) => i.clave === "gamificacion.porcentaje_puntos_equipo")?.porDefecto).toBe(50);
+    await expect(actualizarConfig(admin, "gamificacion.porcentaje_puntos_equipo", 101)).rejects.toMatchObject({ code: "VALOR_CONFIG_INVALIDO" });
+    await expect(actualizarConfig(admin, "gamificacion.porcentaje_puntos_equipo", 40)).resolves.toMatchObject({ valor: 40 });
   });
 
   it("FORBIDDEN si no es admin", async () => {

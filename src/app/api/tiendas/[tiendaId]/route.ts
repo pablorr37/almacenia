@@ -41,6 +41,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       mediosDePago: body.mediosDePago,
       abierto24hs: body.abierto24hs,
       horarios: body.horarios,
+      porcentajePuntosEquipo: body.porcentajePuntosEquipo,
     });
     return respuestaExitosa(tienda);
   } catch (error) {
