@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle, CircleMarker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
@@ -43,32 +43,41 @@ function iconoPin(cerrada: boolean, indice: number): L.DivIcon {
   });
 }
 
-// Encuadre inicial: el usuario + las tiendas más cercanas, dejando libre la franja
-// que tapan la barra superior y el bottom sheet (si no, las tiendas quedan debajo
-// del sheet y no se pueden tocar). Solo la primera vez que llegan tiendas.
+// Encuadre inicial, dejando libre la franja que tapan la barra superior y el bottom
+// sheet (si no, las tiendas quedan debajo del sheet y no se pueden tocar). Con radio
+// de alcance (18-alcance.md) encuadra el círculo completo; sin radio (plan plata),
+// el usuario + las tiendas más cercanas. Solo una vez.
 function EncuadreInicial({
   origen,
   tiendas,
   paddingInferior,
+  alcanceKm,
 }: {
   origen: { lat: number; lon: number };
   tiendas: TiendaMapa[];
   paddingInferior: number;
+  alcanceKm: number | null | undefined;
 }) {
   const map = useMap();
   const hecho = useRef(false);
   useEffect(() => {
-    if (hecho.current || tiendas.length === 0) return;
+    if (hecho.current || alcanceKm === undefined) return;
+    let limites: L.LatLngBounds;
+    if (alcanceKm !== null) {
+      limites = L.latLng(origen.lat, origen.lon).toBounds(alcanceKm * 2000);
+    } else {
+      if (tiendas.length === 0) return;
+      const cercanas = [...tiendas].sort((a, b) => a.distanciaKm - b.distanciaKm).slice(0, 8);
+      limites = L.latLngBounds([[origen.lat, origen.lon], ...cercanas.map((t) => [t.lat, t.lon] as [number, number])]);
+    }
     hecho.current = true;
-    const cercanas = [...tiendas].sort((a, b) => a.distanciaKm - b.distanciaKm).slice(0, 8);
-    const puntos: L.LatLngExpression[] = [[origen.lat, origen.lon], ...cercanas.map((t) => [t.lat, t.lon] as [number, number])];
-    map.fitBounds(L.latLngBounds(puntos), {
+    map.fitBounds(limites, {
       paddingTopLeft: [32, 140],
       paddingBottomRight: [32, paddingInferior + 24],
       maxZoom: 16,
       animate: false,
     });
-  }, [map, origen, tiendas, paddingInferior]);
+  }, [map, origen, tiendas, paddingInferior, alcanceKm]);
   return null;
 }
 
@@ -77,12 +86,16 @@ export function TiendaMap({
   tiendas,
   onSelect,
   paddingInferior = 0,
+  alcanceKm,
 }: {
   origen: { lat: number; lon: number };
   tiendas: TiendaMapa[];
   onSelect?: (id: string) => void;
   // Alto (px) que tapa el bottom sheet, para encuadrar las tiendas por encima.
   paddingInferior?: number;
+  // Radio de alcance en km (18-alcance.md); null = toda la provincia (sin círculo);
+  // undefined = todavía no se sabe.
+  alcanceKm?: number | null;
 }) {
   const ahora = useAhora();
   const estados = useMemo(() => tiendas.map((t) => estadoApertura(t.horarios, ahora, { abierto24hs: t.abierto24hs })), [tiendas, ahora]);
@@ -103,11 +116,19 @@ export function TiendaMap({
       zoomControl={false}
       style={{ width: "100%", height: "100%" }}
     >
-      <EncuadreInicial origen={origen} tiendas={tiendas} paddingInferior={paddingInferior} />
+      <EncuadreInicial origen={origen} tiendas={tiendas} paddingInferior={paddingInferior} alcanceKm={alcanceKm} />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      {typeof alcanceKm === "number" && (
+        <Circle
+          center={[origen.lat, origen.lon]}
+          radius={alcanceKm * 1000}
+          interactive={false}
+          pathOptions={{ color: "#0e6b5c", weight: 2, dashArray: "6 6", fillColor: "#0e6b5c", fillOpacity: 0.08 }}
+        />
+      )}
       <CircleMarker
         center={[origen.lat, origen.lon]}
         radius={8}

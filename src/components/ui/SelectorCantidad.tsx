@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatearCantidad, pasoDe, pesoPorImporte, redondearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
+import { IconoX } from "@/components/ui/IconoX";
 
 // Atajos para productos por kg (03-productos.md, "Cantidades y unidades").
 const ATAJOS_KG = [0.1, 0.25, 0.5, 1];
@@ -111,7 +112,7 @@ export function SelectorCantidad({
           aria-label={valor - paso <= 0 ? `Quitar ${nombre}` : `Menos ${nombre}`}
           className="press flex h-10 w-10 items-center justify-center rounded-control border border-border bg-surface text-lg leading-none"
         >
-          {valor - paso <= 0 ? "×" : "–"}
+          {valor - paso <= 0 ? <IconoX /> : "–"}
         </button>
         <span className="min-w-[52px] text-center text-[14px] font-semibold tabular-nums" aria-live="polite">
           {unidad === "kg" ? formatearCantidad("kg", valor) : valor}

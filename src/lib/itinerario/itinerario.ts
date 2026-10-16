@@ -82,6 +82,7 @@ export async function compararItems(input: CompararInput, ahora = new Date()): P
             tiendaId: { in: todasEnRadio.map((t) => t.id) },
             catalogoId: { in: items.map((i) => i.catalogoId) },
             disponible: true,
+            eliminadoEn: null,
           },
           select: { id: true, tiendaId: true, catalogoId: true, precio: true, precioOferta: true, stock: true },
         }).then((ps) => ps.map((p) => ({ ...p, stock: Number(p.stock) })));
@@ -150,6 +151,7 @@ async function diagnosticar(
       JOIN tiendas t ON t.id = p.tienda_id
       WHERE t.activa = true
         AND p.disponible = true
+        AND p.eliminado_en IS NULL
         AND p.catalogo_id = ANY(${sinNadaEnRadio})
         AND ST_DWithin(t.ubicacion, ST_SetSRID(ST_MakePoint(${origen.lon}, ${origen.lat}), 4326)::geography, ${RADIO_DIAGNOSTICO_KM * 1000})
       GROUP BY p.catalogo_id

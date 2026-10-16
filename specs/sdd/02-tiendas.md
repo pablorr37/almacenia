@@ -174,6 +174,10 @@ Público (no requiere sesión — el mapa del comprador puede mostrarse sin logi
 
 Query: `?lat=<number>&lon=<number>&radioKm=<number>` (default `radioKm=5`, máximo `50`).
 
+Con sesión, el radio se limita al **radio de alcance** del usuario (plan y puntos) y
+el plan plata busca en toda la provincia de San Juan: ver [`18-alcance.md`](18-alcance.md).
+Sin sesión aplica el default y el máximo de arriba.
+
 Response `200`:
 
 ```ts

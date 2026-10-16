@@ -5,6 +5,12 @@ catálogo, pedidos, gestión interna) y **comprador** (mapa, pedidos, itinerario
 compra). Stack: Next.js (TypeScript, app router), PostgreSQL + PostGIS, Prisma,
 Leaflet/MapLibre. Deploy en Coolify.
 
+## Pendientes y decisiones: `docs/memoria.md`
+
+`docs/memoria.md` es la lista viva de pedidos del usuario, decisiones tomadas, rondas de
+trabajo (con su estado y PR) y preguntas abiertas; el detalle de cada ronda está en
+`docs/rondas/`. Leerlo antes de empezar una tarea y actualizarlo al terminarla.
+
 ## Fuente de verdad: `specs/sdd/`
 
 `specs/sdd/00-overview.md` a `05-ventas.md` son la spec técnica completa del MVP:

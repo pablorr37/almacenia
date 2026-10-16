@@ -14,7 +14,8 @@ import { EditorHorarios } from "@/components/tiendas/EditorHorarios";
 import { ValoracionCliente } from "@/components/ui/ValoracionCliente";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
-import { useCodigoBarras } from "@/lib/scanner/useCodigoBarras";
+import { EscanerCodigo } from "@/components/scanner/EscanerCodigo";
+import { DialogoEditarProducto } from "@/components/productos/DialogoEditarProducto";
 import {
   CamposEntradaCatalogo,
   ENTRADA_VACIA,
@@ -79,6 +80,7 @@ type Producto = {
   id: string;
   catalogoId: string;
   nombre: string;
+  descripcion?: string | null;
   imagenUrl: string | null;
   imagenCatalogoUrl: string | null;
   imagenEfectiva: string | null;
@@ -160,30 +162,22 @@ export default function MiTiendaPage() {
   const [escaneando, setEscaneando] = useState(false);
   // Buscador de fotos (16-banco-fotos.md): para qué producto y destino está abierto.
   const [fotoPara, setFotoPara] = useState<{ producto: Producto; destino: DestinoFoto } | null>(null);
-  const { videoRef, activo: scannerActivo, error: scannerError, iniciar: iniciarScanner, detener: detenerScanner } =
-    useCodigoBarras(async (texto) => {
-      setEscaneando(false);
-      detenerScanner();
-      try {
-        const resultados = await apiGet<ProductoCatalogo[]>(
-          `/api/catalogo/buscar?codigoBarras=${encodeURIComponent(texto)}`,
-        );
-        if (resultados[0]) {
-          setCatalogoSeleccionado(resultados[0]);
-          setBusquedaCatalogo(resultados[0].nombre);
-        } else {
-          setBusquedaCatalogo(texto);
-        }
-      } catch {
+  const [editando, setEditando] = useState<Producto | null>(null);
+  // Código leído con el escáner: si está en el catálogo se adopta; si no, queda en el
+  // buscador y se guarda como código de la entrada nueva.
+  async function codigoEscaneado(texto: string) {
+    try {
+      const resultados = await apiGet<ProductoCatalogo[]>(`/api/catalogo/buscar?codigoBarras=${encodeURIComponent(texto)}`);
+      if (resultados[0]) {
+        setCatalogoSeleccionado(resultados[0]);
+        setBusquedaCatalogo(resultados[0].nombre);
+      } else {
         setBusquedaCatalogo(texto);
       }
-    });
-
-  useEffect(() => {
-    if (escaneando) iniciarScanner();
-    // Solo se dispara al abrir/cerrar el scanner, no en cada render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [escaneando]);
+    } catch {
+      setBusquedaCatalogo(texto);
+    }
+  }
 
   useEffect(() => {
     if (catalogoSeleccionado || busquedaCatalogo.trim().length < 2) {
@@ -646,15 +640,12 @@ export default function MiTiendaPage() {
                 </button>
               </div>
 
-              {escaneando && (
-                <div className="flex flex-col gap-1.5 rounded-control border border-border bg-bg p-2">
-                  <video ref={videoRef} className="w-full rounded-control" muted playsInline />
-                  {scannerError && <p className="text-[12px] text-estado-rechazado-text">{scannerError}</p>}
-                  {!scannerActivo && !scannerError && (
-                    <p className="text-[12px] text-text-2">Iniciando cámara...</p>
-                  )}
-                </div>
-              )}
+              <EscanerCodigo
+                abierto={escaneando}
+                titulo="Apuntá al código de barras del producto"
+                onDetectado={codigoEscaneado}
+                onCerrar={() => setEscaneando(false)}
+              />
 
               {catalogoSeleccionado && (
                 <div className="flex items-center justify-between rounded-control bg-estado-entregado-bg px-2.5 py-1.5 text-[12px] font-semibold text-estado-entregado-text">
@@ -788,17 +779,41 @@ export default function MiTiendaPage() {
                     )}
                   </div>
                 </div>
-                <span
-                  className={`rounded-pill px-2.5 py-1 text-[11px] font-bold ${
-                    p.disponible && p.stock > 0
-                      ? "bg-estado-entregado-bg text-estado-entregado-text"
-                      : "bg-estado-cancelado-bg text-estado-cancelado-text"
-                  }`}
-                >
-                  {p.disponible && p.stock > 0 ? "Disponible" : "Sin stock"}
-                </span>
+                <div className="flex flex-shrink-0 flex-col items-end gap-2">
+                  <span
+                    className={`rounded-pill px-2.5 py-1 text-[11px] font-bold ${
+                      p.disponible && p.stock > 0
+                        ? "bg-estado-entregado-bg text-estado-entregado-text"
+                        : "bg-estado-cancelado-bg text-estado-cancelado-text"
+                    }`}
+                  >
+                    {p.disponible && p.stock > 0 ? "Disponible" : p.disponible ? "Sin stock" : "Pausado"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEditando(p)}
+                    aria-label={`Editar o eliminar ${p.nombre}`}
+                    className="press rounded-control border border-border bg-surface px-3 py-2 text-[12px] font-semibold text-text"
+                  >
+                    Editar
+                  </button>
+                </div>
               </div>
             ))}
+            {editando && (
+              <DialogoEditarProducto
+                producto={editando}
+                onCerrar={() => setEditando(null)}
+                onGuardado={(actualizado) => {
+                  setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
+                  setEditando(null);
+                }}
+                onEliminado={(id) => {
+                  setProductos((prev) => prev.filter((x) => x.id !== id));
+                  setEditando(null);
+                }}
+              />
+            )}
           </div>
         )}
 

@@ -51,7 +51,7 @@ export async function crearResena(comprador: Usuario, input: CrearResenaInput): 
 
   if (input.productoId) {
     const producto = await prisma.producto.findUnique({ where: { id: input.productoId } });
-    if (!producto || producto.tiendaId !== input.tiendaId) {
+    if (!producto || producto.eliminadoEn || producto.tiendaId !== input.tiendaId) {
       throw new AppError("PRODUCTO_NO_ENCONTRADO", "El producto no existe en esa tienda.");
     }
   }

@@ -31,6 +31,7 @@ export async function listarProductosAdmin(
     : PAGE_SIZE_DEFAULT;
 
   const where = {
+    eliminadoEn: null,
     ...(input.tiendaId ? { tiendaId: input.tiendaId } : {}),
     ...(input.categoriaId ? { categoriaId: input.categoriaId } : {}),
     ...(input.q
