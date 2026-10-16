@@ -7,7 +7,7 @@ import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
 import { Toast } from "@/components/ui/Toast";
 import { IconoQr } from "@/components/clientes/CompartirQr";
 import { leerCodigoQr } from "@/lib/clientes/leer-codigo";
-import { useCodigoBarras } from "@/lib/scanner/useCodigoBarras";
+import { EscanerCodigo } from "@/components/scanner/EscanerCodigo";
 
 // Punto de venta de mostrador (05-ventas.md): el vendedor arma el ticket con lo que
 // le pide el cliente, lo cobra en el acto o lo deja "por cobrar" hasta que llega la
@@ -154,22 +154,15 @@ export function PuntoDeVenta({
     }
   }, []);
 
-  const { videoRef: videoQrRef, error: errorQr, iniciar: iniciarQr, detener: detenerQr } = useCodigoBarras(
-    useCallback(
-      (texto: string) => {
-        const codigo = leerCodigoQr(texto);
-        if (!codigo) return;
-        setEscaneandoQr(false);
-        setEmailCliente(codigo);
-        confirmarCodigo(codigo);
-      },
-      [confirmarCodigo]
-    )
-  );
-  useEffect(() => {
-    if (escaneandoQr) iniciarQr();
-    else detenerQr();
-  }, [escaneandoQr, iniciarQr, detenerQr]);
+  function qrEscaneado(texto: string) {
+    const codigo = leerCodigoQr(texto);
+    if (!codigo) {
+      setErrorCliente("Ese código no es un QR de cliente de Almacenia.");
+      return;
+    }
+    setEmailCliente(codigo);
+    confirmarCodigo(codigo);
+  }
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -465,22 +458,20 @@ export function PuntoDeVenta({
             />
             <button
               type="button"
-              onClick={() => setEscaneandoQr((v) => !v)}
+              onClick={() => setEscaneandoQr(true)}
               aria-label="Escanear QR del cliente"
-              className={`press flex h-11 flex-shrink-0 items-center gap-1.5 rounded-control px-3 text-[13px] font-semibold ${
-                escaneandoQr ? "bg-primary text-white" : "border border-border bg-surface text-text"
-              }`}
+              className="press flex h-11 flex-shrink-0 items-center gap-1.5 rounded-control border border-border bg-surface px-3 text-[13px] font-semibold text-text"
             >
               <IconoQr className="h-5 w-5" />
-              {escaneandoQr ? "Cerrar" : "Escanear QR"}
+              Escanear QR
             </button>
           </div>
-          {escaneandoQr && (
-            <div className="flex flex-col gap-1">
-              <video ref={videoQrRef} className="w-full rounded-control" muted playsInline />
-              {errorQr && <span className="text-[12px] text-estado-rechazado-text">{errorQr}</span>}
-            </div>
-          )}
+          <EscanerCodigo
+            abierto={escaneandoQr}
+            titulo="Apuntá al QR que muestra el cliente"
+            onDetectado={qrEscaneado}
+            onCerrar={() => setEscaneandoQr(false)}
+          />
           {clienteConfirmado && codigoCliente === clienteConfirmado.codigo && (
             <span className="text-[13px] font-semibold text-estado-entregado-text" data-testid="cliente-confirmado">
               ✓ Cliente: {clienteConfirmado.nombre}
