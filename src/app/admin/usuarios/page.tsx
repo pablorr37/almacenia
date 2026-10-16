@@ -7,7 +7,8 @@ import { apiGetPaginado, apiPatch, apiDelete, ApiError } from "@/lib/api-client"
 
 type Rol = "comprador" | "vendedor" | "admin";
 type EstadoCuenta = "activa" | "pausada" | "baneada";
-type Plan = "free" | "premium";
+// El plan de la tienda es el del dueño (20-precios-facturacion.md): se cambia en el usuario.
+type Plan = "free" | "premium" | "plata";
 // Plan del usuario (18-alcance.md): define su radio de alcance en el mapa.
 type PlanUsuario = "free" | "premium" | "plata";
 
@@ -39,6 +40,7 @@ const PLANES: Array<{ valor: Plan | ""; etiqueta: string }> = [
   { valor: "", etiqueta: "Cualquier plan" },
   { valor: "free", etiqueta: "Free" },
   { valor: "premium", etiqueta: "Premium" },
+  { valor: "plata", etiqueta: "Plata" },
 ];
 
 const ESTADOS: Array<{ valor: EstadoCuenta | ""; etiqueta: string }> = [
@@ -127,26 +129,8 @@ export default function AdminUsuariosPage() {
     );
   }
 
-  // 10-planes.md: premium habilita fotos propias y prioridad en el mapa.
   function reemplazarTienda(u: UsuarioAdmin, cambiada: TiendaAdmin) {
     reemplazar(u.id, { tiendas: u.tiendas.map((t) => (t.id === cambiada.id ? cambiada : t)) });
-  }
-
-  function cambiarPlan(u: UsuarioAdmin, tienda: TiendaAdmin) {
-    const nuevo: Plan = tienda.plan === "premium" ? "free" : "premium";
-    const texto =
-      nuevo === "premium"
-        ? `¿Pasar "${tienda.nombre}" a Premium? Va a poder subir fotos propias y aparecer primero en el mapa.`
-        : `¿Volver "${tienda.nombre}" a Free?`;
-    if (!window.confirm(texto)) return;
-    return ejecutar(
-      u.id,
-      async () => {
-        await apiPatch(`/api/admin/tiendas/${tienda.id}/plan`, { plan: nuevo });
-        reemplazarTienda(u, { ...tienda, plan: nuevo });
-      },
-      "No se pudo cambiar el plan."
-    );
   }
 
   function cambiarPlanUsuario(u: UsuarioAdmin, plan: PlanUsuario) {
@@ -346,9 +330,7 @@ export default function AdminUsuariosPage() {
                 <div className="flex items-center justify-between gap-2 text-[13px]">
                   <span className="min-w-0 truncate font-semibold">
                     {tienda.nombre}{" "}
-                    <span className={`text-[11px] font-bold ${tienda.plan === "premium" ? "text-accent-text" : "text-text-2"}`}>
-                      {tienda.plan === "premium" ? "PREMIUM" : "FREE"}
-                    </span>
+                    <span className="text-[11px] font-bold text-text-2">{tienda.plan.toUpperCase()}</span>
                   </span>
                   {tienda.verificada ? (
                     <span className="flex-shrink-0 text-[12px] font-semibold text-primary">✓ Verificada</span>
@@ -357,16 +339,6 @@ export default function AdminUsuariosPage() {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={procesando === u.id}
-                    onClick={() => cambiarPlan(u, tienda)}
-                    className={`press h-9 flex-1 rounded-control text-[12px] font-semibold disabled:opacity-50 ${
-                      tienda.plan === "premium" ? "border border-border bg-surface text-text" : "bg-accent text-white"
-                    }`}
-                  >
-                    {tienda.plan === "premium" ? "Volver a Free" : "Pasar a Premium"}
-                  </button>
                   <button
                     type="button"
                     disabled={procesando === u.id}
@@ -390,7 +362,7 @@ export default function AdminUsuariosPage() {
             ))}
 
             <label className="flex items-center justify-between gap-2 text-[13px] text-text">
-              <span>Plan del usuario (radio de alcance)</span>
+              <span>Plan del usuario (alcance, tiendas y balance)</span>
               <select
                 value={u.plan}
                 disabled={procesando === u.id}

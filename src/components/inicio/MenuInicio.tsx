@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { apiGet } from "@/lib/api-client";
+import { ETIQUETA_PLAN, MAX_TIENDAS, planSiguiente, type PlanNombre } from "@/lib/planes/limites";
 import { useSession } from "next-auth/react";
 import { PuntosChip } from "@/components/ui/PuntosChip";
 import { useMisTiendas } from "@/lib/hooks/useMisTiendas";
@@ -73,6 +76,17 @@ function Acceso({
 export function MenuInicio() {
   const { data: session } = useSession();
   const { lista, activa, elegir } = useMisTiendas<TiendaMenu>(true);
+  // Tope de tiendas del plan del usuario (20-precios-facturacion.md).
+  const [plan, setPlan] = useState<PlanNombre | null>(null);
+  useEffect(() => {
+    apiGet<{ plan: PlanNombre }>("/api/alcance")
+      .then((a) => setPlan(a.plan))
+      .catch(() => {});
+  }, []);
+  const propias = lista?.filter((m) => m.rol === "propietario").length ?? 0;
+  const tope = plan ? MAX_TIENDAS[plan] : null;
+  const llegoAlTope = tope !== null && propias >= tope;
+  const siguiente = plan ? planSiguiente(plan) : null;
   const nombre = session?.user?.name?.split(" ")[0];
 
   const t = activa?.tienda.id;
@@ -151,14 +165,23 @@ export function MenuInicio() {
           {accesosNegocio.length === 0 && (
             <p className="text-[13px] text-text-2">Todavía no tenés permisos en esta tienda. Pedíselos a quien la administra.</p>
           )}
-          <Link href="/mi-tienda?nueva=1" className="press-soft flex items-center gap-2 self-start text-[13px] font-semibold text-accent-text">
-            <span className="flex h-6 w-6 items-center justify-center rounded-pill border border-current">
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                <path d={ICONOS.sucursal} />
-              </svg>
-            </span>
-            Nueva sucursal
-          </Link>
+          {llegoAlTope ? (
+            <p className="text-[12px] text-text-2" data-testid="tope-sucursales">
+              Tenés {propias} de {tope} {tope === 1 ? "tienda" : "tiendas"} de tu plan {ETIQUETA_PLAN[plan!]}.
+              {siguiente
+                ? ` Con ${ETIQUETA_PLAN[siguiente]} podés tener hasta ${MAX_TIENDAS[siguiente]}.`
+                : ""}
+            </p>
+          ) : (
+            <Link href="/mi-tienda?nueva=1" className="press-soft flex items-center gap-2 self-start text-[13px] font-semibold text-accent-text">
+              <span className="flex h-6 w-6 items-center justify-center rounded-pill border border-current">
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                  <path d={ICONOS.sucursal} />
+                </svg>
+              </span>
+              Nueva sucursal{tope !== null && propias > 0 ? ` (${propias} de ${tope})` : ""}
+            </Link>
+          )}
         </section>
       ) : (
         <Link
