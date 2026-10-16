@@ -10,7 +10,7 @@ estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
 
 | Ronda | Alcance | Estado | PR |
 | --- | --- | --- | --- |
-| 1 | Bugs (escáner, editar/eliminar productos, × descentrada) + radio de alcance en el mapa | Hecha | PR_RONDA_1 |
+| 1 | Bugs (escáner, editar/eliminar productos, × descentrada) + radio de alcance en el mapa | Hecha | [#8](https://github.com/pablorr37/almacenia/pull/8) |
 | 2 | [Inicio del vendedor y menú de inicio, varias tiendas, empleados y permisos](rondas/ronda-2-inicio-vendedor.md) | Pendiente | — |
 | 3 | [Precio = costo + ganancia + impuestos, datos para facturar, balance por plan, plan Plata](rondas/ronda-3-precios-balance.md) | Pendiente | — |
 | 4 | [Publicidad: Google + otros proveedores + motor propio de Almacenia](rondas/ronda-4-publicidad.md) | Pendiente | — |
