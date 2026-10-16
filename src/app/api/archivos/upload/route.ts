@@ -7,6 +7,7 @@ import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { tienePermiso } from "@/lib/planes/planes";
 import { verificarPermisoFotoCatalogo } from "@/lib/catalogo/catalogo";
+import { exigirPermiso } from "@/lib/equipo/equipo";
 
 async function verificarOwnership(usuario: Usuario, tipo: TipoArchivo, entidadId: string): Promise<void> {
   const usuarioId = usuario.id;
@@ -18,11 +19,8 @@ async function verificarOwnership(usuario: Usuario, tipo: TipoArchivo, entidadId
   }
 
   if (tipo === "tienda") {
-    const tienda = await prisma.tienda.findUnique({ where: { id: entidadId } });
-    if (!tienda) throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
-    if (tienda.vendedorId !== usuarioId) {
-      throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
-    }
+    // La portada es un dato de la tienda: solo el propietario (19-equipo-tienda.md).
+    await exigirPermiso(usuario, entidadId, "propietario");
     return;
   }
 
@@ -36,9 +34,7 @@ async function verificarOwnership(usuario: Usuario, tipo: TipoArchivo, entidadId
   // (10-planes.md), solo premium.
   const producto = await prisma.producto.findUnique({ where: { id: entidadId }, include: { tienda: true } });
   if (!producto) throw new AppError("PRODUCTO_NO_ENCONTRADO", "El producto no existe.");
-  if (producto.tienda.vendedorId !== usuarioId) {
-    throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
-  }
+  await exigirPermiso(usuario, producto.tiendaId, "fotos");
   if (!tienePermiso(producto.tienda, "fotos_personalizadas")) {
     throw new AppError("FOTOS_SOLO_PREMIUM", "Las fotos propias de productos son del plan premium.");
   }

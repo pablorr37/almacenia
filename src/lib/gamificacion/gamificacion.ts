@@ -339,11 +339,15 @@ export async function otorgarPorCheckIn(compradorId: string, tiendaId: string, f
 }
 
 export async function registrarVisitaPagina(usuario: Usuario, tiendaId: string, ahora = new Date()): Promise<number> {
-  const tienda = await prisma.tienda.findUnique({ where: { id: tiendaId }, select: { vendedorId: true } });
+  const tienda = await prisma.tienda.findUnique({
+    where: { id: tiendaId },
+    select: { vendedorId: true, miembros: { where: { usuarioId: usuario.id }, select: { rol: true } } },
+  });
   if (!tienda) {
     throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
   }
-  if (tienda.vendedorId === usuario.id) return 0;
+  // Propia o donde es parte del equipo: no suma (19-equipo-tienda.md).
+  if (tienda.vendedorId === usuario.id || tienda.miembros.length > 0) return 0;
 
   const mes = mesLocal(ahora);
   const clave = { compradorId: usuario.id, tiendaId };

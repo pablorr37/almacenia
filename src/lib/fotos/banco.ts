@@ -1,6 +1,8 @@
 // Banco de fotos curado (specs/sdd/16-banco-fotos.md): fotos libres aprobadas por
 // curadores (admin/tester) y subidas propias. Todas viven en nuestro bucket.
 import { prisma } from "@/lib/prisma";
+import { condicionTiendasConFotos } from "@/lib/equipo/equipo";
+import { tienePermiso } from "@/lib/planes/planes";
 import { Prisma } from "@/generated-prisma/client";
 import type { Plan, FotoBanco as FotoBancoDb } from "@/generated-prisma/client";
 import { AppError } from "@/lib/errors";
@@ -86,9 +88,11 @@ function fotoNoEncontrada(): AppError {
   return new AppError("FOTO_NO_ENCONTRADA", "La foto no existe.");
 }
 
+// El mejor plan entre las tiendas propias y donde tiene 'fotos' (19-equipo-tienda.md).
 async function planDe(usuario: Usuario): Promise<Plan | null> {
-  const tienda = await prisma.tienda.findUnique({ where: { vendedorId: usuario.id }, select: { plan: true } });
-  return tienda?.plan ?? null;
+  const tiendas = await prisma.tienda.findMany({ where: condicionTiendasConFotos(usuario.id), select: { plan: true } });
+  if (tiendas.length === 0) return null;
+  return tiendas.some((t) => tienePermiso(t, "fotos_personalizadas")) ? "premium" : "free";
 }
 
 // Condición SQL de visibilidad según las fuentes del usuario.
@@ -359,7 +363,7 @@ export async function usarFoto(
 
   const entrada = await prisma.productoCatalogo.findUnique({ where: { id: catalogoId! } });
   if (!entrada) throw new AppError("CATALOGO_NO_ENCONTRADO", "El producto de catálogo no existe.");
-  const tienda = await prisma.tienda.findUnique({ where: { vendedorId: usuario.id }, select: { id: true } });
+  const tienda = await prisma.tienda.findFirst({ where: condicionTiendasConFotos(usuario.id), select: { id: true } });
   if (!usuario.esAdmin) {
     if (!usuario.esTester && !tienda) {
       throw new AppError("FORBIDDEN", "Solo vendedores y curadores pueden asignar fotos del catálogo.");

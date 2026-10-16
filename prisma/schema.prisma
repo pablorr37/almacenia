@@ -50,9 +50,11 @@ model Usuario {
   avatarUrl    String?  @map("avatar_url")
   creadoEn     DateTime @default(now()) @map("creado_en")
 
-  tienda        Tienda?
+  tiendas       Tienda[]
+  membresias    MiembroTienda[]
   pedidos       Pedido[]
-  ventas        Venta[]
+  ventas        Venta[]        @relation("VentasComprador")
+  ventasRegistradas Venta[]    @relation("VentasRegistradas")
   resenas       Resena[]
   eventosPuntos EventoPuntos[] @relation("EventosDelUsuario")
 
@@ -75,7 +77,7 @@ model Usuario {
 
 model Tienda {
   id             String    @id @default(uuid())
-  vendedorId     String    @unique @map("vendedor_id")
+  vendedorId     String    @map("vendedor_id") // propietario (19-equipo-tienda.md)
   nombre         String
   descripcion    String?
   direccion      String
@@ -106,7 +108,9 @@ model Tienda {
   eventosPuntos           EventoPuntos[]
   checkIns                CheckInTienda[]
   visitasPagina           VisitaPaginaTienda[]
+  miembros                MiembroTienda[]
 
+  @@index([vendedorId])
   @@index([ubicacion], map: "tiendas_ubicacion_gist_idx", type: Gist)
   @@map("tiendas")
 }
@@ -393,6 +397,44 @@ enum EstadoVenta {
   @@map("estado_venta")
 }
 
+// 19-equipo-tienda.md: encargados y empleados de una tienda, con sus permisos.
+model MiembroTienda {
+  tiendaId  String          @map("tienda_id")
+  usuarioId String          @map("usuario_id")
+  rol       RolMiembro
+  permisos  PermisoTienda[] @default([])
+  creadoEn  DateTime        @default(now()) @map("creado_en")
+
+  tienda  Tienda  @relation(fields: [tiendaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([tiendaId, usuarioId])
+  @@index([usuarioId])
+  @@map("miembros_tienda")
+}
+
+enum RolMiembro {
+  encargado
+  empleado
+
+  @@map("rol_miembro")
+}
+
+enum PermisoTienda {
+  vender
+  cobrar
+  anular
+  precios
+  stock
+  productos
+  fotos
+  pedidos
+  balance
+  usuarios
+
+  @@map("permiso_tienda")
+}
+
 model Venta {
   id          String      @id @default(uuid())
   tiendaId    String      @map("tienda_id")
@@ -406,9 +448,11 @@ model Venta {
   creadaEn    DateTime    @default(now()) @map("creada_en")
   cobradaEn   DateTime?   @map("cobrada_en")
   anuladaEn   DateTime?   @map("anulada_en")
+  vendidaPorId String?    @map("vendida_por_id") // 19-equipo-tienda.md
 
   tienda    Tienda      @relation(fields: [tiendaId], references: [id])
-  comprador Usuario?    @relation(fields: [compradorId], references: [id])
+  comprador Usuario?    @relation("VentasComprador", fields: [compradorId], references: [id])
+  vendidaPor Usuario?   @relation("VentasRegistradas", fields: [vendidaPorId], references: [id], onDelete: SetNull)
   pedido    Pedido?     @relation(fields: [pedidoId], references: [id])
   items     ItemVenta[]
 

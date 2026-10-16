@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { exigirPermiso, accesoATienda, type Permiso } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import type { Pedido } from "@/lib/pedidos/pedidos";
@@ -35,6 +36,7 @@ export interface Venta {
   total: number;
   items: ItemVenta[];
   comprador: { nombre: string; email: string } | null;
+  vendidaPor: { id: string; nombre: string } | null; // quién la registró (19-equipo-tienda.md)
   creadaEn: string;
   cobradaEn: string | null;
   anuladaEn: string | null;
@@ -42,10 +44,14 @@ export interface Venta {
 
 const MAX_NOTA = 200;
 
+// Ver las ventas de la tienda: alcanza con cualquiera de estos (19-equipo-tienda.md).
+const PERMISOS_VER_VENTAS: Permiso[] = ["vender", "cobrar", "balance"];
+
 // Lo que hace falta traer para armar una Venta (ítems con nombre/unidad y comprador).
 const INCLUDE_VENTA = {
   items: { include: { producto: { select: { nombre: true, catalogo: { select: { unidad: true } } } } } },
   comprador: { select: { nombre: true, email: true } },
+  vendidaPor: { select: { id: true, nombre: true } },
 } satisfies Prisma.VentaInclude;
 
 type VentaCompleta = Prisma.VentaGetPayload<{ include: typeof INCLUDE_VENTA }>;
@@ -70,6 +76,7 @@ function aVenta(venta: VentaCompleta): Venta {
       precioUnitario: Number(item.precioUnitario),
     })),
     comprador: venta.comprador,
+    vendidaPor: venta.vendidaPor,
     creadaEn: venta.creadaEn.toISOString(),
     cobradaEn: venta.cobradaEn ? venta.cobradaEn.toISOString() : null,
     anuladaEn: venta.anuladaEn ? venta.anuladaEn.toISOString() : null,
@@ -106,6 +113,7 @@ interface DatosVenta {
   estado: "por_cobrar" | "cobrada";
   medioPago?: MedioPago | null;
   nota?: string | null;
+  vendidaPorId?: string | null;
 }
 
 async function crearVentaEnTransaccion(datos: DatosVenta, items: ItemAProcesar[]): Promise<Venta> {
@@ -125,6 +133,7 @@ async function crearVentaEnTransaccion(datos: DatosVenta, items: ItemAProcesar[]
         estado: datos.estado,
         medioPago: datos.medioPago ?? null,
         nota: datos.nota ?? null,
+        vendidaPorId: datos.vendidaPorId ?? null,
         cobradaEn: datos.estado === "cobrada" ? new Date() : null,
         total,
         items: {
@@ -185,13 +194,10 @@ export async function crearVentaPresencial(
     throw new AppError("ITEMS_VACIOS", "La venta debe tener al menos un producto.");
   }
 
-  const tienda = await prisma.tienda.findUnique({ where: { id: tiendaId } });
-  if (!tienda) {
-    throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
-  }
-  if (tienda.vendedorId !== vendedor.id) {
-    throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
-  }
+  await exigirPermiso(vendedor, tiendaId, "vender");
+  // Cobrar en el momento también pide 'cobrar' (19-equipo-tienda.md).
+  if (input.cobrarAhora !== false) await exigirPermiso(vendedor, tiendaId, "cobrar");
+  const tienda = await prisma.tienda.findUniqueOrThrow({ where: { id: tiendaId } });
 
   if (input.medioPago !== undefined && input.medioPago !== null) {
     const valido = (MEDIOS_DE_PAGO_VALIDOS as readonly string[]).includes(input.medioPago);
@@ -240,6 +246,7 @@ export async function crearVentaPresencial(
       estado: input.cobrarAhora === false ? "por_cobrar" : "cobrada",
       medioPago: input.medioPago ?? null,
       nota,
+      vendidaPorId: vendedor.id,
     },
     items
   );
@@ -253,12 +260,10 @@ export async function transicionarVenta(
 ): Promise<Venta> {
   const venta = await prisma.venta.findUnique({
     where: { id: ventaId },
-    include: { tienda: { select: { vendedorId: true } }, items: true },
+    include: { items: true },
   });
   if (!venta) throw new AppError("VENTA_NO_ENCONTRADA", "La venta no existe.");
-  if (venta.tienda.vendedorId !== vendedor.id) {
-    throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
-  }
+  await exigirPermiso(vendedor, venta.tiendaId, accion === "anular" ? "anular" : "cobrar");
   if (venta.estado !== "por_cobrar" || (accion !== "cobrar" && accion !== "anular")) {
     throw new AppError("TRANSICION_INVALIDA", "Esta venta ya no está por cobrar.");
   }
@@ -307,7 +312,8 @@ export async function obtenerVenta(usuario: Usuario, ventaId: string): Promise<V
   });
   if (!venta) return null;
 
-  const esVendedor = venta.tienda.vendedorId === usuario.id;
+  const acceso = await accesoATienda(usuario.id, venta.tiendaId);
+  const esVendedor = !!acceso && PERMISOS_VER_VENTAS.some((p) => acceso.permisos.includes(p));
   const esComprador = venta.compradorId === usuario.id;
   if (!esVendedor && !esComprador) {
     throw new AppError("NO_AUTORIZADO_VENTA", "No tenés acceso a esta venta.");
@@ -329,13 +335,7 @@ export async function listarVentas(
   vendedor: Usuario,
   input: ListarVentasInput
 ): Promise<{ data: Venta[]; page: number; pageSize: number; total: number }> {
-  const tienda = await prisma.tienda.findUnique({ where: { id: input.tiendaId } });
-  if (!tienda) {
-    throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
-  }
-  if (tienda.vendedorId !== vendedor.id) {
-    throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
-  }
+  await exigirPermiso(vendedor, input.tiendaId, PERMISOS_VER_VENTAS);
 
   const page = input.page && input.page > 0 ? input.page : 1;
   const pageSize = input.pageSize && input.pageSize > 0

@@ -17,6 +17,7 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     const valoracion = await valorarCliente(usuario, compradorId, {
       puntuacion: body.puntuacion,
       comentario: typeof body.comentario === "string" ? body.comentario : undefined,
+      tiendaId: typeof body.tiendaId === "string" ? body.tiendaId : undefined,
     });
     return respuestaExitosa(valoracion);
   } catch (error) {
@@ -24,13 +25,14 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
   }
 }
 
-export async function GET(_request: NextRequest, { params }: Ctx) {
+export async function GET(request: NextRequest, { params }: Ctx) {
   try {
     const usuario = await obtenerUsuarioActual();
     if (!usuario) throw new AppError("NO_AUTENTICADO", "Necesitás iniciar sesión.");
 
     const { compradorId } = await params;
-    return respuestaExitosa(await resumenCliente(usuario, compradorId));
+    const tiendaId = request.nextUrl.searchParams.get("tiendaId") ?? undefined;
+    return respuestaExitosa(await resumenCliente(usuario, compradorId, tiendaId));
   } catch (error) {
     return respuestaError(error);
   }

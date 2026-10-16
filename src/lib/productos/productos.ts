@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { exigirPermiso, PERMISOS, type Permiso } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { crearProductoNuevoEnCatalogo, type NuevaEntradaCatalogo } from "@/lib/catalogo/catalogo";
@@ -87,16 +88,24 @@ export function esComprable(producto: Pick<Producto, "disponible" | "stock">): b
   return producto.disponible && producto.stock > 0;
 }
 
-async function verificarPropiedad(vendedor: Usuario, tiendaId: string): Promise<{ plan: Plan }> {
-  const tienda = await prisma.tienda.findUnique({ where: { id: tiendaId } });
-  if (!tienda) {
-    throw new AppError("TIENDA_NO_ENCONTRADA", "La tienda no existe.");
-  }
-  if (tienda.vendedorId !== vendedor.id) {
-    throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
-  }
-  return tienda;
+// Propietario o miembro con el permiso (19-equipo-tienda.md); devuelve la tienda.
+async function verificarPermiso(usuario: Usuario, tiendaId: string, permiso: Permiso | Permiso[]): Promise<{ plan: Plan }> {
+  await exigirPermiso(usuario, tiendaId, permiso);
+  return prisma.tienda.findUniqueOrThrow({ where: { id: tiendaId }, select: { plan: true } });
 }
+
+// Permiso que pide cada campo editable de un producto (19-equipo-tienda.md).
+const PERMISO_POR_CAMPO: Record<keyof ActualizarProductoInput, Permiso> = {
+  nombre: "productos",
+  descripcion: "productos",
+  destacado: "productos",
+  disponible: "productos",
+  precio: "precios",
+  precioOferta: "precios",
+  stock: "stock",
+  imagenUrl: "fotos",
+  favorito: "vender",
+};
 
 function validarPrecio(precio: number): void {
   if (typeof precio !== "number" || Number.isNaN(precio) || precio < 0) {
@@ -138,7 +147,7 @@ export async function crearProducto(
   tiendaId: string,
   input: CrearProductoInput
 ): Promise<Producto> {
-  const tienda = await verificarPropiedad(vendedor, tiendaId);
+  const tienda = await verificarPermiso(vendedor, tiendaId, "productos");
   validarPrecio(input.precio);
   validarStock(input.stock);
   if ("catalogoId" in input ? input.imagenUrl : input.nuevo.imagenUrl) exigirFotosPremium(tienda);
@@ -286,7 +295,7 @@ export interface ProductoParaVenta extends Producto {
 }
 
 export async function listarParaVenta(vendedor: Usuario, tiendaId: string): Promise<ProductoParaVenta[]> {
-  await verificarPropiedad(vendedor, tiendaId);
+  await verificarPermiso(vendedor, tiendaId, "vender");
   const desde = new Date(Date.now() - 30 * 24 * 3600_000);
   const [productos, ventas] = await Promise.all([
     prisma.producto.findMany({ where: { tiendaId, eliminadoEn: null }, include: INCLUDE_IMAGEN, orderBy: { nombre: "asc" } }),
@@ -348,9 +357,13 @@ export async function actualizarProducto(
   input: ActualizarProductoInput
 ): Promise<Producto> {
   const actual = await obtenerProductoConTienda(productoId);
-  if (actual.tienda.vendedorId !== vendedor.id) {
-    throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
-  }
+  // Cada campo que viene pide su permiso; hacen falta todos.
+  const campos = (Object.keys(input) as Array<keyof ActualizarProductoInput>).filter(
+    (k) => input[k] !== undefined && k in PERMISO_POR_CAMPO
+  );
+  const permisos = [...new Set(campos.map((k) => PERMISO_POR_CAMPO[k]))];
+  if (permisos.length === 0) await exigirPermiso(vendedor, actual.tiendaId, PERMISOS.slice());
+  for (const permiso of permisos) await exigirPermiso(vendedor, actual.tiendaId, permiso);
 
   if (input.precio !== undefined) validarPrecio(input.precio);
   if (input.stock !== undefined) {
@@ -393,9 +406,7 @@ export async function actualizarProducto(
 
 export async function eliminarProducto(vendedor: Usuario, productoId: string): Promise<Producto> {
   const actual = await obtenerProductoConTienda(productoId);
-  if (actual.tienda.vendedorId !== vendedor.id) {
-    throw new AppError("NO_ES_DUENO_DE_TIENDA", "No sos el dueño de esta tienda.");
-  }
+  await exigirPermiso(vendedor, actual.tiendaId, "productos");
 
   const producto = await prisma.producto.update({
     where: { id: productoId },

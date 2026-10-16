@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { condicionTiendasConFotos } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { tienePermiso } from "@/lib/planes/planes";
@@ -201,7 +202,13 @@ export async function verificarPermisoFotoCatalogo(
   if (!entrada) {
     throw new AppError("CATALOGO_NO_ENCONTRADO", "El producto de catálogo no existe.");
   }
-  const tienda = await prisma.tienda.findUnique({ where: { vendedorId: usuario.id }, select: { id: true, plan: true } });
+  // Tiendas propias o donde tiene 'fotos'; vale si alguna es premium (19-equipo-tienda.md).
+  const tiendas = await prisma.tienda.findMany({
+    where: condicionTiendasConFotos(usuario.id),
+    select: { id: true, plan: true },
+    orderBy: { creadaEn: "asc" },
+  });
+  const tienda = tiendas.find((t) => tienePermiso(t, "fotos_personalizadas")) ?? tiendas[0];
   if (usuario.esAdmin) return { tiendaId: tienda?.id ?? null };
 
   if (!tienda || !tienePermiso(tienda, "fotos_personalizadas")) {

@@ -45,7 +45,7 @@ ALTER TABLE ventas ADD COLUMN vendida_por_id UUID REFERENCES usuarios(id) ON DEL
 
 | Permiso | Qué habilita |
 | --- | --- |
-| `vender` | Crear ventas en el punto de venta, ver la lista de productos para vender y marcar favoritos. |
+| `vender` | Crear ventas en el punto de venta, ver la lista de productos para vender y marcar favoritos. Una venta que se cobra en el momento (`cobrarAhora`) pide además `cobrar`. |
 | `cobrar` | Cobrar una venta por cobrar. |
 | `anular` | Anular una venta por cobrar. |
 | `precios` | Cambiar precio y precio de oferta. |
