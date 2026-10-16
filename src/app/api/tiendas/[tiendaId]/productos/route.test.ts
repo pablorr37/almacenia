@@ -99,6 +99,19 @@ describe("/api/tiendas/[tiendaId]/productos", () => {
       expect(body.data[0].nombre).toBe("Prueba Disponible");
     });
 
+    it("costo y margen solo para quien gestiona la tienda (20-precios-facturacion.md)", async () => {
+      await crearProducto(dueno, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Con costo" }, costo: 100, margen: 50, stock: 5 });
+      const listar = async () =>
+        (await (await GET(new NextRequest(`http://localhost/api/tiendas/x/productos`), params(tienda.id))).json()).data[0];
+
+      obtenerUsuarioActualMock.mockResolvedValue(null);
+      expect(await listar()).toMatchObject({ precio: 150, costo: null, margen: null });
+      obtenerUsuarioActualMock.mockResolvedValue(otro);
+      expect(await listar()).toMatchObject({ costo: null, margen: null });
+      obtenerUsuarioActualMock.mockResolvedValue(dueno);
+      expect(await listar()).toMatchObject({ costo: 100, margen: 50 });
+    });
+
     it("?paraVenta=1: 401 sin sesión, 403 si no es el dueño, 200 con datos de venta para el dueño", async () => {
       await crearProducto(dueno, tienda.id, { nuevo: { categoriaId: await categoriaDePrueba(), variante: "Para vender" }, precio: 100, stock: 5 });
       const url = "http://localhost/api/tiendas/x/productos?paraVenta=1";

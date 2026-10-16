@@ -5,6 +5,7 @@ import type { Usuario } from "@/lib/auth/auth";
 import { crearProductoNuevoEnCatalogo, type NuevaEntradaCatalogo } from "@/lib/catalogo/catalogo";
 import { tienePermiso, type Plan } from "@/lib/planes/planes";
 import { validarCantidad, type UnidadMedida } from "./unidades";
+import { ALICUOTAS, calcularPrecio, margenDesde, type AlicuotaIva, type CondicionIva } from "@/lib/precios/precios";
 import { sinRomper, otorgarPorProductoCargado, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
 import type { Producto as ProductoDb } from "@/generated-prisma/client";
 
@@ -28,6 +29,16 @@ export interface Producto {
   stock: number; // unidades o kg según `unidad`
   unidad: UnidadMedida; // del producto de catálogo (03-productos.md)
   disponible: boolean;
+  // 20-precios-facturacion.md. costo y margen solo para quien gestiona la tienda.
+  costo: number | null;
+  margen: number | null;
+  alicuotaIva: AlicuotaIva;
+  impuestosInternos: number;
+}
+
+// Vistas públicas (comprador): sin costo ni margen.
+export function ocultarCostos<T extends { costo: number | null; margen: number | null }>(producto: T): T {
+  return { ...producto, costo: null, margen: null };
 }
 
 // Regla de fotos (03-productos.md): la foto propia solo se muestra si la tienda es
@@ -43,13 +54,13 @@ export function imagenEfectiva(
 
 // Relaciones que hacen falta para resolver la imagen efectiva de un Producto.
 const INCLUDE_IMAGEN = {
-  tienda: { select: { plan: true } },
+  tienda: { select: { plan: true, condicionIva: true } },
   catalogo: { select: { imagenUrl: true, unidad: true } },
   categoria: { select: { id: true, nombre: true } },
 } as const;
 
 type ProductoConImagen = ProductoDb & {
-  tienda: { plan: Plan };
+  tienda: { plan: Plan; condicionIva: CondicionIva };
   catalogo: { imagenUrl: string | null; unidad: UnidadMedida };
   categoria: { id: string; nombre: string } | null;
 };
@@ -81,7 +92,71 @@ function aProducto(producto: ProductoConImagen): Producto {
     stock: Number(producto.stock),
     unidad: producto.catalogo.unidad,
     disponible: producto.disponible,
+    costo: producto.costo === null ? null : Number(producto.costo),
+    margen: producto.margen === null ? null : Number(producto.margen),
+    alicuotaIva: producto.alicuotaIva,
+    impuestosInternos: Number(producto.impuestosInternos),
   };
+}
+
+// Datos de precio que pueden venir al crear o editar (20-precios-facturacion.md).
+interface CamposPrecio {
+  precio?: number;
+  costo?: number | null;
+  margen?: number | null;
+  alicuotaIva?: AlicuotaIva;
+  impuestosInternos?: number;
+}
+
+function validarCamposPrecio(input: CamposPrecio): void {
+  if (input.precio !== undefined) validarPrecio(input.precio);
+  if (input.costo !== undefined && input.costo !== null && (typeof input.costo !== "number" || !Number.isFinite(input.costo) || input.costo < 0)) {
+    throw new AppError("COSTO_INVALIDO", "El costo tiene que ser un número mayor o igual a 0.");
+  }
+  if (
+    input.margen !== undefined &&
+    input.margen !== null &&
+    (typeof input.margen !== "number" || !Number.isFinite(input.margen) || input.margen <= -100 || input.margen > 10000)
+  ) {
+    throw new AppError("MARGEN_INVALIDO", "El margen tiene que ser un porcentaje mayor a -100.");
+  }
+  if (input.alicuotaIva !== undefined && !(ALICUOTAS as readonly string[]).includes(input.alicuotaIva)) {
+    throw new AppError("ALICUOTA_INVALIDA", "La alícuota de IVA no es válida.");
+  }
+  if (
+    input.impuestosInternos !== undefined &&
+    (typeof input.impuestosInternos !== "number" || !Number.isFinite(input.impuestosInternos) || input.impuestosInternos < 0 || input.impuestosInternos > 100)
+  ) {
+    throw new AppError("INTERNOS_INVALIDOS", "Los impuestos internos tienen que ser un porcentaje entre 0 y 100.");
+  }
+}
+
+// Combina lo nuevo con lo guardado y resuelve precio y margen: si viene el precio,
+// manda el precio (y se recalcula el margen si hay costo); si no, con costo y margen
+// conocidos se calcula el precio.
+function resolverPrecio(
+  condicion: CondicionIva,
+  input: CamposPrecio,
+  actual: { precio: number | null; costo: number | null; margen: number | null; alicuotaIva: AlicuotaIva; impuestosInternos: number }
+): { precio: number; costo: number | null; margen: number | null; alicuotaIva: AlicuotaIva; impuestosInternos: number } {
+  const costo = input.costo !== undefined ? input.costo : actual.costo;
+  const alicuotaIva = input.alicuotaIva ?? actual.alicuotaIva;
+  const impuestosInternos = input.impuestosInternos ?? actual.impuestosInternos;
+  const fiscal = { condicion, alicuota: alicuotaIva, internos: impuestosInternos };
+  if (input.precio !== undefined) {
+    const margen = costo !== null ? margenDesde(input.precio, { ...fiscal, costo }) : input.margen !== undefined ? input.margen : actual.margen;
+    return { precio: input.precio, costo, margen, alicuotaIva, impuestosInternos };
+  }
+  const margen = input.margen !== undefined ? input.margen : actual.margen;
+  const cambioAlgo =
+    input.costo !== undefined || input.margen !== undefined || input.alicuotaIva !== undefined || input.impuestosInternos !== undefined;
+  if (costo !== null && margen !== null && (cambioAlgo || actual.precio === null)) {
+    return { precio: calcularPrecio({ ...fiscal, costo, margen }), costo, margen, alicuotaIva, impuestosInternos };
+  }
+  if (actual.precio === null) {
+    throw new AppError("PRECIO_INVALIDO", "Cargá el precio, o el costo y el margen de ganancia.");
+  }
+  return { precio: actual.precio, costo, margen, alicuotaIva, impuestosInternos };
 }
 
 export function esComprable(producto: Pick<Producto, "disponible" | "stock">): boolean {
@@ -89,9 +164,13 @@ export function esComprable(producto: Pick<Producto, "disponible" | "stock">): b
 }
 
 // Propietario o miembro con el permiso (19-equipo-tienda.md); devuelve la tienda.
-async function verificarPermiso(usuario: Usuario, tiendaId: string, permiso: Permiso | Permiso[]): Promise<{ plan: Plan }> {
+async function verificarPermiso(
+  usuario: Usuario,
+  tiendaId: string,
+  permiso: Permiso | Permiso[]
+): Promise<{ plan: Plan; condicionIva: CondicionIva }> {
   await exigirPermiso(usuario, tiendaId, permiso);
-  return prisma.tienda.findUniqueOrThrow({ where: { id: tiendaId }, select: { plan: true } });
+  return prisma.tienda.findUniqueOrThrow({ where: { id: tiendaId }, select: { plan: true, condicionIva: true } });
 }
 
 // Permiso que pide cada campo editable de un producto (19-equipo-tienda.md).
@@ -105,6 +184,10 @@ const PERMISO_POR_CAMPO: Record<keyof ActualizarProductoInput, Permiso> = {
   stock: "stock",
   imagenUrl: "fotos",
   favorito: "vender",
+  costo: "precios",
+  margen: "precios",
+  alicuotaIva: "precios",
+  impuestosInternos: "precios",
 };
 
 function validarPrecio(precio: number): void {
@@ -125,17 +208,15 @@ function validarStock(stock: number): void {
   }
 }
 
-interface CrearProductoDesdeCatalogoInput {
+interface CrearProductoDesdeCatalogoInput extends CamposPrecio {
   catalogoId: string;
-  precio: number;
   stock: number;
   imagenUrl?: string;
   descripcion?: string;
 }
 
-interface CrearProductoNuevoInput {
+interface CrearProductoNuevoInput extends CamposPrecio {
   nuevo: NuevaEntradaCatalogo & { imagenUrl?: string }; // 06-catalogo.md
-  precio: number;
   stock: number;
   descripcion?: string;
 }
@@ -148,7 +229,14 @@ export async function crearProducto(
   input: CrearProductoInput
 ): Promise<Producto> {
   const tienda = await verificarPermiso(vendedor, tiendaId, "productos");
-  validarPrecio(input.precio);
+  validarCamposPrecio(input);
+  const precio = resolverPrecio(tienda.condicionIva, input, {
+    precio: null,
+    costo: null,
+    margen: null,
+    alicuotaIva: "iva_21",
+    impuestosInternos: 0,
+  });
   validarStock(input.stock);
   if ("catalogoId" in input ? input.imagenUrl : input.nuevo.imagenUrl) exigirFotosPremium(tienda);
   if (!("catalogoId" in input)) validarCantidad(input.nuevo.unidad ?? "unidad", input.stock, { permitirCero: true });
@@ -176,7 +264,7 @@ export async function crearProducto(
       // La foto del catálogo NO se copia: se resuelve en imagenEfectiva. Esta
       // columna es solo la foto personalizada (premium).
       imagenUrl: "catalogoId" in input ? (input.imagenUrl ?? null) : null,
-      precio: input.precio,
+      ...precio,
       stock: validarStockDe(catalogo.unidad, input.stock),
     },
     include: INCLUDE_IMAGEN,
@@ -320,11 +408,10 @@ export async function listarParaVenta(vendedor: Usuario, tiendaId: string): Prom
   });
 }
 
-export interface ActualizarProductoInput {
+export interface ActualizarProductoInput extends CamposPrecio {
   nombre?: string;
   descripcion?: string;
   imagenUrl?: string | null;
-  precio?: number;
   precioOferta?: number | null;
   destacado?: boolean;
   stock?: number;
@@ -365,7 +452,14 @@ export async function actualizarProducto(
   if (permisos.length === 0) await exigirPermiso(vendedor, actual.tiendaId, PERMISOS.slice());
   for (const permiso of permisos) await exigirPermiso(vendedor, actual.tiendaId, permiso);
 
-  if (input.precio !== undefined) validarPrecio(input.precio);
+  validarCamposPrecio(input);
+  const precio = resolverPrecio(actual.tienda.condicionIva, input, {
+    precio: Number(actual.precio),
+    costo: actual.costo === null ? null : Number(actual.costo),
+    margen: actual.margen === null ? null : Number(actual.margen),
+    alicuotaIva: actual.alicuotaIva,
+    impuestosInternos: Number(actual.impuestosInternos),
+  });
   if (input.stock !== undefined) {
     validarStock(input.stock);
     const { unidad } = await prisma.productoCatalogo.findUniqueOrThrow({
@@ -374,8 +468,7 @@ export async function actualizarProducto(
     });
     validarStockDe(unidad, input.stock);
   }
-  const precioFinal = input.precio ?? Number(actual.precio);
-  validarPrecioOferta(input.precioOferta, precioFinal);
+  validarPrecioOferta(input.precioOferta, precio.precio);
   if (input.imagenUrl) exigirFotosPremium(actual.tienda);
   if (input.favorito !== undefined && typeof input.favorito !== "boolean") {
     throw new AppError("FAVORITO_INVALIDO", "favorito debe ser true o false.");
@@ -387,7 +480,7 @@ export async function actualizarProducto(
       nombre: input.nombre,
       descripcion: input.descripcion,
       imagenUrl: input.imagenUrl,
-      precio: input.precio,
+      ...precio,
       precioOferta: input.precioOferta,
       destacado: input.destacado,
       stock: input.stock,

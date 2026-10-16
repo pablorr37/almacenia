@@ -18,6 +18,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       descripcion: body.descripcion,
       imagenUrl: body.imagenUrl,
       precio: body.precio,
+      // 20-precios-facturacion.md
+      costo: body.costo,
+      margen: body.margen,
+      alicuotaIva: body.alicuotaIva,
+      impuestosInternos: body.impuestosInternos,
       precioOferta: body.precioOferta,
       destacado: body.destacado,
       stock: body.stock,
