@@ -5,7 +5,7 @@ import { crearTienda, type Tienda } from "@/lib/tiendas/tiendas";
 import { crearProducto } from "@/lib/productos/productos";
 import { crearVentaPresencial } from "@/lib/ventas/ventas";
 import { crearPedido } from "@/lib/pedidos/pedidos";
-import { listarUsuarios, marcarTester, cambiarEstadoCuenta, eliminarUsuario } from "./usuarios";
+import { listarUsuarios, marcarTester, cambiarEstadoCuenta, eliminarUsuario, cambiarPlanUsuario } from "./usuarios";
 import { categoriaDePrueba } from "@/lib/rubros-categorias/test-helpers";
 
 let contador = 0;
@@ -316,6 +316,35 @@ describe("eliminarUsuario", () => {
       await expect(eliminarUsuario(comprador, admin.id, admin.email)).rejects.toMatchObject({ code: "FORBIDDEN" });
     } finally {
       await limpiar([admin.id, otroAdmin.id, comprador.id]);
+    }
+  });
+});
+
+// 18-alcance.md / 11-admin.md: plan del usuario.
+describe("cambiarPlanUsuario", () => {
+  it("el admin cambia el plan del usuario y UsuarioAdmin lo incluye", async () => {
+    const admin = await crearAdmin();
+    const comprador = await crearComprador();
+    try {
+      const inicial = await listarUsuarios(admin, { q: comprador.email });
+      expect(inicial.data[0].plan).toBe("free");
+      const plata = await cambiarPlanUsuario(admin, comprador.id, "plata");
+      expect(plata.plan).toBe("plata");
+      expect((await prisma.usuario.findUniqueOrThrow({ where: { id: comprador.id } })).plan).toBe("plata");
+    } finally {
+      await prisma.usuario.deleteMany({ where: { id: { in: [admin.id, comprador.id] } } });
+    }
+  });
+
+  it("FORBIDDEN si no es admin; PLAN_INVALIDO; USUARIO_NO_ENCONTRADO", async () => {
+    const admin = await crearAdmin();
+    const comprador = await crearComprador();
+    try {
+      await expect(cambiarPlanUsuario(comprador, comprador.id, "premium")).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(cambiarPlanUsuario(admin, comprador.id, "gold" as never)).rejects.toMatchObject({ code: "PLAN_INVALIDO" });
+      await expect(cambiarPlanUsuario(admin, "00000000-0000-0000-0000-000000000000", "premium")).rejects.toMatchObject({ code: "USUARIO_NO_ENCONTRADO" });
+    } finally {
+      await prisma.usuario.deleteMany({ where: { id: { in: [admin.id, comprador.id] } } });
     }
   });
 });

@@ -8,6 +8,8 @@ import { apiGetPaginado, apiPatch, apiDelete, ApiError } from "@/lib/api-client"
 type Rol = "comprador" | "vendedor" | "admin";
 type EstadoCuenta = "activa" | "pausada" | "baneada";
 type Plan = "free" | "premium";
+// Plan del usuario (18-alcance.md): define su radio de alcance en el mapa.
+type PlanUsuario = "free" | "premium" | "plata";
 
 type UsuarioAdmin = {
   id: string;
@@ -17,6 +19,7 @@ type UsuarioAdmin = {
   esVendedor: boolean;
   esAdmin: boolean;
   esTester: boolean;
+  plan: PlanUsuario;
   estadoCuenta: EstadoCuenta;
   motivoSuspension: string | null;
   tienda: { id: string; nombre: string; plan: Plan; verificada: boolean } | null;
@@ -139,6 +142,17 @@ export default function AdminUsuariosPage() {
         reemplazar(u.id, { tienda: { ...tienda, plan: nuevo } });
       },
       "No se pudo cambiar el plan."
+    );
+  }
+
+  function cambiarPlanUsuario(u: UsuarioAdmin, plan: PlanUsuario) {
+    ejecutar(
+      u.id,
+      async () => {
+        const actualizado = await apiPatch<UsuarioAdmin>(`/api/admin/usuarios/${u.id}`, { plan });
+        reemplazar(u.id, { plan: actualizado.plan });
+      },
+      "No se pudo cambiar el plan del usuario."
     );
   }
 
@@ -362,6 +376,20 @@ export default function AdminUsuariosPage() {
               </div>
             )}
 
+            <label className="flex items-center justify-between gap-2 text-[13px] text-text">
+              <span>Plan del usuario (radio de alcance)</span>
+              <select
+                value={u.plan}
+                disabled={procesando === u.id}
+                onChange={(e) => cambiarPlanUsuario(u, e.target.value as PlanUsuario)}
+                aria-label={`Plan de ${u.nombre}`}
+                className="h-9 rounded-control border border-border bg-surface px-2 text-[13px] font-semibold"
+              >
+                <option value="free">Free</option>
+                <option value="premium">Premium</option>
+                <option value="plata">Plata</option>
+              </select>
+            </label>
             <label className="flex items-center gap-2 text-[13px] text-text">
               <input
                 type="checkbox"

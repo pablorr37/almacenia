@@ -38,8 +38,9 @@ verificación. Todas las rutas bajo `/api/admin/**` requieren `esAdmin = true`
 - Un admin no puede pausar, banear ni eliminarse a sí mismo (`ACCION_SOBRE_SI_MISMO`)
   ni hacerlo con otro admin (`FORBIDDEN`).
 - Marcar o desmarcar un usuario como **tester** (`esTester`, `01-auth.md`) con
-  `PATCH /api/admin/usuarios/:id`. Es la única escritura sobre usuarios: `esAdmin`
-  sigue sin endpoint.
+  `PATCH /api/admin/usuarios/:id`. `esAdmin` sigue sin endpoint.
+- Cambiar el **plan del usuario** (free / premium / plata, `18-alcance.md`) con
+  `PATCH /api/admin/usuarios/:id` `{ plan }`. `UsuarioAdmin` incluye `plan`.
 - **Curaduría de fotos** (`/admin/fotos`, admin y testers): lista de entradas de
   catálogo sin foto con un botón "Buscar" que abre el buscador de fotos
   (`16-banco-fotos.md`) precargado con el nombre, y cola de fotos `pendiente`
@@ -110,9 +111,11 @@ llegar a **todos** los usuarios registrados.
 
 ### `PATCH /api/admin/usuarios/:id`
 
-Request `{ esTester: boolean }` o `{ estadoCuenta: 'activa' | 'pausada' | 'baneada'; motivo?: string }`.
+Request `{ esTester: boolean }`, `{ estadoCuenta: 'activa' | 'pausada' | 'baneada'; motivo?: string }`
+o `{ plan: 'free' | 'premium' | 'plata' }` (plan del usuario, `18-alcance.md`).
 Response `200`: `{ data: UsuarioAdmin }` (incluye `estadoCuenta`, `motivoSuspension`).
 `400 ESTADO_CUENTA_INVALIDO` si `estadoCuenta` no es válido.
+`400 PLAN_INVALIDO` si `plan` no es válido.
 
 ### `DELETE /api/admin/usuarios/:id`
 

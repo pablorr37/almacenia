@@ -5,6 +5,7 @@ import { Prisma } from "@/generated-prisma/client";
 import type { Usuario } from "@/lib/auth/auth";
 import { requireAdmin } from "@/lib/auth/auth";
 import type { Plan, EstadoVerificacion } from "@/generated-prisma/client";
+import { SAN_JUAN } from "@/lib/alcance/alcance";
 
 const RADIO_KM_DEFAULT = 5;
 const RADIO_KM_MAXIMO = 50;
@@ -277,18 +278,27 @@ export interface BuscarTiendasCercanasInput {
   lat: number;
   lon: number;
   radioKm?: number;
+  // 18-alcance.md: límite del radio según el alcance del usuario (el radio pedido
+  // se recorta a este valor), o `null` para buscar en toda la provincia (plata).
+  alcanceKm?: number | null;
 }
 
 export async function buscarTiendasCercanas(
   input: BuscarTiendasCercanasInput
 ): Promise<Array<Tienda & { distanciaKm: number }>> {
-  const radioKm = input.radioKm ?? RADIO_KM_DEFAULT;
-  if (typeof radioKm !== "number" || Number.isNaN(radioKm) || radioKm <= 0 || radioKm > RADIO_KM_MAXIMO) {
+  const radioPedido = input.radioKm ?? (typeof input.alcanceKm === "number" ? input.alcanceKm : RADIO_KM_DEFAULT);
+  if (typeof radioPedido !== "number" || Number.isNaN(radioPedido) || radioPedido <= 0 || radioPedido > RADIO_KM_MAXIMO) {
     throw new AppError("RADIO_INVALIDO", `El radio debe ser mayor a 0 y hasta ${RADIO_KM_MAXIMO} km.`);
   }
   validarUbicacion(input.lat, input.lon);
 
-  const radioMetros = radioKm * 1000;
+  const radioKm = typeof input.alcanceKm === "number" ? Math.min(radioPedido, input.alcanceKm) : radioPedido;
+  const origen = Prisma.sql`ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography`;
+  // Plata: toda la provincia de San Juan (rectángulo), sin límite de radio.
+  const filtroZona =
+    input.alcanceKm === null
+      ? Prisma.sql`ubicacion::geometry && ST_MakeEnvelope(${SAN_JUAN.lonMin}, ${SAN_JUAN.latMin}, ${SAN_JUAN.lonMax}, ${SAN_JUAN.latMax}, 4326)`
+      : Prisma.sql`ST_DWithin(ubicacion, ${origen}, ${radioKm * 1000})`;
 
   const filas = await prisma.$queryRaw<Array<FilaTienda & { distancia_km: number }>>`
     SELECT
@@ -296,13 +306,13 @@ export async function buscarTiendasCercanas(
       imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
       ST_Y(ubicacion::geometry) AS lat,
       ST_X(ubicacion::geometry) AS lon,
-      ST_Distance(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography) / 1000 AS distancia_km
+      ST_Distance(ubicacion, ${origen}) / 1000 AS distancia_km
     FROM tiendas
     WHERE activa = true
       -- 01-auth.md: las tiendas de cuentas pausadas/baneadas no se muestran.
       AND vendedor_id IN (SELECT id FROM usuarios WHERE estado_cuenta = 'activa')
-      AND ST_DWithin(ubicacion, ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography, ${radioMetros})
-    ORDER BY (plan = 'premium') DESC, distancia_km ASC
+      AND ${filtroZona}
+    ORDER BY (plan IN ('premium', 'plata')) DESC, distancia_km ASC
   `;
 
   const horariosPorTienda = await obtenerHorariosPorTiendas(filas.map((f) => f.id));

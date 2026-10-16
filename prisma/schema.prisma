@@ -46,6 +46,7 @@ model Usuario {
   estadoCuenta     EstadoCuenta @default(activa) @map("estado_cuenta")
   motivoSuspension String?      @map("motivo_suspension")
   suspendidaEn     DateTime?    @map("suspendida_en")
+  plan             Plan         @default(free) // 18-alcance.md
   avatarUrl    String?  @map("avatar_url")
   creadoEn     DateTime @default(now()) @map("creado_en")
 
@@ -151,6 +152,7 @@ model CategoriaProducto {
 enum Plan {
   free
   premium
+  plata
 
   @@map("plan")
 }

@@ -10,7 +10,8 @@ export type Feature = "fotos_personalizadas" | "destacado_prioritario";
 const FEATURES_PREMIUM: readonly Feature[] = ["fotos_personalizadas", "destacado_prioritario"];
 
 export function tienePermiso(tienda: { plan: Plan }, feature: Feature): boolean {
-  if (tienda.plan === "premium") return true;
+  // Una tienda plata cuenta como premium (10-planes.md, 18-alcance.md).
+  if (tienda.plan === "premium" || tienda.plan === "plata") return true;
   return !FEATURES_PREMIUM.includes(feature);
 }
 

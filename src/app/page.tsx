@@ -22,6 +22,17 @@ const TiendaMap = dynamic(
 
 type Tienda = TiendaMapa;
 
+// 18-alcance.md
+type Alcance = {
+  plan: "free" | "premium" | "plata";
+  puntos: number;
+  radioKm: number | null;
+  provincia: boolean;
+  proximoUmbral: { radioKm: number; puntos: number } | null;
+};
+
+const formatoKm = (km: number) => km.toLocaleString("es-AR", { maximumFractionDigits: 1 });
+
 export default function MapaPage() {
   const { status } = useSession();
 
@@ -42,6 +53,7 @@ function MapaAutenticado() {
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const [snap, setSnap] = useState<"colapsado" | "medio" | "expandido">("medio");
+  const [alcance, setAlcance] = useState<Alcance | null>(null);
   const ahora = useAhora();
 
   useEffect(() => {
@@ -63,6 +75,10 @@ function MapaAutenticado() {
 
   const cargarTiendas = useCallback(() => {
     if (!origen) return;
+    // El radio de alcance lo aplica el servidor (18-alcance.md); acá solo se dibuja.
+    apiGet<Alcance>("/api/alcance")
+      .then(setAlcance)
+      .catch(() => {});
     apiGet<Tienda[]>(`/api/tiendas/cercanas?lat=${origen.lat}&lon=${origen.lon}`)
       .then(setTiendas)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Error al buscar tiendas."))
@@ -88,6 +104,7 @@ function MapaAutenticado() {
             origen={origen}
             tiendas={tiendas}
             onSelect={() => setSnap("colapsado")}
+            alcanceKm={alcance ? alcance.radioKm : undefined}
             // El sheet arranca en "medio" (45% de la pantalla).
             paddingInferior={typeof window === "undefined" ? 0 : Math.round(window.innerHeight * 0.45)}
           />
@@ -134,6 +151,25 @@ function MapaAutenticado() {
         </svg>
         Lista de compras
       </Link>
+
+      {/* Radio de alcance (18-alcance.md): plan y puntos; lleva al historial de puntos. */}
+      {alcance && (
+        <Link
+          href="/perfil/puntos"
+          data-testid="chip-alcance"
+          className="press absolute right-5 top-[76px] z-20 flex animate-fade-in-down flex-col items-end rounded-card border border-border bg-surface/95 px-3 py-1.5 text-right shadow-card"
+          style={{ animationDelay: "120ms" }}
+        >
+          <span className="text-[13px] font-bold text-primary-dark tabular-nums">
+            {alcance.radioKm === null ? "Toda San Juan" : `Alcance ${formatoKm(alcance.radioKm)} km`}
+          </span>
+          {alcance.proximoUmbral && (
+            <span className="text-[11px] text-text-2 tabular-nums">
+              {Math.max(1, Math.ceil(alcance.proximoUmbral.puntos - alcance.puntos))} pts más → {alcance.proximoUmbral.radioKm} km
+            </span>
+          )}
+        </Link>
+      )}
 
       <BottomSheet
         snap={snap}

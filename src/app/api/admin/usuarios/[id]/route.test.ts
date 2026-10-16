@@ -2,11 +2,11 @@ import { NextRequest } from "next/server";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
-import { marcarTester, cambiarEstadoCuenta, eliminarUsuario } from "@/lib/admin/usuarios";
+import { marcarTester, cambiarEstadoCuenta, eliminarUsuario, cambiarPlanUsuario } from "@/lib/admin/usuarios";
 import { PATCH, DELETE } from "./route";
 
 vi.mock("@/lib/auth/session", () => ({ obtenerUsuarioActual: vi.fn() }));
-vi.mock("@/lib/admin/usuarios", () => ({ marcarTester: vi.fn(), cambiarEstadoCuenta: vi.fn(), eliminarUsuario: vi.fn() }));
+vi.mock("@/lib/admin/usuarios", () => ({ marcarTester: vi.fn(), cambiarEstadoCuenta: vi.fn(), eliminarUsuario: vi.fn(), cambiarPlanUsuario: vi.fn() }));
 
 const admin: Usuario = {
   id: "a", email: "a@a.com", nombre: "A", esComprador: true, esVendedor: false,
@@ -35,6 +35,15 @@ describe("PATCH /api/admin/usuarios/:id", () => {
     vi.mocked(obtenerUsuarioActual).mockResolvedValue({ ...admin, esAdmin: false });
     vi.mocked(marcarTester).mockRejectedValue(new AppError("FORBIDDEN", "x"));
     expect((await PATCH(req({ esTester: true }), params)).status).toBe(403);
+  });
+
+  it("200 cambia el plan del usuario (18-alcance.md)", async () => {
+    vi.mocked(obtenerUsuarioActual).mockResolvedValue(admin);
+    vi.mocked(cambiarPlanUsuario).mockResolvedValue({ id: "u1", plan: "plata" } as never);
+    const res = await PATCH(req({ plan: "plata" }), params);
+    expect(res.status).toBe(200);
+    expect(cambiarPlanUsuario).toHaveBeenCalledWith(admin, "u1", "plata");
+    expect(marcarTester).not.toHaveBeenCalled();
   });
 
   it("200 cambia el estado de cuenta con motivo", async () => {

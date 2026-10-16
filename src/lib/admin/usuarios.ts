@@ -9,6 +9,7 @@ const PAGE_SIZE_MAXIMO = 100;
 export type RolUsuario = "comprador" | "vendedor" | "admin";
 
 export interface UsuarioAdmin extends Usuario {
+  plan: Plan; // plan del usuario (18-alcance.md); el de la tienda va en `tienda.plan`
   estadoCuenta: EstadoCuenta;
   motivoSuspension: string | null;
   tienda: { id: string; nombre: string; plan: Plan; verificada: boolean } | null;
@@ -52,6 +53,7 @@ async function aUsuarioAdmin(u: UsuarioConTienda): Promise<UsuarioAdmin> {
     esAdmin: u.esAdmin,
     esTester: u.esTester,
     avatarUrl: u.avatarUrl,
+    plan: u.plan,
     estadoCuenta: u.estadoCuenta,
     motivoSuspension: u.motivoSuspension,
     tienda: u.tienda,
@@ -59,7 +61,7 @@ async function aUsuarioAdmin(u: UsuarioConTienda): Promise<UsuarioAdmin> {
   };
 }
 
-// Única escritura sobre usuarios desde el admin (11-admin.md): el flag esTester.
+// Marca o desmarca al usuario como tester (11-admin.md).
 export async function marcarTester(admin: Usuario, usuarioId: string, esTester: boolean): Promise<UsuarioAdmin> {
   requireAdmin(admin);
   if (typeof esTester !== "boolean") {
@@ -68,6 +70,21 @@ export async function marcarTester(admin: Usuario, usuarioId: string, esTester: 
   const existe = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { id: true } });
   if (!existe) throw new AppError("USUARIO_NO_ENCONTRADO", "El usuario no existe.");
   await prisma.usuario.update({ where: { id: usuarioId }, data: { esTester } });
+  return aUsuarioAdmin(await buscarConTienda(usuarioId));
+}
+
+const PLANES: Plan[] = ["free", "premium", "plata"];
+
+// Plan del usuario: free / premium / plata (18-alcance.md). Sin cobro integrado,
+// solo lo cambia un admin.
+export async function cambiarPlanUsuario(admin: Usuario, usuarioId: string, plan: Plan): Promise<UsuarioAdmin> {
+  requireAdmin(admin);
+  if (!PLANES.includes(plan)) {
+    throw new AppError("PLAN_INVALIDO", "El plan tiene que ser free, premium o plata.");
+  }
+  const existe = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { id: true } });
+  if (!existe) throw new AppError("USUARIO_NO_ENCONTRADO", "El usuario no existe.");
+  await prisma.usuario.update({ where: { id: usuarioId }, data: { plan } });
   return aUsuarioAdmin(await buscarConTienda(usuarioId));
 }
 

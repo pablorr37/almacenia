@@ -15,6 +15,7 @@ CREATE TABLE usuarios (
   es_admin       BOOLEAN NOT NULL DEFAULT false,
   es_tester      BOOLEAN NOT NULL DEFAULT false,
   estado_cuenta  estado_cuenta NOT NULL DEFAULT 'activa', -- 'activa' | 'pausada' | 'baneada'
+  plan           plan NOT NULL DEFAULT 'free',              -- 'free' | 'premium' | 'plata', ver 18-alcance.md
   motivo_suspension TEXT,
   suspendida_en  TIMESTAMPTZ,
   avatar_url     TEXT,

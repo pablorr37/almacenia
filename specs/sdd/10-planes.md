@@ -10,7 +10,8 @@ tiempo sin requerir cambios de schema.
 ## Modelo de datos
 
 `Tienda.plan` (`free` | `premium`, ver `02-tiendas.md`) es el único campo de
-schema. No hay tabla de features: la lista de features gateadas vive como
+schema. El enum `plan` suma `plata` para el plan del usuario (`18-alcance.md`); una tienda
+con `plata` cuenta como `premium` para estas features. No hay tabla de features: la lista de features gateadas vive como
 constantes en código (`src/lib/planes/planes.ts`), no en la base de datos, porque
 en este MVP no hay UI de admin para editarlas dinámicamente.
 
