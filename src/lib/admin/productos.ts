@@ -71,6 +71,10 @@ export async function listarProductosAdmin(
     stock: Number(p.stock),
     unidad: p.catalogo.unidad,
     disponible: p.disponible,
+    costo: p.costo === null ? null : Number(p.costo),
+    margen: p.margen === null ? null : Number(p.margen),
+    alicuotaIva: p.alicuotaIva,
+    impuestosInternos: Number(p.impuestosInternos),
     tiendaNombre: p.tienda.nombre,
     vendedorNombre: p.tienda.vendedor.nombre,
   }));

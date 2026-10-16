@@ -19,6 +19,8 @@ import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { EscanerCodigo } from "@/components/scanner/EscanerCodigo";
 import { DialogoEditarProducto } from "@/components/productos/DialogoEditarProducto";
+import { CamposPrecio, PRECIO_VACIO, aPayloadPrecio, type ValorPrecio } from "@/components/productos/CamposPrecio";
+import { CONDICIONES_IVA, ETIQUETA_CONDICION, type AlicuotaIva, type CondicionIva } from "@/lib/precios/precios";
 import {
   CamposEntradaCatalogo,
   ENTRADA_VACIA,
@@ -60,6 +62,15 @@ type Tienda = {
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[];
   abierto24hs: boolean;
+  porcentajePuntosEquipo: number | null;
+  // Datos fiscales (20-precios-facturacion.md).
+  condicionIva: CondicionIva;
+  razonSocial: string | null;
+  cuit: string | null;
+  ingresosBrutos: string | null;
+  domicilioFiscal: string | null;
+  puntoVenta: number | null;
+  inicioActividades: string | null;
 };
 
 
@@ -92,6 +103,10 @@ type Producto = {
   stock: number;
   unidad: UnidadMedida;
   disponible: boolean;
+  costo: number | null;
+  margen: number | null;
+  alicuotaIva: AlicuotaIva;
+  impuestosInternos: number;
 };
 
 type EstadoPedido =
@@ -181,6 +196,8 @@ function MiTienda() {
   // Datos de un producto NUEVO en el catálogo (06-catalogo.md: categoría + marca +
   // variante + contenido); si se adopta uno existente, mandan los del catálogo.
   const [entradaNueva, setEntradaNueva] = useState<EntradaCatalogoForm>(ENTRADA_VACIA);
+  // Precio del producto nuevo: costo + ganancia + impuestos (20-precios-facturacion.md).
+  const [precioNuevo, setPrecioNuevo] = useState<ValorPrecio>(PRECIO_VACIO);
   const [rubros, setRubros] = useState<Rubro[]>([]);
   const [rubroForm, setRubroForm] = useState("");
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
@@ -190,6 +207,19 @@ function MiTienda() {
   const [mediosForm, setMediosForm] = useState<MedioPago[]>([]);
   const [horariosForm, setHorariosForm] = useState<HorarioTienda[]>(horarioPorDefecto());
   const [abierto24hsForm, setAbierto24hsForm] = useState(false);
+  // 12-gamificacion.md: % de los puntos de una venta para quien del equipo la hizo.
+  // null = el valor por defecto de Almacenia.
+  const [porcentajeEquipoForm, setPorcentajeEquipoForm] = useState<number | null>(null);
+  // Datos fiscales (20-precios-facturacion.md); los edita solo el propietario.
+  const [fiscalForm, setFiscalForm] = useState({
+    condicionIva: "monotributo" as CondicionIva,
+    razonSocial: "",
+    cuit: "",
+    ingresosBrutos: "",
+    domicilioFiscal: "",
+    puntoVenta: "",
+    inicioActividades: "",
+  });
   const [guardandoTienda, setGuardandoTienda] = useState(false);
   const [tiendaGuardada, setTiendaGuardada] = useState(false);
   const [solicitandoVerificacion, setSolicitandoVerificacion] = useState(false);
@@ -252,6 +282,16 @@ function MiTienda() {
     setMediosForm(tienda.mediosDePago);
     setHorariosForm(tienda.horarios.length > 0 ? tienda.horarios : horarioPorDefecto());
     setAbierto24hsForm(tienda.abierto24hs);
+    setPorcentajeEquipoForm(tienda.porcentajePuntosEquipo);
+    setFiscalForm({
+      condicionIva: tienda.condicionIva,
+      razonSocial: tienda.razonSocial ?? "",
+      cuit: tienda.cuit ?? "",
+      ingresosBrutos: tienda.ingresosBrutos ?? "",
+      domicilioFiscal: tienda.domicilioFiscal ?? "",
+      puntoVenta: tienda.puntoVenta ? String(tienda.puntoVenta) : "",
+      inicioActividades: tienda.inicioActividades ?? "",
+    });
     setRubroForm(tienda.rubro?.id ?? "");
   }, [tienda, puedeVerPedidos]);
 
@@ -281,6 +321,14 @@ function MiTienda() {
         mediosDePago: mediosForm,
         horarios: horariosForm,
         abierto24hs: abierto24hsForm,
+        porcentajePuntosEquipo: porcentajeEquipoForm,
+        condicionIva: fiscalForm.condicionIva,
+        razonSocial: fiscalForm.razonSocial || null,
+        cuit: fiscalForm.cuit || null,
+        ingresosBrutos: fiscalForm.ingresosBrutos || null,
+        domicilioFiscal: fiscalForm.domicilioFiscal || null,
+        puntoVenta: fiscalForm.puntoVenta ? Number(fiscalForm.puntoVenta) : null,
+        inicioActividades: fiscalForm.inicioActividades || null,
         rubroId: rubroForm || undefined,
       });
       setTienda(actualizada);
@@ -333,7 +381,7 @@ function MiTienda() {
         ...(catalogoSeleccionado
           ? { catalogoId: catalogoSeleccionado.id }
           : { nuevo: { ...aNuevaEntrada(entradaNueva), codigoBarras } }),
-        precio: Number(form.get("precio")),
+        ...aPayloadPrecio(precioNuevo),
         stock: Number(form.get("stock")),
       });
       setProductos([...productos, nuevo]);
@@ -342,6 +390,7 @@ function MiTienda() {
       setCatalogoSeleccionado(null);
       setResultadosCatalogo([]);
       setEntradaNueva(ENTRADA_VACIA);
+      setPrecioNuevo(PRECIO_VACIO);
     } catch (err) {
       setErrorProducto(err instanceof ApiError ? err.message : "No se pudo agregar el producto.");
     }
@@ -570,6 +619,84 @@ function MiTienda() {
               </div>
             </div>
 
+            <fieldset className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5" aria-label="Datos fiscales">
+              <legend className="px-1 text-[14px] font-semibold text-text">Datos fiscales</legend>
+              <p className="text-[12px] text-text-2">
+                Definen cómo se arma el precio (con o sin IVA discriminado) y hacen falta para emitir comprobantes.
+              </p>
+              <label className="flex flex-col gap-1 text-[12px] font-semibold text-text-2">
+                Condición frente al IVA
+                <select
+                  value={fiscalForm.condicionIva}
+                  onChange={(e) => setFiscalForm({ ...fiscalForm, condicionIva: e.target.value as CondicionIva })}
+                  aria-label="Condición frente al IVA"
+                  className="h-11 rounded-control border border-border bg-surface px-3 text-[14px] font-normal text-text"
+                >
+                  {CONDICIONES_IVA.map((c) => (
+                    <option key={c} value={c}>
+                      {ETIQUETA_CONDICION[c]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {(
+                [
+                  ["razonSocial", "Razón social", "text"],
+                  ["cuit", "CUIT", "text"],
+                  ["domicilioFiscal", "Domicilio fiscal", "text"],
+                  ["ingresosBrutos", "Ingresos brutos (opcional)", "text"],
+                  ["puntoVenta", "Punto de venta", "number"],
+                  ["inicioActividades", "Inicio de actividades (opcional)", "date"],
+                ] as const
+              ).map(([campo, etiqueta, tipo]) => (
+                <label key={campo} className="flex flex-col gap-1 text-[12px] font-semibold text-text-2">
+                  {etiqueta}
+                  <input
+                    type={tipo}
+                    value={fiscalForm[campo]}
+                    onChange={(e) => setFiscalForm({ ...fiscalForm, [campo]: e.target.value })}
+                    aria-label={etiqueta}
+                    inputMode={campo === "cuit" ? "numeric" : undefined}
+                    placeholder={campo === "cuit" ? "20-12345678-6" : undefined}
+                    className="h-11 rounded-control border border-border bg-surface px-3 text-[14px] font-normal text-text"
+                  />
+                </label>
+              ))}
+            </fieldset>
+
+            <fieldset className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5">
+              <legend className="px-1 text-[14px] font-semibold text-text">Puntos por ventas del equipo</legend>
+              <p className="text-[12px] text-text-2">
+                Cuando vende alguien de tu equipo, los puntos de la venta se reparten entre esa persona y vos.
+              </p>
+              <label className="flex items-center gap-2 text-[13px] text-text">
+                <input
+                  type="checkbox"
+                  checked={porcentajeEquipoForm === null}
+                  onChange={(e) => setPorcentajeEquipoForm(e.target.checked ? null : 50)}
+                  className="h-4 w-4 accent-[#0e6b5c]"
+                />
+                Usar el valor por defecto de Almacenia
+              </label>
+              {porcentajeEquipoForm !== null && (
+                <>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={porcentajeEquipoForm}
+                    onChange={(e) => setPorcentajeEquipoForm(Number(e.target.value))}
+                    aria-label="Porcentaje de los puntos para quien vende"
+                    className="w-full accent-[#0e6b5c]"
+                  />
+                  <p className="text-[13px] font-semibold text-text" data-testid="reparto-puntos">
+                    Quien vende se lleva {porcentajeEquipoForm} %, vos {100 - porcentajeEquipoForm} %
+                  </p>
+                </>
+              )}
+            </fieldset>
+
             {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}
             {tiendaGuardada && (
               <p className="text-[13px] font-semibold text-estado-entregado-text">
@@ -762,17 +889,14 @@ function MiTienda() {
                 const unidad = catalogoSeleccionado?.unidad ?? entradaNueva.unidad;
                 return (
                   <>
-                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
-                      <Input
-                        id="p-precio"
-                        name="precio"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder={unidad === "kg" ? "Precio por kg" : "Precio"}
-                        className="w-full min-w-0"
-                        required
-                      />
+                    <CamposPrecio
+                      valor={precioNuevo}
+                      onChange={setPrecioNuevo}
+                      condicion={tienda.condicionIva}
+                      porKg={unidad === "kg"}
+                      idPrefijo="p"
+                    />
+                    <div className="grid">
                       <Input
                         id="p-stock"
                         name="stock"
@@ -874,6 +998,7 @@ function MiTienda() {
               <DialogoEditarProducto
                 producto={editando}
                 permisos={activa?.permisos ?? []}
+                condicion={tienda.condicionIva}
                 onCerrar={() => setEditando(null)}
                 onGuardado={(actualizado) => {
                   setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));

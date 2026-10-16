@@ -17,10 +17,12 @@ en este MVP no hay UI de admin para editarlas dinámicamente.
 
 ## Reglas de negocio
 
-- `plan` nace en `free` para toda tienda nueva.
-- El cambio de plan es manual (vía `PATCH /api/admin/tiendas/:id/plan`, `esAdmin`
-  requerido) mientras no exista integración de cobro — no hay endpoint de
-  self-service para que un vendedor se pase a premium solo.
+- **Desde la ronda 3** el plan de la tienda es el de su **dueño** (`usuarios.plan`;
+  `tiendas.plan` es una copia) y hay tope de tiendas por plan: ver
+  [`20-precios-facturacion.md`](20-precios-facturacion.md). Cada feature declara su plan
+  mínimo (free < premium < plata).
+- El cambio de plan es manual (el admin cambia el plan del **usuario** con
+  `PATCH /api/admin/usuarios/:id` `{ plan }`) mientras no exista integración de cobro.
 - **Features gateadas en este MVP** (primera aplicación concreta del mecanismo):
   - `fotos_personalizadas`: solo una tienda `premium` puede subir fotos de
     producto — tanto la foto personalizada de su `Producto` (`imagenUrl`, visible
@@ -44,10 +46,8 @@ en este MVP no hay UI de admin para editarlas dinámicamente.
 
 ## Endpoints REST
 
-### `PATCH /api/admin/tiendas/:id/plan`
-
-Requiere `esAdmin = true`. Request: `{ plan: 'free' | 'premium' }`. Response `200`:
-`{ data: Tienda }`.
+`PATCH /api/admin/tiendas/:id/plan` se eliminó en la ronda 3 (el plan se cambia en el
+usuario, `11-admin.md` / `18-alcance.md`).
 
 ## Firmas de funciones/clases TypeScript
 

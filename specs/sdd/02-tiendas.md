@@ -35,6 +35,9 @@ ALTER TABLE tiendas ADD COLUMN medios_de_pago medio_pago[] NOT NULL DEFAULT '{}'
 
 -- Locales 24 hs (ver reglas de horarios).
 ALTER TABLE tiendas ADD COLUMN abierto_24hs BOOLEAN NOT NULL DEFAULT false;
+-- % de los puntos de una venta que se lleva el miembro del equipo que la registró
+-- (12-gamificacion.md). NULL = default del sistema. Lo edita solo el propietario.
+ALTER TABLE tiendas ADD COLUMN porcentaje_puntos_equipo SMALLINT NULL CHECK (porcentaje_puntos_equipo BETWEEN 0 AND 100);
 
 CREATE TABLE horarios_tienda (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -254,6 +257,7 @@ interface Tienda {
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[]; // vacío, o los 7 días (una o más franjas por día)
   abierto24hs: boolean;
+  porcentajePuntosEquipo: number | null; // 12-gamificacion.md; null = default del sistema
 }
 
 type EstadoVerificacion = 'pendiente' | 'aprobada' | 'rechazada';
@@ -315,6 +319,7 @@ interface ActualizarTiendaInput {
   mediosDePago?: MedioPago[];
   horarios?: HorarioTienda[]; // si se manda, reemplaza las 7 filas existentes
   abierto24hs?: boolean;
+  porcentajePuntosEquipo?: number | null; // entero 0-100 o null (default del sistema); si no, 400 PORCENTAJE_INVALIDO
 }
 
 async function actualizarTienda(
@@ -344,6 +349,7 @@ async function revisarSolicitudVerificacion(
 | `UBICACION_INVALIDA`         | `lat`/`lon` fuera de rango o faltantes al crear.               |
 | `TIENDA_NO_ENCONTRADA`       | `:id` no existe.                                                |
 | `NO_ES_DUENO_DE_TIENDA`      | El usuario autenticado intenta editar una tienda que no es la suya. |
+| `PORCENTAJE_INVALIDO`        | `porcentajePuntosEquipo` no es un entero entre 0 y 100 ni `null`. |
 | `RADIO_INVALIDO`             | `radioKm` <= 0 o > 50 en la búsqueda por cercanía.              |
 | `TEXTO_NO_PERMITIDO`         | El nombre de la tienda tiene palabras no permitidas (`src/lib/moderacion`). |
 | `HORARIO_INVALIDO`           | `horarios` no cubre los 7 días, `diaSemana` fuera de 0-6, formato de hora inválido, `abre >= cierra`, franjas superpuestas, más de 3 franjas en un día, o un día con entrada cerrada y franjas abiertas a la vez. |

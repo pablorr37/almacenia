@@ -41,6 +41,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       mediosDePago: body.mediosDePago,
       abierto24hs: body.abierto24hs,
       horarios: body.horarios,
+      porcentajePuntosEquipo: body.porcentajePuntosEquipo,
+      // Datos fiscales (20-precios-facturacion.md).
+      condicionIva: body.condicionIva,
+      razonSocial: body.razonSocial,
+      cuit: body.cuit,
+      ingresosBrutos: body.ingresosBrutos,
+      domicilioFiscal: body.domicilioFiscal,
+      puntoVenta: body.puntoVenta,
+      inicioActividades: body.inicioActividades,
     });
     return respuestaExitosa(tienda);
   } catch (error) {

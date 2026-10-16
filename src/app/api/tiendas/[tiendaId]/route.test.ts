@@ -97,5 +97,15 @@ describe("/api/tiendas/[tiendaId]", () => {
       expect(res.status).toBe(200);
       expect(body.data.nombre).toBe("Nombre actualizado");
     });
+
+    it("200 cambia el porcentaje de puntos del equipo; 400 PORCENTAJE_INVALIDO (12-gamificacion.md)", async () => {
+      obtenerUsuarioActualMock.mockResolvedValue(dueno);
+
+      const ok = await (await PATCH(patchReq({ porcentajePuntosEquipo: 70 }), params(tienda.id))).json();
+      expect(ok.data.porcentajePuntosEquipo).toBe(70);
+      const mal = await PATCH(patchReq({ porcentajePuntosEquipo: 150 }), params(tienda.id));
+      expect(mal.status).toBe(400);
+      expect((await mal.json()).error.code).toBe("PORCENTAJE_INVALIDO");
+    });
   });
 });

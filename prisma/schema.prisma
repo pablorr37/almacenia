@@ -93,6 +93,17 @@ model Tienda {
   plan           Plan      @default(free)
   mediosDePago   MedioPago[] @default([]) @map("medios_de_pago")
   abierto24hs    Boolean   @default(false) @map("abierto_24hs")
+  // 12-gamificacion.md: % de los puntos de una venta para el miembro que la registró.
+  // null = default del sistema (gamificacion.porcentaje_puntos_equipo).
+  porcentajePuntosEquipo Int? @map("porcentaje_puntos_equipo") @db.SmallInt
+  // Datos fiscales (20-precios-facturacion.md); los edita solo el propietario.
+  condicionIva      CondicionIva @default(monotributo) @map("condicion_iva")
+  razonSocial       String?      @map("razon_social")
+  cuit              String?      @db.Char(11)
+  ingresosBrutos    String?      @map("ingresos_brutos")
+  domicilioFiscal   String?      @map("domicilio_fiscal")
+  puntoVenta        Int?         @map("punto_venta")
+  inicioActividades DateTime?    @map("inicio_actividades") @db.Date
   creadaEn       DateTime  @default(now()) @map("creada_en")
   actualizadaEn  DateTime  @default(now()) @updatedAt @map("actualizada_en")
 
@@ -109,6 +120,8 @@ model Tienda {
   checkIns                CheckInTienda[]
   visitasPagina           VisitaPaginaTienda[]
   miembros                MiembroTienda[]
+  comprobantes            Comprobante[]
+  numeraciones            NumeracionComprobante[]
 
   @@index([vendedorId])
   @@index([ubicacion], map: "tiendas_ubicacion_gist_idx", type: Gist)
@@ -262,6 +275,11 @@ model Producto {
   imagenUrl     String?  @map("imagen_url")
   precio        Decimal  @db.Decimal(12, 2)
   precioOferta  Decimal? @map("precio_oferta") @db.Decimal(12, 2)
+  // 20-precios-facturacion.md: precio = costo + ganancia + impuestos.
+  costo             Decimal?    @db.Decimal(12, 2)
+  margen            Decimal?    @db.Decimal(7, 2)
+  alicuotaIva       AlicuotaIva @default(iva_21) @map("alicuota_iva")
+  impuestosInternos Decimal     @default(0) @map("impuestos_internos") @db.Decimal(5, 2)
   destacado     Boolean  @default(false)
   stock         Decimal  @default(0) @db.Decimal(10, 3)
   disponible    Boolean  @default(true)
@@ -435,6 +453,80 @@ enum PermisoTienda {
   @@map("permiso_tienda")
 }
 
+// 20-precios-facturacion.md
+enum CondicionIva {
+  monotributo
+  responsable_inscripto
+  exento
+
+  @@map("condicion_iva")
+}
+
+enum AlicuotaIva {
+  iva_21
+  iva_10_5
+  iva_27
+  iva_0
+  exento
+
+  @@map("alicuota_iva")
+}
+
+enum TipoComprobante {
+  A
+  B
+  C
+
+  @@map("tipo_comprobante")
+}
+
+enum EstadoComprobante {
+  interno
+  autorizado
+  rechazado
+
+  @@map("estado_comprobante")
+}
+
+model Comprobante {
+  id               String            @id @default(uuid())
+  ventaId          String            @unique @map("venta_id")
+  tiendaId         String            @map("tienda_id")
+  tipo             TipoComprobante
+  puntoVenta       Int               @map("punto_venta")
+  numero           Int
+  clienteDocTipo   String            @map("cliente_doc_tipo")
+  clienteDoc       String?           @map("cliente_doc")
+  clienteNombre    String?           @map("cliente_nombre")
+  clienteCondicion CondicionIva?     @map("cliente_condicion")
+  neto             Decimal           @db.Decimal(12, 2)
+  ivaPorAlicuota   Json              @map("iva_por_alicuota")
+  internos         Decimal           @db.Decimal(12, 2)
+  total            Decimal           @db.Decimal(12, 2)
+  estado           EstadoComprobante @default(interno)
+  cae              String?
+  caeVencimiento   DateTime?         @map("cae_vencimiento") @db.Date
+  emitidoEn        DateTime          @default(now()) @map("emitido_en")
+
+  venta  Venta  @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  tienda Tienda @relation(fields: [tiendaId], references: [id], onDelete: Cascade)
+
+  @@unique([tiendaId, puntoVenta, tipo, numero])
+  @@map("comprobantes")
+}
+
+model NumeracionComprobante {
+  tiendaId   String          @map("tienda_id")
+  puntoVenta Int             @map("punto_venta")
+  tipo       TipoComprobante
+  ultimo     Int
+
+  tienda Tienda @relation(fields: [tiendaId], references: [id], onDelete: Cascade)
+
+  @@id([tiendaId, puntoVenta, tipo])
+  @@map("numeracion_comprobantes")
+}
+
 model Venta {
   id          String      @id @default(uuid())
   tiendaId    String      @map("tienda_id")
@@ -455,6 +547,7 @@ model Venta {
   vendidaPor Usuario?   @relation("VentasRegistradas", fields: [vendidaPorId], references: [id], onDelete: SetNull)
   pedido    Pedido?     @relation(fields: [pedidoId], references: [id])
   items     ItemVenta[]
+  comprobante Comprobante?
 
   @@index([tiendaId])
   @@index([creadaEn])
@@ -468,6 +561,12 @@ model ItemVenta {
   productoId     String  @map("producto_id")
   cantidad       Decimal @db.Decimal(10, 3)
   precioUnitario Decimal @map("precio_unitario") @db.Decimal(12, 2)
+  // Foto fiscal al vender (20-precios-facturacion.md); null en ventas anteriores.
+  costoUnitario    Decimal?     @map("costo_unitario") @db.Decimal(12, 2)
+  alicuotaIva      AlicuotaIva? @map("alicuota_iva")
+  netoUnitario     Decimal?     @map("neto_unitario") @db.Decimal(12, 4)
+  ivaUnitario      Decimal?     @map("iva_unitario") @db.Decimal(12, 4)
+  internosUnitario Decimal?     @map("internos_unitario") @db.Decimal(12, 4)
 
   venta    Venta    @relation(fields: [ventaId], references: [id])
   producto Producto @relation(fields: [productoId], references: [id])

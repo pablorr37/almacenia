@@ -84,7 +84,8 @@ describe("crearTienda", () => {
     expect(actualizado?.esVendedor).toBe(true);
   });
 
-  it("un usuario puede crear una segunda tienda (19-equipo-tienda.md)", async () => {
+  it("un usuario con plan premium puede crear una segunda tienda (19-equipo-tienda.md, 20-precios-facturacion.md)", async () => {
+    await prisma.usuario.update({ where: { id: usuario.id }, data: { plan: "premium" } });
     const primera = await crearTienda(usuario, {
       nombre: "Primera tienda",
       direccion: "Dirección 1",

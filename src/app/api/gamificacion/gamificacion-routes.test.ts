@@ -75,7 +75,7 @@ describe("rutas de gamificación, check-in, visita y config", () => {
     const admin = { ...vendedor, esAdmin: true };
     obtenerUsuarioActualMock.mockResolvedValue(admin);
     const lista = await (await GET_CONFIG()).json();
-    expect(lista.data).toHaveLength(2);
+    expect(lista.data.map((i: { clave: string }) => i.clave)).toContain("itinerario.costo_km");
 
     const req = new NextRequest("http://localhost/x", {
       method: "PATCH",

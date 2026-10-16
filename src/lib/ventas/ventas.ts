@@ -7,6 +7,7 @@ import { sinRomper, otorgarPorVenta } from "@/lib/gamificacion/gamificacion";
 import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { MEDIOS_DE_PAGO_VALIDOS, type MedioPago } from "@/lib/tiendas/tiendas";
 import { resolverCodigoCliente } from "@/lib/clientes/codigo-cliente";
+import { desglosar } from "@/lib/precios/precios";
 import type { Prisma } from "@/generated-prisma/client";
 
 const PAGE_SIZE_DEFAULT = 20;
@@ -124,6 +125,33 @@ async function crearVentaEnTransaccion(datos: DatosVenta, items: ItemAProcesar[]
       await debitarStockAtomico(tx, item.productoId, item.cantidad);
     }
 
+    // Foto fiscal de cada ítem (20-precios-facturacion.md): costo, alícuota y desglose
+    // del precio según la condición de la tienda en este momento.
+    const { condicionIva } = await tx.tienda.findUniqueOrThrow({ where: { id: datos.tiendaId }, select: { condicionIva: true } });
+    const fiscales = new Map(
+      (
+        await tx.producto.findMany({
+          where: { id: { in: items.map((i) => i.productoId) } },
+          select: { id: true, costo: true, alicuotaIva: true, impuestosInternos: true },
+        })
+      ).map((p) => [p.id, p])
+    );
+    const fotoFiscal = (item: ItemAProcesar) => {
+      const p = fiscales.get(item.productoId)!;
+      const d = desglosar(item.precioUnitario, {
+        condicion: condicionIva,
+        alicuota: p.alicuotaIva,
+        internos: Number(p.impuestosInternos),
+      });
+      return {
+        costoUnitario: p.costo,
+        alicuotaIva: p.alicuotaIva,
+        netoUnitario: d.neto,
+        ivaUnitario: d.iva,
+        internosUnitario: d.internos,
+      };
+    };
+
     return tx.venta.create({
       data: {
         tiendaId: datos.tiendaId,
@@ -141,6 +169,7 @@ async function crearVentaEnTransaccion(datos: DatosVenta, items: ItemAProcesar[]
             productoId: item.productoId,
             cantidad: item.cantidad,
             precioUnitario: item.precioUnitario,
+            ...fotoFiscal(item),
           })),
         },
       },

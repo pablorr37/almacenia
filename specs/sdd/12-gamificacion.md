@@ -66,6 +66,22 @@ CREATE TABLE visitas_pagina_tienda (
 | Comprador | `checkin_gps` | +1 | Check-in GPS válido (`POST /api/tiendas/:id/checkin`). Una vez por día por tienda. Se suma aparte de `visita_compra`. | `checkin_gps:<compradorId>:<tiendaId>:<YYYY-MM-DD>` |
 | Comprador | `visita_pagina` | 5 → 0,5 | Abrir la página de una tienda. Una vez por mes por tienda, con decaimiento (ver abajo). No aplica al dueño de la tienda. | `visita_pagina:<compradorId>:<tiendaId>:<YYYY-MM>` |
 
+**Venta registrada por alguien del equipo** (`19-equipo-tienda.md`): si la venta tiene
+`vendidaPorId` distinto del propietario, los puntos de `venta_realizada` se **reparten**
+entre quien vendió y el propietario:
+
+- `pctEquipo` = `tiendas.porcentaje_puntos_equipo` (lo configura el propietario, 0–100)
+  o, si es `NULL`, la configuración del sistema `gamificacion.porcentaje_puntos_equipo`
+  (default `50`, editable por admin, `11-admin.md`). Ningún porcentaje está fijo en el código.
+- Quien vendió recibe `redondeo1(p · pctEquipo / 100)` con tipo `venta_realizada_equipo`
+  y clave `venta_realizada_equipo:<ventaId>` (metadata `{ ventaId, porcentajeEquipo }`);
+  el propietario recibe el resto (`p −` eso) con `venta_realizada:<ventaId>`. Así la suma
+  es exacta con 1 decimal.
+- No se registra un evento de 0 puntos (con 0 % o 100 % hay un solo evento).
+- Si vende el propietario, la venta nace de un pedido o es anterior a `vendida_por_id`,
+  el 100 % va al propietario.
+- `compra_realizada` y `visita_compra` tampoco se otorgan si el comprador es quien vendió.
+
 Ejemplos de `venta_realizada`: arroz×1 + gaseosa×6 → `1 + 0.1·2 + 0.1·6 = 1.8`;
 caramelo×1 → `1.1`; yerba×2 + azúcar×3 → `1.2` (ninguna línea supera 3 unidades).
 

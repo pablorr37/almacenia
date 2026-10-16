@@ -18,12 +18,8 @@ ALTER TABLE usuarios ADD COLUMN plan plan NOT NULL DEFAULT 'free';
 
 - El enum `plan` pasa a ser `free | premium | plata` y lo usan tanto `usuarios.plan`
   (este módulo) como `tiendas.plan` (`10-planes.md`).
-- `usuarios.plan` es el plan **del usuario**, como comprador y como vendedor. Hasta
-  la ronda 3 (`docs/rondas/ronda-3-precios-balance.md`) convive con `tiendas.plan`,
-  que sigue gateando las features de la tienda. La ronda 3 los unifica.
-- `tiendas.plan` sigue aceptando solo `free | premium` desde el admin
-  (`PATCH /api/admin/tiendas/:id/plan`). Si una tienda llegara a tener `plata`,
-  cuenta como `premium` para las features de `10-planes.md`.
+- `usuarios.plan` es el plan **del usuario**, como comprador y como vendedor. Desde la
+  ronda 3, `tiendas.plan` es una copia del plan del dueño (`20-precios-facturacion.md`).
 
 ## Reglas de negocio
 

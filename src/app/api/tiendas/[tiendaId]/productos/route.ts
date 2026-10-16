@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
+import { accesoATienda } from "@/lib/equipo/equipo";
 import {
   crearProducto,
   listarProductos,
+  ocultarCostos,
   listarParaVenta,
   type SortProductos,
   type TabProductos,
@@ -29,6 +31,11 @@ export async function POST(
         ? {
             catalogoId: body.catalogoId,
             precio: body.precio,
+            // 20-precios-facturacion.md
+            costo: body.costo,
+            margen: body.margen,
+            alicuotaIva: body.alicuotaIva,
+            impuestosInternos: body.impuestosInternos,
             stock: body.stock,
             imagenUrl: body.imagenUrl,
             descripcion: body.descripcion,
@@ -36,6 +43,11 @@ export async function POST(
         : {
             nuevo: body.nuevo,
             precio: body.precio,
+            // 20-precios-facturacion.md
+            costo: body.costo,
+            margen: body.margen,
+            alicuotaIva: body.alicuotaIva,
+            impuestosInternos: body.impuestosInternos,
             stock: body.stock,
             descripcion: body.descripcion,
           }
@@ -71,7 +83,10 @@ export async function GET(
       page: sp.get("page") ? Number(sp.get("page")) : undefined,
       pageSize: sp.get("pageSize") ? Number(sp.get("pageSize")) : undefined,
     });
-    return respuestaExitosa(resultado.data, 200, {
+    // Costo y margen solo para el propietario o su equipo (20-precios-facturacion.md).
+    const usuario = await obtenerUsuarioActual();
+    const gestiona = usuario ? !!(await accesoATienda(usuario.id, tiendaId)) : false;
+    return respuestaExitosa(gestiona ? resultado.data : resultado.data.map(ocultarCostos), 200, {
       page: resultado.page,
       pageSize: resultado.pageSize,
       total: resultado.total,

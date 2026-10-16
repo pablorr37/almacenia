@@ -4,6 +4,8 @@ import { useState, type FormEvent } from "react";
 import { apiDelete, apiPatch, ApiError } from "@/lib/api-client";
 import type { UnidadMedida } from "@/lib/productos/unidades";
 import { PERMISOS, type Permiso } from "@/lib/equipo/permisos";
+import type { AlicuotaIva, CondicionIva } from "@/lib/precios/precios";
+import { CamposPrecio, aPayloadPrecio, valorDesdeProducto, type ValorPrecio } from "./CamposPrecio";
 
 // Editar o eliminar un producto de la tienda (03-productos.md): precio, oferta, stock,
 // disponible y descripción. Eliminar es una baja real: deja de verse en todos lados,
@@ -14,6 +16,11 @@ export interface ProductoEditable {
   descripcion?: string | null;
   precio: number;
   precioOferta: number | null;
+  // 20-precios-facturacion.md
+  costo: number | null;
+  margen: number | null;
+  alicuotaIva: AlicuotaIva;
+  impuestosInternos: number;
   stock: number;
   unidad: UnidadMedida;
   disponible: boolean;
@@ -32,15 +39,18 @@ export function DialogoEditarProducto<T extends ProductoEditable>({
   onEliminado,
   onCerrar,
   permisos = PERMISOS.slice(),
+  condicion = "monotributo",
 }: {
   producto: T;
   // Permisos del equipo (19-equipo-tienda.md): cada campo se edita solo con el suyo.
   permisos?: Permiso[];
+  // Condición frente al IVA de la tienda: define cómo se arma el precio.
+  condicion?: CondicionIva;
   onGuardado: (producto: T) => void;
   onEliminado: (id: string) => void;
   onCerrar: () => void;
 }) {
-  const [precio, setPrecio] = useState(String(producto.precio));
+  const [precio, setPrecio] = useState<ValorPrecio>(valorDesdeProducto(producto));
   const [oferta, setOferta] = useState(producto.precioOferta === null ? "" : String(producto.precioOferta));
   const [stock, setStock] = useState(String(producto.stock));
   const [disponible, setDisponible] = useState(producto.disponible);
@@ -59,7 +69,7 @@ export function DialogoEditarProducto<T extends ProductoEditable>({
       // Solo se mandan los campos que habilitan los permisos: el servidor exige el
       // permiso de cada campo que llega.
       const actualizado = await apiPatch<T>(`/api/productos/${producto.id}`, {
-        ...(puedePrecios ? { precio: numero(precio), precioOferta: oferta.trim() ? numero(oferta) : null } : {}),
+        ...(puedePrecios ? { ...aPayloadPrecio(precio), precioOferta: oferta.trim() ? numero(oferta) : null } : {}),
         ...(puedeStock ? { stock: numero(stock) } : {}),
         ...(puedeProductos ? { disponible, descripcion: descripcion.trim() || undefined } : {}),
       });
@@ -97,11 +107,15 @@ export function DialogoEditarProducto<T extends ProductoEditable>({
         <h2 id="editar-producto-titulo" className="font-display text-[19px] font-bold text-primary-dark">
           {producto.nombre}
         </h2>
+        <CamposPrecio
+          valor={precio}
+          onChange={setPrecio}
+          condicion={condicion}
+          porKg={producto.unidad === "kg"}
+          disabled={!puedePrecios}
+          idPrefijo="editar"
+        />
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
-          <label className="flex flex-col gap-1 text-[12px] font-semibold text-text-2">
-            {producto.unidad === "kg" ? "Precio por kg" : "Precio"}
-            <input value={precio} onChange={(e) => setPrecio(e.target.value)} inputMode="decimal" required disabled={!puedePrecios} className={claseInput} />
-          </label>
           <label className="flex flex-col gap-1 text-[12px] font-semibold text-text-2">
             Precio de oferta
             <input

@@ -79,9 +79,9 @@ Request: `{ decision: 'aprobada' | 'rechazada'; notaAdmin?: string }`. Delegado 
 `revisarSolicitudVerificacion` (`02-tiendas.md`). Response `200`:
 `{ data: SolicitudVerificacion }`.
 
-### `PATCH /api/admin/tiendas/:id/plan`
+### ~~`PATCH /api/admin/tiendas/:id/plan`~~
 
-Ver `10-planes.md`.
+Eliminado en la ronda 3: el plan de la tienda es el del dueño (`20-precios-facturacion.md`).
 
 ### `PATCH /api/admin/tiendas/:id/verificacion`
 
@@ -259,6 +259,8 @@ Claves actuales:
 |---|---|---|---|
 | `gamificacion.umbral_items_compra_extra` | entero ≥ 0 | `5` | `12-gamificacion.md` (`visita_compra`) |
 | `itinerario.costo_km` | número ≥ 0 (ARS por km) | `300` | `15-itinerario.md` |
+| `balance.umbral_stock_bajo` | entero ≥ 0 | `3` | `20-precios-facturacion.md` (alertas del balance completo) |
+| `gamificacion.porcentaje_puntos_equipo` | entero 0–100 | `50` | `12-gamificacion.md` (reparto de `venta_realizada` con el equipo; cada tienda puede pisarlo) |
 
 ### `GET /api/admin/config`
 
@@ -270,7 +272,7 @@ Request: `{ clave: string; valor: number }`. Response `200`: el mismo item actua
 
 ```ts
 // Ubicación: src/lib/config/config.ts
-type ClaveConfig = 'gamificacion.umbral_items_compra_extra' | 'itinerario.costo_km';
+type ClaveConfig = 'gamificacion.umbral_items_compra_extra' | 'itinerario.costo_km' | 'gamificacion.porcentaje_puntos_equipo' | 'balance.umbral_stock_bajo';
 async function obtenerConfig(clave: ClaveConfig): Promise<number>; // valor guardado o default
 async function listarConfig(admin: Usuario): Promise<ItemConfig[]>;
 async function actualizarConfig(admin: Usuario, clave: string, valor: number): Promise<ItemConfig>;

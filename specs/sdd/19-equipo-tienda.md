@@ -91,8 +91,10 @@ ALTER TABLE ventas ADD COLUMN vendida_por_id UUID REFERENCES usuarios(id) ON DEL
 
 - `POST /api/tiendas` ya no rechaza a un usuario que tiene tienda: crea una más. Se
   quita el error `USUARIO_YA_TIENE_TIENDA`.
-- Los puntos de gamificación por venta siguen yendo al **propietario**
-  (`12-gamificacion.md`), aunque la registre un empleado.
+- Los puntos de gamificación de una venta registrada por un miembro se **reparten**
+  entre ese miembro y el propietario según `tiendas.porcentaje_puntos_equipo`, que
+  configura el propietario (si no lo configura, rige el default del sistema, 50 %).
+  Detalle en `12-gamificacion.md`.
 - El check-in o la visita a una tienda propia, o a una donde el usuario es miembro,
   no suma puntos.
 - Para las funciones que se resuelven "por usuario" y no por tienda, se usan las

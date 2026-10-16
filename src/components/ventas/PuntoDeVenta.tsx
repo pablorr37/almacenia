@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet, apiGetPaginado, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
@@ -584,7 +585,17 @@ export function PuntoDeVenta({
                 <span className="text-text-2">
                   {hora(v.cobradaEn ?? v.creadaEn)} · {v.medioPago ? ETIQUETA_MEDIO[v.medioPago] : "Pedido online"}
                 </span>
-                <span className="font-semibold">{formatoARS(v.total)}</span>
+                <span className="flex items-center gap-3">
+                  <span className="font-semibold">{formatoARS(v.total)}</span>
+                  {/* 20-precios-facturacion.md: comprobante de la venta cobrada. */}
+                  <Link
+                    href={`/ventas/${v.id}/comprobante`}
+                    aria-label={`Comprobante de la venta de ${formatoARS(v.total)}`}
+                    className="text-[12px] font-semibold text-accent-text"
+                  >
+                    Comprobante
+                  </Link>
+                </span>
               </li>
             ))}
           </ul>

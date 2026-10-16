@@ -84,6 +84,10 @@ describe("esComprable", () => {
     stock: 1,
     unidad: "unidad",
     disponible: true,
+    costo: null,
+    margen: null,
+    alicuotaIva: "iva_21",
+    impuestosInternos: 0,
   };
 
   it("true si disponible=true y stock>0", () => {

@@ -354,6 +354,7 @@ describe("usuarios con varias tiendas", () => {
   it("UsuarioAdmin lista todas sus tiendas y eliminarUsuario las borra todas", async () => {
     const admin = await crearAdmin();
     const { vendedor, tienda } = await crearVendedorConTienda();
+    await prisma.usuario.update({ where: { id: vendedor.id }, data: { plan: "premium" } }); // tope de tiendas
     const segunda = await crearTienda(vendedor, { nombre: `Sucursal admin ${contador}`, direccion: "D", lat: -31.5, lon: -68.5 });
     try {
       const fila = (await listarUsuarios(admin, { q: vendedor.email })).data[0];
