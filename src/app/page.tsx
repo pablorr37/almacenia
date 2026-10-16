@@ -31,7 +31,9 @@ type Alcance = {
   proximoUmbral: { radioKm: number; puntos: number } | null;
 };
 
-const formatoKm = (km: number) => km.toLocaleString("es-AR", { maximumFractionDigits: 1 });
+// Trunca (no redondea) a un decimal: 9,98 km se muestra "9,9", no "10", para no
+// prometer el próximo umbral antes de tiempo.
+const formatoKm = (km: number) => (Math.floor(km * 10 + 1e-9) / 10).toLocaleString("es-AR", { maximumFractionDigits: 1 });
 
 export default function MapaPage() {
   const { status } = useSession();

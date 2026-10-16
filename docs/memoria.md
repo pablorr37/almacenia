@@ -10,7 +10,7 @@ estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
 
 | Ronda | Alcance | Estado | PR |
 | --- | --- | --- | --- |
-| 1 | Bugs (escáner, editar/eliminar productos, × descentrada) + radio de alcance en el mapa | En curso | — |
+| 1 | Bugs (escáner, editar/eliminar productos, × descentrada) + radio de alcance en el mapa | Hecha | PR_RONDA_1 |
 | 2 | [Inicio del vendedor y menú de inicio, varias tiendas, empleados y permisos](rondas/ronda-2-inicio-vendedor.md) | Pendiente | — |
 | 3 | [Precio = costo + ganancia + impuestos, datos para facturar, balance por plan, plan Plata](rondas/ronda-3-precios-balance.md) | Pendiente | — |
 | 4 | [Publicidad: Google + otros proveedores + motor propio de Almacenia](rondas/ronda-4-publicidad.md) | Pendiente | — |
@@ -66,6 +66,27 @@ Aclaraciones posteriores del usuario:
   | plata | — | toda la provincia de San Juan |
 
   En las fórmulas, `x` es la posición dentro del tramo, de 0 a 1.
+
+## Ronda 1: qué quedó hecho
+
+- **Escáner:**
+  - lee con el `BarcodeDetector` nativo o, si no hay, con zxing limitado a EAN/UPC/Code 128/QR;
+  - enfoque continuo, tocar para enfocar y linterna;
+  - pantalla completa con botón Cerrar, Escape y gesto atrás.
+  - Probado en Chromium con cámara falsa: EAN-13 leído en ~0,2 s y QR leído.
+  - **Pendiente:** el usuario prueba el enfoque en un celular real.
+- **Productos:** Editar (precio, oferta, stock, disponible, descripción) y Eliminar desde mi-tienda → Productos.
+  - Eliminar es una baja real (`productos.eliminado_en`): desaparece de la tienda, el punto de venta, el itinerario y el admin.
+  - Las ventas y pedidos viejos lo conservan.
+- **×:** las × de quitar/cerrar son un SVG centrado (`src/components/ui/IconoX.tsx`).
+- **Radio de alcance** (`specs/sdd/18-alcance.md`):
+  - `usuarios.plan`;
+  - `GET /api/alcance`;
+  - `/api/tiendas/cercanas` limitado al alcance con sesión;
+  - círculo y chip en el mapa;
+  - selector de plan en `/admin/usuarios`.
+  - Los invitados no se limitan: su lista es una vitrina de hasta 50 km desde el centro de San Juan.
+- **Plan por usuario vs. por tienda:** el enum `plan` ya tiene `plata`. Desde el admin, la tienda sigue siendo free/premium hasta la ronda 3.
 
 ## Preguntas abiertas
 
