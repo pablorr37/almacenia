@@ -4,7 +4,7 @@ Lista viva. **Antes de empezar una tarea, leé este archivo. Al terminarla, actu
 estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
 [`docs/rondas/`](rondas/).
 
-Última actualización: 2026-10-17.
+Última actualización: 2026-10-17 (ronda 3).
 
 ## Estado de las rondas
 
@@ -12,7 +12,7 @@ estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
 | --- | --- | --- | --- |
 | 1 | Bugs (escáner, editar/eliminar productos, × descentrada) + radio de alcance en el mapa | Hecha | [#8](https://github.com/pablorr37/almacenia/pull/8) |
 | 2 | [Inicio del vendedor y menú de inicio, varias tiendas, empleados y permisos](rondas/ronda-2-inicio-vendedor.md) | Hecha | [#9](https://github.com/pablorr37/almacenia/pull/9) |
-| 3 | [Precio = costo + ganancia + impuestos, datos para facturar, balance por plan, plan Plata](rondas/ronda-3-precios-balance.md) | Pendiente | — |
+| 3 | [Precio = costo + ganancia + impuestos, datos para facturar, balance por plan, plan Plata](rondas/ronda-3-precios-balance.md) | Hecha | PR_RONDA_3 |
 | 4 | [Publicidad: Google + otros proveedores + motor propio de Almacenia](rondas/ronda-4-publicidad.md) | Pendiente | — |
 | — | Plan Gold ("casi admin") | Para otra ronda | — |
 
@@ -115,11 +115,59 @@ Spec: `specs/sdd/19-equipo-tienda.md`.
   - valorar clientes y editar los datos de la tienda son solo del propietario;
   - cobrar en el momento pide el permiso `cobrar`.
 
+## Ronda 3: qué quedó hecho
+
+Spec: `specs/sdd/20-precios-facturacion.md`.
+
+- **Reparto de puntos por venta** (pedido del usuario):
+  - cuando vende alguien del equipo, los puntos se reparten entre esa persona y el dueño;
+  - el % lo configura el dueño en mi-tienda → Tienda;
+  - si no lo configura, rige el default del sistema (50 %, editable por el admin en la configuración). Nada fijo en el código.
+- **Precio = costo + ganancia + impuestos:**
+  - en el alta y la edición de un producto, costo, ganancia % y precio final están enlazados;
+  - se eligen la alícuota de IVA (en tiendas responsables inscriptas) y los impuestos internos;
+  - el desglose se ve en vivo y hay aviso si el margen es negativo.
+  - Responsable inscripto: neto + IVA + internos. Monotributo/exento: el IVA no se discrimina.
+  - El costo y el margen no se muestran al público.
+- **Foto fiscal en cada venta:** costo, alícuota, neto, IVA e internos del momento, para que el balance histórico no cambie.
+- **Datos fiscales de la tienda:**
+  - condición frente al IVA, razón social, CUIT (con dígito verificador), IIBB, domicilio fiscal, punto de venta e inicio de actividades;
+  - los edita solo el dueño.
+- **Comprobantes:**
+  - botón "Comprobante" en las ventas cobradas;
+  - tipo A, B o C según emisor y cliente, con numeración correlativa por tienda, punto de venta y tipo;
+  - vista imprimible con la leyenda "Comprobante interno — no válido como factura" mientras no haya CAE.
+  - La interfaz `Facturador` queda lista (adaptador `SinFacturacion`).
+- **Plan de la tienda = plan del dueño**, con tope de tiendas por plan:
+
+  | Plan | Tiendas |
+  | --- | --- |
+  | free | 1 |
+  | premium | 3 (2 sucursales) |
+  | plata | 4 (3 sucursales) |
+
+  - El admin cambia el plan en el usuario; se quitó el plan por tienda.
+  - El menú muestra cuántas tiendas usa el dueño y lo invita a mejorar el plan.
+- **Balance por plan:**
+
+  | Plan | Nivel | Qué muestra |
+  | --- | --- | --- |
+  | free | básico | ventas, cobrado/por cobrar y más vendidos |
+  | premium | sólido | + costo vendido, ganancia y margen, rentabilidad por producto y categoría, valor del stock, comparativo |
+  | plata | completo | + IVA débito por alícuota, flujo de caja, alertas (stock bajo configurable por el admin, margen negativo, sin costo), libro de ventas CSV, rentabilidad de todas las sucursales |
+
+  Las secciones de un plan mayor se ven bloqueadas.
+
 ## Preguntas abiertas
 
-- **Facturación (ronda 3):**
-  - condición fiscal de cada tienda (monotributo / responsable inscripto / exento) y alícuotas de IVA por producto (21 %, 10,5 %, 27 %, exento);
-  - ¿se integra la factura electrónica de ARCA (ex AFIP) ya, o alcanza con dejar los datos listos?
+- **Facturación (resuelto en la ronda 3):**
+  - cada tienda elige su condición fiscal;
+  - la conexión con ARCA queda para otra ronda, con todo listo.
+- **Pendientes de la ronda 3:**
+  - conectar con ARCA: WSFEv1, certificado y clave de cada contribuyente, adaptador en `src/lib/facturacion/facturador.ts`;
+  - IVA crédito fiscal: necesita un módulo de compras a proveedores;
+  - precio de cada plan y cobro (hoy el admin cambia el plan a mano);
+  - plan Gold.
 - **Publicidad (ronda 4):**
   - IDs de Google AdSense/Ad Manager y qué otros proveedores (los configura el usuario);
   - precio y forma de pago de la publicidad en el mapa.

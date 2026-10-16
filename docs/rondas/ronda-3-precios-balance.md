@@ -1,6 +1,6 @@
 # Ronda 3: precio = costo + ganancia + impuestos, facturación, balance por plan, plan Plata
 
-Estado: **pendiente** (borrador). Ver el pedido textual en [`../memoria.md`](../memoria.md), punto 1.
+Estado: **hecha** (ver "Ronda 3: qué quedó hecho" en `../memoria.md` y la spec `specs/sdd/20-precios-facturacion.md`). Lo de abajo es el borrador original. Ver el pedido textual en [`../memoria.md`](../memoria.md), punto 1.
 
 ## Composición del precio (contabilidad, Argentina)
 - **Costo** de compra del producto, sin IVA si la tienda es responsable inscripta.
