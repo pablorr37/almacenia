@@ -176,7 +176,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
   return (
     <div className="relative mx-auto flex min-h-screen max-w-md flex-col bg-bg">
       <div className="flex items-center gap-3 px-5 pb-1 pt-5">
-        <Link href="/" aria-label="Volver al mapa" className="flex h-8 w-8 items-center justify-center">
+        <Link href={status === "authenticated" ? "/mapa" : "/"} aria-label={status === "authenticated" ? "Volver al mapa" : "Volver al inicio"} className="flex h-8 w-8 items-center justify-center">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#201A15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>

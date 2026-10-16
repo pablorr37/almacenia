@@ -1,6 +1,6 @@
 // Valoración de clientes por el dueño de la tienda (specs/sdd/13-valoraciones-clientes.md).
 import { prisma } from "@/lib/prisma";
-import { exigirPermiso } from "@/lib/equipo/equipo";
+import { exigirPermiso, PERMISOS } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import type { ValoracionCliente as ValoracionClienteDb } from "@/generated-prisma/client";
@@ -121,7 +121,9 @@ export async function resumenCliente(
   compradorId: string,
   tiendaId?: string
 ): Promise<ResumenCliente & { miValoracion: ValoracionCliente | null }> {
-  const tienda = await tiendaDelVendedor(vendedor, tiendaId);
+  // Leer el resumen lo puede cualquiera del equipo; valorar, solo el propietario.
+  if (tiendaId) await exigirPermiso(vendedor, tiendaId, PERMISOS.slice());
+  const tienda = tiendaId ? { id: tiendaId } : await tiendaDelVendedor(vendedor);
   const resumen = (await resumenesClientes(vendedor, [compradorId]))[compradorId];
   const propia = await prisma.valoracionCliente.findUnique({
     where: { tiendaId_compradorId: { tiendaId: tienda.id, compradorId } },

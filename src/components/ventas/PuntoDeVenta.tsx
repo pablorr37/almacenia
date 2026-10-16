@@ -123,10 +123,15 @@ export function PuntoDeVenta({
   tiendaId,
   mediosDePago,
   onStockCambiado,
+  puedeCobrar = true,
+  puedeAnular = true,
 }: {
   tiendaId: string;
   mediosDePago: MedioPago[];
   onStockCambiado: () => void;
+  // Permisos del equipo (19-equipo-tienda.md): sin 'cobrar' solo se cierra por cobrar.
+  puedeCobrar?: boolean;
+  puedeAnular?: boolean;
 }) {
   const medios = mediosDePago.length > 0 ? mediosDePago : TODOS_LOS_MEDIOS;
   const [productos, setProductos] = useState<ProductoVendible[]>([]);
@@ -500,14 +505,16 @@ export function PuntoDeVenta({
           >
             Cerrar · por cobrar
           </button>
-          <button
-            type="button"
-            disabled={lineas.length === 0 || enviando}
-            onClick={() => cerrar(true)}
-            className="press h-12 flex-1 rounded-control bg-accent text-[14px] font-semibold text-white disabled:opacity-50"
-          >
-            {enviando ? "Registrando..." : "Cobrar ahora"}
-          </button>
+          {puedeCobrar && (
+            <button
+              type="button"
+              disabled={lineas.length === 0 || enviando}
+              onClick={() => cerrar(true)}
+              className="press h-12 flex-1 rounded-control bg-accent text-[14px] font-semibold text-white disabled:opacity-50"
+            >
+              {enviando ? "Registrando..." : "Cobrar ahora"}
+            </button>
+          )}
         </div>
       </section>
 
@@ -535,22 +542,26 @@ export function PuntoDeVenta({
                 </div>
                 {v.nota && <div className="text-[13px] italic text-text">“{v.nota}”</div>}
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={procesando === v.id}
-                    onClick={() => transicionar(v, "anular")}
-                    className="press h-10 flex-1 rounded-control border border-border bg-surface text-[13px] font-semibold text-estado-rechazado-text disabled:opacity-50"
-                  >
-                    Anular
-                  </button>
-                  <button
-                    type="button"
-                    disabled={procesando === v.id}
-                    onClick={() => transicionar(v, "cobrar")}
-                    className="press h-10 flex-[2] rounded-control bg-primary text-[13px] font-semibold text-white disabled:opacity-50"
-                  >
-                    Pago recibido
-                  </button>
+                  {puedeAnular && (
+                    <button
+                      type="button"
+                      disabled={procesando === v.id}
+                      onClick={() => transicionar(v, "anular")}
+                      className="press h-10 flex-1 rounded-control border border-border bg-surface text-[13px] font-semibold text-estado-rechazado-text disabled:opacity-50"
+                    >
+                      Anular
+                    </button>
+                  )}
+                  {puedeCobrar && (
+                    <button
+                      type="button"
+                      disabled={procesando === v.id}
+                      onClick={() => transicionar(v, "cobrar")}
+                      className="press h-10 flex-[2] rounded-control bg-primary text-[13px] font-semibold text-white disabled:opacity-50"
+                    >
+                      Pago recibido
+                    </button>
+                  )}
                 </div>
               </li>
             ))}

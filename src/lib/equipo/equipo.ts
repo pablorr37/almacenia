@@ -3,25 +3,13 @@ import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
 import { resolverCodigoCliente } from "@/lib/clientes/codigo-cliente";
 import { obtenerTienda, type Tienda } from "@/lib/tiendas/tiendas";
-import type { PermisoTienda, RolMiembro } from "@/generated-prisma/client";
+import type { RolMiembro } from "@/generated-prisma/client";
+import { PERMISOS, permisosPorDefecto, type Permiso, type RolEnTienda } from "./permisos";
 
 // Varias tiendas por usuario, equipo y permisos (19-equipo-tienda.md).
 
-export type Permiso = PermisoTienda;
-export type RolEnTienda = "propietario" | RolMiembro;
-
-export const PERMISOS: readonly Permiso[] = [
-  "vender",
-  "cobrar",
-  "anular",
-  "precios",
-  "stock",
-  "productos",
-  "fotos",
-  "pedidos",
-  "balance",
-  "usuarios",
-];
+export type { Permiso, RolEnTienda } from "./permisos";
+export { PERMISOS, permisosPorDefecto } from "./permisos";
 const ROLES: readonly RolMiembro[] = ["encargado", "empleado"];
 
 export interface Acceso {
@@ -34,10 +22,6 @@ export interface MiembroTienda {
   rol: RolMiembro;
   permisos: Permiso[];
   creadoEn: string;
-}
-
-export function permisosPorDefecto(rol: RolMiembro): Permiso[] {
-  return rol === "encargado" ? PERMISOS.filter((p) => p !== "usuarios") : ["vender", "cobrar"];
 }
 
 // Los permisos se devuelven siempre en el orden de PERMISOS.

@@ -11,6 +11,8 @@ type Plan = "free" | "premium";
 // Plan del usuario (18-alcance.md): define su radio de alcance en el mapa.
 type PlanUsuario = "free" | "premium" | "plata";
 
+type TiendaAdmin = { id: string; nombre: string; plan: Plan; verificada: boolean };
+
 type UsuarioAdmin = {
   id: string;
   nombre: string;
@@ -22,7 +24,7 @@ type UsuarioAdmin = {
   plan: PlanUsuario;
   estadoCuenta: EstadoCuenta;
   motivoSuspension: string | null;
-  tienda: { id: string; nombre: string; plan: Plan; verificada: boolean } | null;
+  tiendas: TiendaAdmin[]; // propias (19-equipo-tienda.md)
   cantidadVentas: number;
 };
 
@@ -126,20 +128,22 @@ export default function AdminUsuariosPage() {
   }
 
   // 10-planes.md: premium habilita fotos propias y prioridad en el mapa.
-  function cambiarPlan(u: UsuarioAdmin) {
-    if (!u.tienda) return;
-    const nuevo: Plan = u.tienda.plan === "premium" ? "free" : "premium";
+  function reemplazarTienda(u: UsuarioAdmin, cambiada: TiendaAdmin) {
+    reemplazar(u.id, { tiendas: u.tiendas.map((t) => (t.id === cambiada.id ? cambiada : t)) });
+  }
+
+  function cambiarPlan(u: UsuarioAdmin, tienda: TiendaAdmin) {
+    const nuevo: Plan = tienda.plan === "premium" ? "free" : "premium";
     const texto =
       nuevo === "premium"
-        ? `¿Pasar "${u.tienda.nombre}" a Premium? Va a poder subir fotos propias y aparecer primero en el mapa.`
-        : `¿Volver "${u.tienda.nombre}" a Free?`;
+        ? `¿Pasar "${tienda.nombre}" a Premium? Va a poder subir fotos propias y aparecer primero en el mapa.`
+        : `¿Volver "${tienda.nombre}" a Free?`;
     if (!window.confirm(texto)) return;
-    const tienda = u.tienda;
     return ejecutar(
       u.id,
       async () => {
         await apiPatch(`/api/admin/tiendas/${tienda.id}/plan`, { plan: nuevo });
-        reemplazar(u.id, { tienda: { ...tienda, plan: nuevo } });
+        reemplazarTienda(u, { ...tienda, plan: nuevo });
       },
       "No se pudo cambiar el plan."
     );
@@ -156,16 +160,14 @@ export default function AdminUsuariosPage() {
     );
   }
 
-  function alternarVerificacion(u: UsuarioAdmin) {
-    if (!u.tienda) return;
-    const tienda = u.tienda;
+  function alternarVerificacion(u: UsuarioAdmin, tienda: TiendaAdmin) {
     const verificada = !tienda.verificada;
     if (!verificada && !window.confirm(`¿Quitar la verificación de "${tienda.nombre}"?`)) return;
     return ejecutar(
       u.id,
       async () => {
         await apiPatch(`/api/admin/tiendas/${tienda.id}/verificacion`, { verificada });
-        reemplazar(u.id, { tienda: { ...tienda, verificada } });
+        reemplazarTienda(u, { ...tienda, verificada });
       },
       "No se pudo cambiar la verificación."
     );
@@ -223,7 +225,7 @@ export default function AdminUsuariosPage() {
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 px-6 text-center">
         <p className="text-text-2">Esta sección es solo para administradores.</p>
         <Link href="/" className="font-semibold text-accent-text">
-          Volver al mapa
+          Volver al inicio
         </Link>
       </div>
     );
@@ -318,15 +320,13 @@ export default function AdminUsuariosPage() {
                 <span className="text-[14px] font-semibold">{u.nombre}</span>
                 <span className="truncate text-[12px] text-text-2">{u.email}</span>
               </div>
-              {u.tienda && (
-                <span
-                  className={`flex-shrink-0 rounded-pill px-2.5 py-1 text-[11px] font-bold ${
-                    u.tienda.plan === "premium" ? "bg-accent text-white" : "bg-placeholder text-text-2"
-                  }`}
-                >
-                  {u.tienda.plan === "premium" ? "PREMIUM" : "FREE"}
-                </span>
-              )}
+              <span
+                className={`flex-shrink-0 rounded-pill px-2.5 py-1 text-[11px] font-bold ${
+                  u.plan === "free" ? "bg-placeholder text-text-2" : "bg-accent text-white"
+                }`}
+              >
+                {u.plan.toUpperCase()}
+              </span>
             </div>
             <div className="flex flex-wrap gap-1.5 text-[11px] text-text-2">
               {u.esComprador && <span className="rounded-pill bg-placeholder px-2 py-0.5">Comprador</span>}
@@ -341,11 +341,16 @@ export default function AdminUsuariosPage() {
             </div>
             {u.motivoSuspension && <p className="text-[12px] italic text-text-2">Motivo: {u.motivoSuspension}</p>}
 
-            {u.tienda && (
-              <div className="flex flex-col gap-2 rounded-control bg-bg p-2.5">
+            {u.tiendas.map((tienda) => (
+              <div key={tienda.id} className="flex flex-col gap-2 rounded-control bg-bg p-2.5">
                 <div className="flex items-center justify-between gap-2 text-[13px]">
-                  <span className="min-w-0 truncate font-semibold">{u.tienda.nombre}</span>
-                  {u.tienda.verificada ? (
+                  <span className="min-w-0 truncate font-semibold">
+                    {tienda.nombre}{" "}
+                    <span className={`text-[11px] font-bold ${tienda.plan === "premium" ? "text-accent-text" : "text-text-2"}`}>
+                      {tienda.plan === "premium" ? "PREMIUM" : "FREE"}
+                    </span>
+                  </span>
+                  {tienda.verificada ? (
                     <span className="flex-shrink-0 text-[12px] font-semibold text-primary">✓ Verificada</span>
                   ) : (
                     <span className="flex-shrink-0 text-[12px] text-text-2">Sin verificar</span>
@@ -355,26 +360,34 @@ export default function AdminUsuariosPage() {
                   <button
                     type="button"
                     disabled={procesando === u.id}
-                    onClick={() => cambiarPlan(u)}
+                    onClick={() => cambiarPlan(u, tienda)}
                     className={`press h-9 flex-1 rounded-control text-[12px] font-semibold disabled:opacity-50 ${
-                      u.tienda.plan === "premium" ? "border border-border bg-surface text-text" : "bg-accent text-white"
+                      tienda.plan === "premium" ? "border border-border bg-surface text-text" : "bg-accent text-white"
                     }`}
                   >
-                    {u.tienda.plan === "premium" ? "Volver a Free" : "Pasar a Premium"}
+                    {tienda.plan === "premium" ? "Volver a Free" : "Pasar a Premium"}
                   </button>
                   <button
                     type="button"
                     disabled={procesando === u.id}
-                    onClick={() => alternarVerificacion(u)}
+                    onClick={() => alternarVerificacion(u, tienda)}
                     className={`press h-9 flex-1 rounded-control text-[12px] font-semibold disabled:opacity-50 ${
-                      u.tienda.verificada ? "border border-border bg-surface text-text" : "bg-primary text-white"
+                      tienda.verificada ? "border border-border bg-surface text-text" : "bg-primary text-white"
                     }`}
                   >
-                    {u.tienda.verificada ? "Quitar verificación" : "Verificar tienda"}
+                    {tienda.verificada ? "Quitar verificación" : "Verificar tienda"}
                   </button>
                 </div>
+                <span className="flex gap-3 text-[13px]">
+                  <Link href={`/admin/productos?tiendaId=${tienda.id}`} className="font-semibold text-accent-text">
+                    Productos
+                  </Link>
+                  <Link href={`/tiendas/${tienda.id}`} className="font-semibold text-accent-text">
+                    Ver tienda →
+                  </Link>
+                </span>
               </div>
-            )}
+            ))}
 
             <label className="flex items-center justify-between gap-2 text-[13px] text-text">
               <span>Plan del usuario (radio de alcance)</span>
@@ -448,16 +461,6 @@ export default function AdminUsuariosPage() {
               <span className="text-text-2">
                 {u.cantidadVentas} venta{u.cantidadVentas !== 1 ? "s" : ""}
               </span>
-              {u.tienda && (
-                <span className="flex gap-3">
-                  <Link href={`/admin/productos?tiendaId=${u.tienda.id}`} className="font-semibold text-accent-text">
-                    Productos
-                  </Link>
-                  <Link href={`/tiendas/${u.tienda.id}`} className="font-semibold text-accent-text">
-                    Ver tienda →
-                  </Link>
-                </span>
-              )}
             </div>
           </div>
         ))}
@@ -499,7 +502,11 @@ export default function AdminUsuariosPage() {
               Eliminar a {aEliminar.nombre}
             </h2>
             <p className="text-[13px] text-text-2">
-              Se borra la cuenta{aEliminar.tienda ? `, la tienda "${aEliminar.tienda.nombre}" con sus productos, pedidos y ventas` : ""} y
+              Se borra la cuenta
+              {aEliminar.tiendas.length > 0
+                ? `, ${aEliminar.tiendas.length === 1 ? "la tienda" : "las tiendas"} ${aEliminar.tiendas.map((t) => `"${t.nombre}"`).join(", ")} con sus productos, pedidos y ventas`
+                : ""}{" "}
+              y
               todos sus datos. <strong>No se puede deshacer.</strong> Si solo querés impedir que entre, usá Pausar o Banear.
             </p>
             <label className="flex flex-col gap-1 text-[12px] text-text-2">

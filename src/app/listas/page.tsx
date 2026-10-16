@@ -53,7 +53,7 @@ export default function ListasPage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 px-5 py-6">
       <div className="flex items-center gap-2">
-        <BotonVolver href="/" etiqueta="Volver al mapa" />
+        <BotonVolver href="/" etiqueta="Volver al inicio" />
         <h1 className="flex-1 font-display text-[22px] font-bold text-primary-dark">Mis listas</h1>
         <Link
           href="/listas/nueva"

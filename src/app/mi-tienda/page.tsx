@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMisTiendas, guardarTiendaActiva } from "@/lib/hooks/useMisTiendas";
+import { ETIQUETA_ROL, puede, type Permiso } from "@/lib/equipo/permisos";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
@@ -128,11 +131,50 @@ const ETIQUETA_ACCION: Record<AccionPedido, string> = {
 const formatoARS = (n: number) =>
   "$" + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+type Seccion = "vender" | "pedidos" | "productos" | "tienda";
+
+// Qué permiso habilita cada sección (19-equipo-tienda.md).
+const PERMISO_SECCION: Record<Seccion, Permiso | Permiso[] | "propietario"> = {
+  vender: "vender",
+  pedidos: "pedidos",
+  productos: ["productos", "stock", "precios"],
+  tienda: "propietario",
+};
+const ETIQUETA_SECCION: Record<Seccion, string> = { vender: "Vender", pedidos: "Pedidos", productos: "Stock", tienda: "Tienda" };
+const SECCIONES = Object.keys(PERMISO_SECCION) as Seccion[];
+
 export default function MiTiendaPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-md px-6 py-10 text-text-2">Cargando...</div>}>
+      <MiTienda />
+    </Suspense>
+  );
+}
+
+function MiTienda() {
   const { status } = useSession();
-  const [tab, setTab] = useState<"vender" | "pedidos" | "productos" | "tienda">("vender");
-  const [tienda, setTienda] = useState<Tienda | null>(null);
-  const [cargandoTienda, setCargandoTienda] = useState(true);
+  const router = useRouter();
+  const params = useSearchParams();
+  const tiendaParam = params.get("tienda");
+  const seccionParam = params.get("seccion") as Seccion | null;
+  const nueva = params.get("nueva") === "1";
+  const { lista, activa, recargar } = useMisTiendas<Tienda>(status === "authenticated", tiendaParam);
+  const cargandoTienda = status === "loading" || (status === "authenticated" && lista === null);
+  const secciones = activa ? SECCIONES.filter((sec) => puede(activa, PERMISO_SECCION[sec])) : [];
+  // La tienda es la activa (19-equipo-tienda.md: ?tienda=, la última elegida o la
+  // primera), con los cambios que se guardan acá encima.
+  const [tiendaEditada, setTienda] = useState<Tienda | null>(null);
+  const tienda = activa ? (tiendaEditada?.id === activa.tienda.id ? tiendaEditada : activa.tienda) : null;
+  // Sección: la elegida, la de ?seccion= o la primera que habilitan los permisos.
+  const [tabElegida, setTab] = useState<Seccion | null>(null);
+  const tab: Seccion =
+    tabElegida && secciones.includes(tabElegida)
+      ? tabElegida
+      : seccionParam && secciones.includes(seccionParam)
+        ? seccionParam
+        : secciones[0] ?? "vender";
+  const puedeVerPedidos = !!activa && puede(activa, "pedidos");
+  const conPermiso = (permiso: Permiso | Permiso[] | "propietario") => !!activa && puede(activa, permiso);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -196,32 +238,22 @@ export default function MiTiendaPage() {
     apiGet<Rubro[]>("/api/rubros").then(setRubros).catch(() => {});
   }, []);
 
+  const activaId = activa?.tienda.id;
   useEffect(() => {
-    if (status !== "authenticated") {
-      setCargandoTienda(false);
-      return;
-    }
-    apiGet<Tienda>("/api/tiendas/mia")
-      .then(setTienda)
-      .catch((err) => {
-        if (!(err instanceof ApiError) || err.code !== "TIENDA_NO_ENCONTRADA") {
-          setError(err instanceof ApiError ? err.message : "Error al cargar tu tienda.");
-        }
-      })
-      .finally(() => setCargandoTienda(false));
-  }, [status]);
+    if (activaId) guardarTiendaActiva(activaId);
+  }, [activaId]);
 
   useEffect(() => {
     if (!tienda) return;
     recargarProductos(tienda.id);
-    apiGet<Pedido[]>(`/api/pedidos?tiendaId=${tienda.id}`).then(setPedidos).catch(() => {});
+    if (puedeVerPedidos) apiGet<Pedido[]>(`/api/pedidos?tiendaId=${tienda.id}`).then(setPedidos).catch(() => {});
     setNombreForm(tienda.nombre);
     setDescripcionForm(tienda.descripcion ?? "");
     setMediosForm(tienda.mediosDePago);
     setHorariosForm(tienda.horarios.length > 0 ? tienda.horarios : horarioPorDefecto());
     setAbierto24hsForm(tienda.abierto24hs);
     setRubroForm(tienda.rubro?.id ?? "");
-  }, [tienda]);
+  }, [tienda, puedeVerPedidos]);
 
   // Sin horarios ni 24 hs la tienda no aparece en "Solo abiertas ahora" y los
   // compradores ven "Horario no informado" (02-tiendas.md): aviso persistente.
@@ -268,7 +300,7 @@ export default function MiTiendaPage() {
       const posicion = await new Promise<GeolocationPosition>((resolve, reject) =>
         navigator.geolocation.getCurrentPosition(resolve, reject),
       );
-      const nueva = await apiPost<Tienda>("/api/tiendas", {
+      const creada = await apiPost<Tienda>("/api/tiendas", {
         nombre: form.get("nombre"),
         descripcion: form.get("descripcion") || undefined,
         direccion: form.get("direccion"),
@@ -276,7 +308,9 @@ export default function MiTiendaPage() {
         lon: posicion.coords.longitude,
         rubroId: form.get("rubroId") || undefined,
       });
-      setTienda(nueva);
+      guardarTiendaActiva(creada.id);
+      await recargar();
+      router.replace(`/mi-tienda?tienda=${creada.id}&seccion=tienda`);
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -337,12 +371,15 @@ export default function MiTiendaPage() {
     return <div className="mx-auto max-w-md px-6 py-10 text-text-2">Cargando...</div>;
   }
 
-  if (!tienda) {
+  if (!tienda || nueva) {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col gap-6 px-6 py-8">
+        <Link href="/" className="text-[13px] font-semibold text-accent-text">
+          ← Inicio
+        </Link>
         <div className="flex flex-col gap-1">
           <h1 className="font-display text-[22px] font-bold text-primary-dark">
-            Publicá tu tienda
+            {lista && lista.length > 0 ? "Nueva sucursal" : "Publicá tu tienda"}
           </h1>
           <p className="text-[14px] text-text-2">
             Necesitamos tu ubicación para mostrarte en el mapa a los compradores cercanos.
@@ -379,28 +416,55 @@ export default function MiTiendaPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-bg">
-      <div className="flex items-center justify-between px-5 pb-1 pt-5">
-        <span className="font-display text-[20px] font-bold text-primary-dark">Mi tienda</span>
+      <div className="flex items-center justify-between gap-2 px-5 pb-1 pt-5">
         <Link href="/" className="text-[13px] font-semibold text-accent-text">
-          Ver como comprador
+          ← Inicio
         </Link>
+        {activa && (
+          <span className="rounded-pill bg-primary-soft px-2.5 py-1 text-[11px] font-bold text-primary-dark">
+            {ETIQUETA_ROL[activa.rol]}
+          </span>
+        )}
+      </div>
+      <div className="px-5 pt-1">
+        {lista && lista.length > 1 ? (
+          <select
+            value={tienda.id}
+            onChange={(e) => router.replace(`/mi-tienda?tienda=${e.target.value}&seccion=${tab}`)}
+            aria-label="Tienda activa"
+            className="max-w-full truncate rounded-control border border-border bg-surface px-2 py-1.5 font-display text-[19px] font-bold text-primary-dark"
+          >
+            {lista.map((m) => (
+              <option key={m.tienda.id} value={m.tienda.id}>
+                {m.tienda.nombre}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="font-display text-[20px] font-bold text-primary-dark">{tienda.nombre}</span>
+        )}
       </div>
 
-      <div className="flex gap-1.5 px-5 pb-3 pt-3.5">
-        {(["vender", "pedidos", "productos", "tienda"] as const).map((t) => (
+      <div className="flex gap-1.5 px-5 pb-3 pt-3.5" role="tablist" aria-label="Secciones de la tienda">
+        {secciones.map((t) => (
           <button
             key={t}
+            role="tab"
+            aria-selected={tab === t}
             onClick={() => setTab(t)}
             className={`flex-1 rounded-control px-2 py-2.5 text-[13px] font-semibold ${
               tab === t ? "bg-primary text-white" : "border border-border bg-surface text-text"
             }`}
           >
-            {t[0].toUpperCase() + t.slice(1)}
+            {ETIQUETA_SECCION[t]}
           </button>
         ))}
       </div>
+      {secciones.length === 0 && (
+        <p className="px-5 text-[13px] text-text-2">Todavía no tenés permisos en esta tienda. Pedíselos a quien la administra.</p>
+      )}
 
-      {tienda.horarios.length === 0 && !tienda.abierto24hs && (
+      {conPermiso("propietario") && tienda.horarios.length === 0 && !tienda.abierto24hs && (
         <div
           role="status"
           className="mx-5 mb-3 flex animate-fade-up flex-col gap-2 rounded-card border border-estado-pendiente-text/30 bg-estado-pendiente-bg p-3.5 text-estado-pendiente-text"
@@ -611,11 +675,14 @@ export default function MiTiendaPage() {
             tiendaId={tienda.id}
             mediosDePago={tienda.mediosDePago}
             onStockCambiado={() => recargarProductos(tienda.id)}
+            puedeCobrar={conPermiso("cobrar")}
+            puedeAnular={conPermiso("anular")}
           />
         )}
 
         {tab === "productos" && (
           <div className="flex flex-col gap-3">
+            {conPermiso("productos") && (
             <form onSubmit={crearProducto} className="flex flex-col gap-2 rounded-card border border-dashed border-accent p-3">
               <div className="flex gap-2">
                 <Input
@@ -729,6 +796,7 @@ export default function MiTiendaPage() {
                 + Agregar producto
               </Button>
             </form>
+            )}
             {productos.map((p) => (
               <div
                 key={p.id}
@@ -751,6 +819,7 @@ export default function MiTiendaPage() {
                     {formatoARS(p.precio)}
                     {p.unidad === "kg" ? " / kg" : ""} · stock {formatearCantidad(p.unidad, p.stock)}
                   </div>
+                  {conPermiso("fotos") && (
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Foto compartida del catálogo: cualquier vendedor la elige del banco si falta (06-catalogo.md). */}
                     {!p.imagenCatalogoUrl && (
@@ -778,6 +847,7 @@ export default function MiTiendaPage() {
                       </span>
                     )}
                   </div>
+                  )}
                 </div>
                 <div className="flex flex-shrink-0 flex-col items-end gap-2">
                   <span
@@ -803,6 +873,7 @@ export default function MiTiendaPage() {
             {editando && (
               <DialogoEditarProducto
                 producto={editando}
+                permisos={activa?.permisos ?? []}
                 onCerrar={() => setEditando(null)}
                 onGuardado={(actualizado) => {
                   setProductos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
@@ -847,7 +918,11 @@ export default function MiTiendaPage() {
                       </Link>
                     </div>
                   </details>
-                  <ValoracionCliente compradorId={p.compradorId} puedeValorar={p.estado === "entregado"} />
+                  <ValoracionCliente
+                    compradorId={p.compradorId}
+                    tiendaId={tienda.id}
+                    puedeValorar={p.estado === "entregado" && conPermiso("propietario")}
+                  />
                   {acciones.length > 0 && (
                     <div className="mt-1 flex gap-2">
                       {acciones.map((accion) => (
