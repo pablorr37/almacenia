@@ -17,6 +17,11 @@ export const CLAVES_CONFIG = {
     descripcion:
       "Gamificación: % de los puntos de una venta que se lleva el miembro del equipo que la registró (el resto, el dueño). Cada tienda puede definir el suyo.",
   },
+  "balance.umbral_stock_bajo": {
+    porDefecto: 3,
+    entero: true,
+    descripcion: "Balance completo (plata): un producto disponible con este stock o menos aparece en las alertas de stock bajo.",
+  },
   "itinerario.costo_km": {
     porDefecto: 300,
     entero: false,

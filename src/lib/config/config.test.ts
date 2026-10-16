@@ -35,6 +35,7 @@ describe("configuración del sistema (11-admin.md)", () => {
     await actualizarConfig(admin, "itinerario.costo_km", 150.5);
     const items = await listarConfig(admin);
     expect(items.map((i) => i.clave).sort()).toEqual([
+      "balance.umbral_stock_bajo",
       "gamificacion.porcentaje_puntos_equipo",
       "gamificacion.umbral_items_compra_extra",
       "itinerario.costo_km",

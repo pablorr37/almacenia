@@ -87,7 +87,11 @@ export async function cambiarPlanUsuario(admin: Usuario, usuarioId: string, plan
   }
   const existe = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { id: true } });
   if (!existe) throw new AppError("USUARIO_NO_ENCONTRADO", "El usuario no existe.");
-  await prisma.usuario.update({ where: { id: usuarioId }, data: { plan } });
+  // El plan de sus tiendas es el suyo (20-precios-facturacion.md).
+  await prisma.$transaction([
+    prisma.usuario.update({ where: { id: usuarioId }, data: { plan } }),
+    prisma.tienda.updateMany({ where: { vendedorId: usuarioId }, data: { plan } }),
+  ]);
   return aUsuarioAdmin(await buscarConTienda(usuarioId));
 }
 

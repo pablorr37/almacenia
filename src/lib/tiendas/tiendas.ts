@@ -6,6 +6,9 @@ import type { Usuario } from "@/lib/auth/auth";
 import { requireAdmin } from "@/lib/auth/auth";
 import type { Plan, EstadoVerificacion } from "@/generated-prisma/client";
 import { SAN_JUAN } from "@/lib/alcance/alcance";
+import { MAX_TIENDAS } from "@/lib/planes/limites";
+import { normalizarCuit } from "./cuit";
+import { CONDICIONES_IVA, type CondicionIva } from "@/lib/precios/precios";
 
 const RADIO_KM_DEFAULT = 5;
 const RADIO_KM_MAXIMO = 50;
@@ -34,6 +37,14 @@ export interface Tienda {
   horarios: HorarioTienda[];
   abierto24hs: boolean;
   porcentajePuntosEquipo: number | null; // 12-gamificacion.md; null = default del sistema
+  // Datos fiscales (20-precios-facturacion.md).
+  condicionIva: CondicionIva;
+  razonSocial: string | null;
+  cuit: string | null;
+  ingresosBrutos: string | null;
+  domicilioFiscal: string | null;
+  puntoVenta: number | null;
+  inicioActividades: string | null; // YYYY-MM-DD
 }
 
 export interface SolicitudVerificacion {
@@ -65,6 +76,13 @@ interface FilaTienda {
   medios_de_pago: string;
   abierto_24hs: boolean;
   porcentaje_puntos_equipo: number | null;
+  condicion_iva: CondicionIva;
+  razon_social: string | null;
+  cuit: string | null;
+  ingresos_brutos: string | null;
+  domicilio_fiscal: string | null;
+  punto_venta: number | null;
+  inicio_actividades: string | null;
 }
 
 // Convierte el literal de array de Postgres ("{}", "{efectivo,qr}") a string[].
@@ -94,6 +112,13 @@ function aTienda(fila: FilaTienda, horarios: HorarioTienda[] = []): Tienda {
     horarios,
     abierto24hs: fila.abierto_24hs,
     porcentajePuntosEquipo: fila.porcentaje_puntos_equipo,
+    condicionIva: fila.condicion_iva,
+    razonSocial: fila.razon_social,
+    cuit: fila.cuit,
+    ingresosBrutos: fila.ingresos_brutos,
+    domicilioFiscal: fila.domicilio_fiscal,
+    puntoVenta: fila.punto_venta,
+    inicioActividades: fila.inicio_actividades,
   };
 }
 
@@ -107,6 +132,8 @@ const COLUMNAS_TIENDA = Prisma.sql`
   id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
   imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
   porcentaje_puntos_equipo,
+  condicion_iva, razon_social, cuit, ingresos_brutos, domicilio_fiscal, punto_venta,
+  to_char(inicio_actividades, 'YYYY-MM-DD') AS inicio_actividades,
   ST_Y(ubicacion::geometry) AS lat,
   ST_X(ubicacion::geometry) AS lon
 `;
@@ -228,7 +255,16 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
   }
   await validarRubroId(input.rubroId);
 
-  // Un usuario puede tener varias tiendas (19-equipo-tienda.md).
+  // Varias tiendas por dueño (19-equipo-tienda.md), hasta el tope de su plan; la tienda
+  // toma el plan del dueño (20-precios-facturacion.md).
+  const dueno = await prisma.usuario.findUniqueOrThrow({ where: { id: usuario.id }, select: { plan: true } });
+  const propias = await prisma.tienda.count({ where: { vendedorId: usuario.id } });
+  if (propias >= MAX_TIENDAS[dueno.plan]) {
+    throw new AppError(
+      "LIMITE_TIENDAS_PLAN",
+      `Tu plan permite hasta ${MAX_TIENDAS[dueno.plan]} ${MAX_TIENDAS[dueno.plan] === 1 ? "tienda" : "tiendas"}. Mejorá tu plan para sumar sucursales.`
+    );
+  }
   const mediosDePago = input.mediosDePago ?? [];
 
   const [fila] = await prisma.$transaction(async (tx) => {
@@ -236,7 +272,7 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
     // de la columna en Postgres — al insertar con SQL crudo hay que generarlo acá.
     const id = crypto.randomUUID();
     const filas = await tx.$queryRaw<FilaTienda[]>`
-      INSERT INTO tiendas (id, vendedor_id, nombre, descripcion, direccion, ubicacion, medios_de_pago, abierto_24hs, rubro_id)
+      INSERT INTO tiendas (id, vendedor_id, nombre, descripcion, direccion, ubicacion, medios_de_pago, abierto_24hs, rubro_id, plan)
       VALUES (
         ${id},
         ${usuario.id},
@@ -246,7 +282,8 @@ export async function crearTienda(usuario: Usuario, input: CrearTiendaInput): Pr
         ST_SetSRID(ST_MakePoint(${input.lon}, ${input.lat}), 4326)::geography,
         ${mediosDePago}::medio_pago[],
         ${input.abierto24hs ?? false},
-        ${input.rubroId ?? null}
+        ${input.rubroId ?? null},
+        ${dueno.plan}::plan
       )
       RETURNING
         ${COLUMNAS_TIENDA}
@@ -350,6 +387,65 @@ export interface ActualizarTiendaInput {
   horarios?: HorarioTienda[];
   abierto24hs?: boolean;
   porcentajePuntosEquipo?: number | null;
+  condicionIva?: CondicionIva;
+  razonSocial?: string | null;
+  cuit?: string | null;
+  ingresosBrutos?: string | null;
+  domicilioFiscal?: string | null;
+  puntoVenta?: number | null;
+  inicioActividades?: string | null;
+}
+
+// Emitir comprobantes pide razón social, CUIT, domicilio fiscal y punto de venta.
+export function datosFiscalesCompletos(
+  t: Pick<Tienda, "razonSocial" | "cuit" | "domicilioFiscal" | "puntoVenta">
+): boolean {
+  return !!(t.razonSocial && t.cuit && t.domicilioFiscal && t.puntoVenta);
+}
+
+type DatosFiscales = Pick<
+  Tienda,
+  "condicionIva" | "razonSocial" | "cuit" | "ingresosBrutos" | "domicilioFiscal" | "puntoVenta" | "inicioActividades"
+>;
+
+const textoOpcional = (v: string | null | undefined, actual: string | null) =>
+  v === undefined ? actual : v === null ? null : v.trim() || null;
+
+// Valida y combina los datos fiscales nuevos con los actuales (20-precios-facturacion.md).
+function datosFiscales(input: ActualizarTiendaInput, actual: DatosFiscales): DatosFiscales {
+  if (input.condicionIva !== undefined && !(CONDICIONES_IVA as readonly string[]).includes(input.condicionIva)) {
+    throw new AppError("CONDICION_IVA_INVALIDA", "La condición frente al IVA tiene que ser monotributo, responsable inscripto o exento.");
+  }
+  let cuit = actual.cuit;
+  if (input.cuit !== undefined) {
+    cuit = input.cuit === null || input.cuit.trim() === "" ? null : normalizarCuit(input.cuit);
+    if (input.cuit !== null && input.cuit.trim() !== "" && !cuit) {
+      throw new AppError("CUIT_INVALIDO", "El CUIT no es válido: revisá los 11 números.");
+    }
+  }
+  if (
+    input.puntoVenta !== undefined &&
+    input.puntoVenta !== null &&
+    (!Number.isInteger(input.puntoVenta) || input.puntoVenta < 1 || input.puntoVenta > 99999)
+  ) {
+    throw new AppError("PUNTO_VENTA_INVALIDO", "El punto de venta tiene que ser un número entre 1 y 99999.");
+  }
+  if (
+    input.inicioActividades !== undefined &&
+    input.inicioActividades !== null &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(input.inicioActividades) || Number.isNaN(Date.parse(input.inicioActividades)))
+  ) {
+    throw new AppError("FECHA_INVALIDA", "La fecha de inicio de actividades tiene que tener el formato AAAA-MM-DD.");
+  }
+  return {
+    condicionIva: input.condicionIva ?? actual.condicionIva,
+    razonSocial: textoOpcional(input.razonSocial, actual.razonSocial),
+    cuit,
+    ingresosBrutos: textoOpcional(input.ingresosBrutos, actual.ingresosBrutos),
+    domicilioFiscal: textoOpcional(input.domicilioFiscal, actual.domicilioFiscal),
+    puntoVenta: input.puntoVenta !== undefined ? input.puntoVenta : actual.puntoVenta,
+    inicioActividades: input.inicioActividades !== undefined ? input.inicioActividades : actual.inicioActividades,
+  };
 }
 
 function validarPorcentajePuntosEquipo(valor: unknown): void {
@@ -373,6 +469,7 @@ export async function actualizarTienda(
   }
   if (typeof input.nombre === "string") exigirTextoPermitido(input.nombre, "El nombre de la tienda");
   validarPorcentajePuntosEquipo(input.porcentajePuntosEquipo);
+  const fiscal = datosFiscales(input, actual);
 
   const lat = input.lat ?? actual.lat;
   const lon = input.lon ?? actual.lon;
@@ -417,6 +514,13 @@ export async function actualizarTienda(
         porcentaje_puntos_equipo = ${
           input.porcentajePuntosEquipo !== undefined ? input.porcentajePuntosEquipo : actual.porcentajePuntosEquipo
         }::smallint,
+        condicion_iva = ${fiscal.condicionIva}::condicion_iva,
+        razon_social = ${fiscal.razonSocial},
+        cuit = ${fiscal.cuit},
+        ingresos_brutos = ${fiscal.ingresosBrutos},
+        domicilio_fiscal = ${fiscal.domicilioFiscal},
+        punto_venta = ${fiscal.puntoVenta}::integer,
+        inicio_actividades = ${fiscal.inicioActividades}::date,
         actualizada_en = now()
       WHERE id = ${tiendaId}
       RETURNING

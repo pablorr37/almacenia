@@ -57,6 +57,13 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   MIEMBRO_YA_EXISTE: 409,
   ES_PROPIETARIO: 409,
   MIEMBRO_NO_ENCONTRADO: 404,
+  // 20-precios-facturacion.md
+  DATOS_FISCALES_INCOMPLETOS: 409,
+  VENTA_NO_COBRADA: 409,
+  COMPROBANTE_YA_EMITIDO: 409,
+  COMPROBANTE_NO_ENCONTRADO: 404,
+  LIMITE_TIENDAS_PLAN: 409,
+  PLAN_INSUFICIENTE: 403,
 };
 
 // 00-overview.md, "Sin caché": datos vivos, nadie (navegador, Cloudflare, proxy)

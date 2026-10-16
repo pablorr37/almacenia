@@ -26,6 +26,8 @@ describe("rutas de varias tiendas, equipo y balance", () => {
     dueno = await registrarUsuario({ email: `test-eq-api-d-${suf}@almacenia.test`, password: "password123", nombre: "Dueño" });
     emp = await registrarUsuario({ email: `test-eq-api-e-${suf}@almacenia.test`, password: "password123", nombre: "Emp" });
     tienda = await crearTienda(dueno, { nombre: "B Central", direccion: "D", lat: -31.5, lon: -68.5 });
+    // Una sucursal pide plan premium o mayor (20-precios-facturacion.md).
+    await prisma.usuario.update({ where: { id: dueno.id }, data: { plan: "premium" } });
     sucursal = await crearTienda(dueno, { nombre: "A Sucursal", direccion: "D", lat: -31.5, lon: -68.5 });
   });
 

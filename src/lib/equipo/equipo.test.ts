@@ -146,6 +146,7 @@ describe("varias tiendas", () => {
   it("un usuario crea varias tiendas; misTiendas lista las propias primero y después donde es miembro", async () => {
     const yo = await usuario("Yo");
     const otra = await usuario("Otra");
+    await prisma.usuario.update({ where: { id: yo.id }, data: { plan: "premium" } }); // tope de tiendas
     const b = await tiendaDe(yo, "B Sucursal");
     const a = await tiendaDe(yo, "A Central");
     const ajena = await tiendaDe(otra, "Ajena");
