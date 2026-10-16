@@ -38,7 +38,8 @@ entrega a domicilio (delivery), chat in-app, y las fases 2 a 6 del itinerario.
 
 ```
 Usuario (esComprador, esVendedor — independientes, ver 01-auth.md)
-  └─< Tienda (1 vendedor -> 1 tienda, MVP simple; crearla activa esVendedor=true)
+  └─< Tienda (propietario; varias por usuario; crearla activa esVendedor=true)
+        └─< MiembroTienda >── Usuario (encargado/empleado con permisos)
         └─< Producto (stock, precio)
         └─< Pedido >── Usuario (comprador)
               └─< ItemPedido >── Producto
@@ -46,10 +47,8 @@ Usuario (esComprador, esVendedor — independientes, ver 01-auth.md)
               └─< ItemVenta >── Producto
 ```
 
-Relación 1 vendedor : 1 tienda para simplificar el MVP (un `Usuario` con `esVendedor =
-true` gestiona una única `Tienda`). Pasar a N tiendas por vendedor no rompe este
-modelo: solo cambia la cardinalidad de `Tienda.vendedor_id`, no hace falta anticiparlo
-ahora.
+Un usuario puede ser propietario de varias tiendas y miembro (encargado o empleado,
+con permisos) de otras: ver [`19-equipo-tienda.md`](19-equipo-tienda.md).
 
 ## Stack técnico (ver `agents/memory/decisiones/stack-app.md`)
 
