@@ -1,6 +1,6 @@
 # Ronda 2: menú de inicio, inicio del vendedor, varias tiendas, empleados y permisos
 
-Estado: **pendiente** (borrador). Ver el pedido textual en [`../memoria.md`](../memoria.md), punto 7.
+Estado: **hecha** (ver "Ronda 2: qué quedó hecho" en `../memoria.md` y la spec `specs/sdd/19-equipo-tienda.md`). Lo de abajo es el borrador original. Ver el pedido textual en [`../memoria.md`](../memoria.md), punto 7.
 
 ## Objetivo
 - **Pantalla de inicio = menú**, con accesos a cada función o grupo de funciones:
