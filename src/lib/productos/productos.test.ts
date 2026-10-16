@@ -375,6 +375,36 @@ describe("eliminarProducto", () => {
       code: "NO_ES_DUENO_DE_TIENDA",
     });
   });
+  it("es una baja real: desaparece de los listados y no se puede editar, vender ni pedir (03-productos.md)", async () => {
+    const otroProducto = await crearProducto(vendedor, tienda.id, inputNuevo({ nombre: "Se queda", precio: 10, stock: 5 }));
+    await eliminarProducto(vendedor, producto.id);
+
+    const listado = await listarProductos({ tiendaId: tienda.id });
+    expect(listado.data.map((p) => p.id)).toEqual([otroProducto.id]);
+    expect(listado.total).toBe(1);
+    expect((await listarParaVenta(vendedor, tienda.id)).map((p) => p.id)).toEqual([otroProducto.id]);
+
+    await expect(actualizarProducto(vendedor, producto.id, { precio: 50 })).rejects.toMatchObject({ code: "PRODUCTO_NO_ENCONTRADO" });
+    await expect(eliminarProducto(vendedor, producto.id)).rejects.toMatchObject({ code: "PRODUCTO_NO_ENCONTRADO" });
+
+    const { crearVentaPresencial } = await import("@/lib/ventas/ventas");
+    await expect(
+      crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }] })
+    ).rejects.toMatchObject({ code: "PRODUCTO_NO_ENCONTRADO" });
+
+    const { crearPedido } = await import("@/lib/pedidos/pedidos");
+    await expect(
+      crearPedido(otro, { tiendaId: tienda.id, items: [{ productoId: producto.id, cantidad: 1 }] })
+    ).rejects.toMatchObject({ code: "PRODUCTO_NO_ENCONTRADO" });
+  });
+
+  it("una venta vieja conserva el producto eliminado en su detalle", async () => {
+    const { crearVentaPresencial, obtenerVenta } = await import("@/lib/ventas/ventas");
+    const venta = await crearVentaPresencial(vendedor, tienda.id, { items: [{ productoId: producto.id, cantidad: 1 }] });
+    await eliminarProducto(vendedor, producto.id);
+    const vista = await obtenerVenta(vendedor, venta.id);
+    expect(vista!.items[0]).toMatchObject({ nombre: "Prueba A borrar", cantidad: 1 });
+  });
 });
 
 describe("debitarStock", () => {

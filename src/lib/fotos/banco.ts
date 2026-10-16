@@ -186,7 +186,7 @@ export async function catalogoSinFoto(
   const [entradas, total] = await Promise.all([
     prisma.productoCatalogo.findMany({
       where,
-      select: { id: true, nombre: true, marca: true, _count: { select: { productos: true } } },
+      select: { id: true, nombre: true, marca: true, _count: { select: { productos: { where: { eliminadoEn: null } } } } },
       orderBy: [{ productos: { _count: "desc" } }, { nombre: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,

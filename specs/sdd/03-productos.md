@@ -20,6 +20,7 @@ CREATE TABLE productos (
   destacado      BOOLEAN NOT NULL DEFAULT false,
   stock          NUMERIC(10, 3) NOT NULL DEFAULT 0, -- unidades o kg según catálogo
   disponible     BOOLEAN NOT NULL DEFAULT true,
+  eliminado_en   TIMESTAMPTZ, -- baja del producto (ver "Eliminar un producto")
   favorito       BOOLEAN NOT NULL DEFAULT false, -- estrella del vendedor en el punto de venta
   creado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
   actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -100,9 +101,14 @@ La unidad de venta viene del producto de catálogo (`productos_catalogo.unidad`,
   `disponible = true` **y** `stock > 0`. Esta es una regla derivada, no un campo
   propio — se calcula en el momento de mostrar el catálogo o validar un pedido/venta.
 - `precio` es un monto en la moneda local, sin decimales de más de 2 posiciones.
-- No hay borrado físico de productos con historial de ventas asociado: `DELETE`
-  marca `disponible = false` y `stock = 0` en lugar de borrar la fila, para no romper
-  la referencia desde `ItemVenta`/`ItemPedido` de ventas pasadas.
+- **Eliminar un producto es una baja real para la tienda**, pero no un borrado físico.
+  `DELETE` marca `eliminado_en = now()` (además de `disponible = false` y `stock = 0`):
+  - el producto deja de aparecer en todo listado (storefront, panel del vendedor,
+    punto de venta, admin, "Buscar y comparar");
+  - no se puede editar, vender, pedir ni reseñar: `404 PRODUCTO_NO_ENCONTRADO`;
+  - la fila sigue existiendo para no romper la referencia desde `ItemVenta`/`ItemPedido`
+    de ventas y pedidos pasados.
+  Si la tienda lo quiere vender de nuevo, lo vuelve a cargar desde el catálogo.
 - Crear un producto otorga puntos de gamificación al vendedor (`producto_cargado`,
   una vez por tienda y producto de catálogo — ver `12-gamificacion.md`).
 - Crear un producto requiere elegir un `catalogoId` existente o proveer los datos de
@@ -193,8 +199,9 @@ Response `200`: `{ data: Producto }`.
 
 ### `DELETE /api/productos/:id`
 
-Requiere ser el dueño de la tienda del producto. Ver regla de borrado
-lógico arriba. Response `200`: `{ data: Producto }` (con `disponible: false, stock: 0`).
+Requiere ser el dueño de la tienda del producto. Ver "Eliminar un producto" arriba.
+Response `200`: `{ data: Producto }` (con `disponible: false, stock: 0`). Eliminar dos
+veces el mismo producto da `404 PRODUCTO_NO_ENCONTRADO`.
 
 ## Firmas de funciones/clases TypeScript
 

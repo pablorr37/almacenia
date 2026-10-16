@@ -259,6 +259,8 @@ model Producto {
   destacado     Boolean  @default(false)
   stock         Decimal  @default(0) @db.Decimal(10, 3)
   disponible    Boolean  @default(true)
+  // 03-productos.md: baja del producto (sigue la fila por el historial de ventas).
+  eliminadoEn   DateTime? @map("eliminado_en")
   favorito      Boolean  @default(false)
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
@@ -270,7 +272,7 @@ model Producto {
   itemsVenta  ItemVenta[]
   resenas     Resena[]
 
-  @@index([tiendaId])
+  @@index([tiendaId, eliminadoEn])
   @@index([catalogoId])
   @@index([categoriaId])
   @@index([catalogoId, disponible])

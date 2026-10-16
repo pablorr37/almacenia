@@ -216,6 +216,9 @@ export async function crearVentaPresencial(
 
   const items: ItemAProcesar[] = input.items.map((item) => {
     const producto = productosPorId.get(item.productoId);
+    if (producto?.eliminadoEn) {
+      throw new AppError("PRODUCTO_NO_ENCONTRADO", "Uno de los productos ya no está en la tienda.");
+    }
     if (!producto || producto.tiendaId !== tiendaId) {
       throw new AppError("PRODUCTOS_DE_OTRA_TIENDA", "Todos los productos deben pertenecer a la misma tienda.");
     }

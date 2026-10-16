@@ -239,6 +239,7 @@ export async function listarProductos(
 
   const where = {
     tiendaId: input.tiendaId,
+    eliminadoEn: null,
     ...(input.soloDisponibles ? { disponible: true, stock: { gt: 0 } } : {}),
     ...(input.categoriaId ? { categoriaId: input.categoriaId } : {}),
     ...(input.q ? { OR: [{ nombre: { contains: input.q, mode: "insensitive" as const } }, { descripcion: { contains: input.q, mode: "insensitive" as const } }] } : {}),
@@ -288,7 +289,7 @@ export async function listarParaVenta(vendedor: Usuario, tiendaId: string): Prom
   await verificarPropiedad(vendedor, tiendaId);
   const desde = new Date(Date.now() - 30 * 24 * 3600_000);
   const [productos, ventas] = await Promise.all([
-    prisma.producto.findMany({ where: { tiendaId }, include: INCLUDE_IMAGEN, orderBy: { nombre: "asc" } }),
+    prisma.producto.findMany({ where: { tiendaId, eliminadoEn: null }, include: INCLUDE_IMAGEN, orderBy: { nombre: "asc" } }),
     prisma.$queryRaw<Array<{ producto_id: string; vendidos_30d: number; ultima_venta_en: Date }>>`
       SELECT iv.producto_id,
              COUNT(DISTINCT v.id) FILTER (WHERE v.creada_en >= ${desde})::int AS vendidos_30d,
@@ -334,7 +335,8 @@ async function obtenerProductoConTienda(productoId: string) {
     where: { id: productoId },
     include: { tienda: true },
   });
-  if (!producto) {
+  // 03-productos.md: un producto eliminado ya no existe para la tienda.
+  if (!producto || producto.eliminadoEn) {
     throw new AppError("PRODUCTO_NO_ENCONTRADO", "El producto no existe.");
   }
   return producto;
@@ -397,7 +399,7 @@ export async function eliminarProducto(vendedor: Usuario, productoId: string): P
 
   const producto = await prisma.producto.update({
     where: { id: productoId },
-    data: { disponible: false, stock: 0 },
+    data: { disponible: false, stock: 0, eliminadoEn: new Date() },
     include: INCLUDE_IMAGEN,
   });
 
