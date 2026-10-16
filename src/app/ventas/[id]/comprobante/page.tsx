@@ -183,18 +183,18 @@ export default function ComprobantePage({ params }: { params: Promise<{ id: stri
             <thead className="border-b border-border text-[12px] text-text-2">
               <tr>
                 <th className="py-1 font-semibold">Producto</th>
-                <th className="py-1 text-right font-semibold">Cant.</th>
-                <th className="py-1 text-right font-semibold">Precio</th>
-                <th className="py-1 text-right font-semibold">Subtotal</th>
+                <th className="py-1 pl-2 text-right font-semibold">Cant.</th>
+                <th className="py-1 pl-2 text-right font-semibold">Precio</th>
+                <th className="py-1 pl-2 text-right font-semibold">Subtotal</th>
               </tr>
             </thead>
             <tbody>
               {comprobante.items.map((i, n) => (
                 <tr key={n} className="border-b border-border/60">
                   <td className="py-1.5 pr-2">{i.nombre}</td>
-                  <td className="py-1.5 text-right">{i.cantidad.toLocaleString("es-AR")}</td>
-                  <td className="py-1.5 text-right">{formatoARS(i.precioUnitario)}</td>
-                  <td className="py-1.5 text-right">{formatoARS(i.subtotal)}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-2 text-right">{i.cantidad.toLocaleString("es-AR")}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-2 text-right">{formatoARS(i.precioUnitario)}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-2 text-right">{formatoARS(i.subtotal)}</td>
                 </tr>
               ))}
             </tbody>

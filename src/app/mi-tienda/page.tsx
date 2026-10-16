@@ -896,7 +896,7 @@ function MiTienda() {
                       porKg={unidad === "kg"}
                       idPrefijo="p"
                     />
-                    <div className="flex">
+                    <div className="grid">
                       <Input
                         id="p-stock"
                         name="stock"
