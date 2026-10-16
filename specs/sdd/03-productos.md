@@ -315,3 +315,8 @@ async function debitarStock(productoId: string, cantidad: number): Promise<Produ
 | `PRECIO_OFERTA_INVALIDO`    | `precioOferta` negativo o mayor/igual a `precio`.                  |
 | `CATALOGO_NO_ENCONTRADO`    | `catalogoId` no existe (ver `06-catalogo.md`).                     |
 | `FOTOS_SOLO_PREMIUM`        | Tienda `free` intenta setear una foto personalizada (`403`, ver `10-planes.md`). |
+
+## Precio, costo e impuestos
+
+Costo, margen, alícuota de IVA e impuestos internos del producto, y cómo se calcula el
+precio final: ver [`20-precios-facturacion.md`](20-precios-facturacion.md).

@@ -271,3 +271,9 @@ async function listarVentas(
 | `MEDIO_PAGO_INVALIDO`         | `medioPago` no es uno de los medios que acepta la tienda.           |
 | `NOTA_INVALIDA`               | `nota` de más de 200 caracteres.                                     |
 | `TRANSICION_INVALIDA`         | `cobrar`/`anular` sobre una venta que no está `por_cobrar` (`409`).  |
+
+## Foto fiscal y comprobantes
+
+Cada ítem guarda costo, alícuota y desglose (neto, IVA, internos) al venderse; los
+comprobantes (A/B/C, numeración, `Facturador`): ver
+[`20-precios-facturacion.md`](20-precios-facturacion.md).
