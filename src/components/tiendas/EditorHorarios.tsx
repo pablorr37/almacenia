@@ -1,6 +1,7 @@
 "use client";
 
 import type { HorarioTienda } from "@/lib/tiendas/horarios";
+import { IconoX } from "@/components/ui/IconoX";
 
 // Editor de horarios con franjas (02-tiendas.md): por día, cerrado o de 1 a 3
 // franjas (horario partido, ej. 9-12 y 16-20). Controlado: recibe y emite la lista
@@ -111,9 +112,9 @@ export function EditorHorarios({
                     type="button"
                     onClick={() => reemplazarDia(dia, franjas.filter((_, j) => j !== i))}
                     aria-label={`Quitar franja ${i + 1} del ${DIAS[dia]}`}
-                    className="press h-8 w-8 flex-shrink-0 rounded-pill text-[16px] text-text-2"
+                    className="press flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-pill leading-none text-text-2"
                   >
-                    ×
+                    <IconoX tamano={12} />
                   </button>
                 )}
               </div>

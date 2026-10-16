@@ -8,6 +8,7 @@ import { Toast } from "@/components/ui/Toast";
 import { IconoQr } from "@/components/clientes/CompartirQr";
 import { leerCodigoQr } from "@/lib/clientes/leer-codigo";
 import { EscanerCodigo } from "@/components/scanner/EscanerCodigo";
+import { IconoX } from "@/components/ui/IconoX";
 
 // Punto de venta de mostrador (05-ventas.md): el vendedor arma el ticket con lo que
 // le pide el cliente, lo cobra en el acto o lo deja "por cobrar" hasta que llega la
@@ -410,9 +411,9 @@ export function PuntoDeVenta({
                     type="button"
                     onClick={() => fijar(producto.id, 0)}
                     aria-label={`Quitar ${producto.nombre}`}
-                    className="press h-7 w-7 rounded-pill text-text-2"
+                    className="press flex h-7 w-7 items-center justify-center rounded-pill leading-none text-text-2"
                   >
-                    ×
+                    <IconoX tamano={12} />
                   </button>
                 </span>
               </li>

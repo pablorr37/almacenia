@@ -5,6 +5,7 @@ import { apiGet, apiGetPaginado, apiPost, apiPostForm, ApiError } from "@/lib/ap
 import { palabrasClave, type ResultadoWeb } from "@/lib/fotos/buscador-web";
 import type { FotoBanco, Fuente } from "@/lib/fotos/banco";
 import { comprimirImagen, mensajeErrorSubida } from "@/lib/archivos/comprimir-imagen";
+import { IconoX } from "@/components/ui/IconoX";
 
 // Buscador de fotos (16-banco-fotos.md): la misma UI para todos. El banco lo ve
 // cualquiera; la pestaña "Web libre" (Openverse, CC0/dominio público) solo los
@@ -200,8 +201,8 @@ export function BuscadorFotos({
           <h2 id="buscador-fotos-titulo" className="font-display text-[20px] font-bold text-primary-dark">
             {titulo}
           </h2>
-          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="press h-9 w-9 rounded-pill text-[20px] text-text-2">
-            ×
+          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="press flex h-9 w-9 items-center justify-center rounded-pill leading-none text-text-2">
+            <IconoX tamano={16} />
           </button>
         </div>
 

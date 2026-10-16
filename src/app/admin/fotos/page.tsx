@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { apiGet, apiGetPaginado, apiPatch, ApiError } from "@/lib/api-client";
 import { BuscadorFotos, type DestinoFoto } from "@/components/fotos/BuscadorFotos";
 import type { FotoBanco } from "@/lib/fotos/banco";
+import { IconoX } from "@/components/ui/IconoX";
 
 // Curaduría del banco de fotos (11-admin.md, 16-banco-fotos.md): admin y testers.
 type EntradaSinFoto = { id: string; nombre: string; marca: string | null; tiendas: number };
@@ -131,9 +132,9 @@ export default function AdminFotosPage() {
                     type="button"
                     onClick={() => revisar(f, "rechazada")}
                     aria-label="Rechazar"
-                    className="press h-8 w-8 rounded-control border border-border text-[13px] text-estado-rechazado-text"
+                    className="press flex h-8 w-8 items-center justify-center rounded-control border border-border leading-none text-estado-rechazado-text"
                   >
-                    ×
+                    <IconoX tamano={12} />
                   </button>
                 </div>
               </li>
