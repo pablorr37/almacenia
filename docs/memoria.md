@@ -1,0 +1,78 @@
+# Memoria del proyecto: pedidos, decisiones y pendientes
+
+Lista viva. **Antes de empezar una tarea, leé este archivo. Al terminarla, actualizalo**:
+estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
+[`docs/rondas/`](rondas/).
+
+Última actualización: 2026-10-16.
+
+## Estado de las rondas
+
+| Ronda | Alcance | Estado | PR |
+| --- | --- | --- | --- |
+| 1 | Bugs (escáner, editar/eliminar productos, × descentrada) + radio de alcance en el mapa | En curso | — |
+| 2 | [Inicio del vendedor y menú de inicio, varias tiendas, empleados y permisos](rondas/ronda-2-inicio-vendedor.md) | Pendiente | — |
+| 3 | [Precio = costo + ganancia + impuestos, datos para facturar, balance por plan, plan Plata](rondas/ronda-3-precios-balance.md) | Pendiente | — |
+| 4 | [Publicidad: Google + otros proveedores + motor propio de Almacenia](rondas/ronda-4-publicidad.md) | Pendiente | — |
+| — | Plan Gold ("casi admin") | Para otra ronda | — |
+
+Forma de trabajo acordada:
+- se trabaja en la rama de la sesión;
+- se abre un PR y lo mergea Claude apenas termina, sin esperar confirmación;
+- Coolify despliega `master` solo.
+
+## Pedido del usuario (2026-10-16, textual)
+
+> 1) El precio de un producto está compuesto por costo+ganancia y lo que la teoría de contabilidad (hay que dejar almacenia lista para poder facturar si es necesario) diga que es el precio de un producto. Eso para poder hacer un balance básico para planes free, sólido para planes premium y completo para planes plata. Gold es casi admin, lo dejamos para otra ronda.
+>
+> 2) Publicidad dentro de la app: planes premium/plata tienen publicidad al estilo google dentro de la app, con salidas rotativas mixeadas con las de google y otros proveedores, incluso internos de almacenia. Para eso hay que configurar la publicidad de google y de otros proveedores, y dejar lista la infra para un servicio propio de almacenia, con motor de anunciantes y layout de diseño integrado.
+>
+> 3) Radio de alcance visible: en el mapa (que cambiará de ui, punto 7) se ve el radio de alcance: 3 km para usuarios free con menos de 100 puntos; de 3 a 7 para usuarios free >=100 puntos hasta 500 a 500 dividido en el rango 3 a 7, con curvatura negativa de crecimiento, esto es: el radio se agranda cada vez menos cuantos más puntos se tenga. De 7 a 10 igual: pero x2: de 500 a 1500 puntos. El radio crece muy rápido entre 500 y 700 pero se pone lento a >700. Lo mismo de 10 a 15km: pero esta vez es constante. Hasta 1km cada 100 puntos. Plan Premium tiene este rango: 15km. Plan Plata tiene todo San Juan.
+>
+> 4) No funciona el escáner qr/barra.
+>
+> 5) No se puede eliminar o modificar un producto agregado. Hay que arreglar esto.
+>
+> 6) El ícono de x (quitar) en un pedido/venta no está centrado en el recuadro.
+>
+> 7) El mapa es la pantalla de inicio de las personas logueadas; la lista de negocios cercanos es para los no logueados; pero eso del lado de compradores. Los vendedores deben tener su tienda como página de inicio. De hecho crear la página de inicio: Nueva venta, manejo de stock (donde se agregan o eliminan o modifican productos y stock), control de usuarios (donde se promueve o quita usuarios de la app como empleados, encargados, el user propietario que le da permisos a los users empleados como cambiar precios, cobrar una venta, cambiar o no foto, etc. permisos que el dueño tiene y que el dueño puede dar o revocar a otros users de la app para que vendan en su/s tienda/s), balance, …
+
+Aclaraciones posteriores del usuario:
+- **Punto 7, lo que seguía a "balance":** la pantalla de inicio es un **menú** que enlaza a cada función o grupo de funciones de la app. El mapa es una de ellas.
+- **Punto 4:** la cámara abre bien, pero **no lee** el código de barras ni el QR, **no puede enfocar** y **no tiene botón para salir o volver**.
+
+## Decisiones tomadas
+
+- **Publicidad:**
+  - Compradores y vendedores con plan **free** ven anuncios rotativos (Google + otros proveedores + anuncios propios de Almacenia).
+  - En el mapa, ven el **nombre de las tiendas que pagan publicidad** junto a su pin.
+  - Los usuarios **premium y plata** no ven anuncios; en el mapa ven solo el nombre en el pin.
+  - Esto contradice "planes premium/plata tienen publicidad" del texto original; lo aclaró el usuario.
+- **Plan por usuario:** free / premium / plata, tanto para compradores como para vendedores. Gold queda para otra ronda.
+  - Hoy el plan vive en la tienda (`tiendas.plan`).
+  - La ronda 1 agrega `usuarios.plan`.
+  - La ronda 3 unifica: el plan de la tienda pasa a ser el de su dueño.
+- **Varias tiendas por dueño** (sucursales), con empleados/encargados por tienda y permisos que el dueño da y quita (ronda 2).
+- **Radio de alcance** (ronda 1, `specs/sdd/18-alcance.md`):
+
+  | Plan | Puntos | Radio |
+  | --- | --- | --- |
+  | free | menos de 100 | 3 km |
+  | free | 100–500 | 3 → 7 km, cóncava: `3 + 4·(1 − (1 − x)²)` |
+  | free | 500–1500 | 7 → 10 km, muy cóncava: `7 + 3·(1 − (1 − x)⁴)`; muy rápido entre 500 y 700 |
+  | free | 1500–2000 | 10 → 15 km, lineal: 1 km cada 100 puntos |
+  | free | 2000 o más | 15 km |
+  | premium | — | 15 km |
+  | plata | — | toda la provincia de San Juan |
+
+  En las fórmulas, `x` es la posición dentro del tramo, de 0 a 1.
+
+## Preguntas abiertas
+
+- **Facturación (ronda 3):**
+  - condición fiscal de cada tienda (monotributo / responsable inscripto / exento) y alícuotas de IVA por producto (21 %, 10,5 %, 27 %, exento);
+  - ¿se integra la factura electrónica de ARCA (ex AFIP) ya, o alcanza con dejar los datos listos?
+- **Publicidad (ronda 4):**
+  - IDs de Google AdSense/Ad Manager y qué otros proveedores (los configura el usuario);
+  - precio y forma de pago de la publicidad en el mapa.
+- **Empleados (ronda 2):** lista final de permisos asignables. Propuestos: vender, cobrar, anular, cambiar precios, editar stock, alta y baja de productos, fotos, ver balance, gestionar empleados.
