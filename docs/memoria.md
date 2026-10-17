@@ -4,7 +4,7 @@ Lista viva. **Antes de empezar una tarea, leé este archivo. Al terminarla, actu
 estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
 [`docs/rondas/`](rondas/).
 
-Última actualización: 2026-10-17 (ronda 3).
+Última actualización: 2026-10-17 (pedido de puntos como pago, publicidad y notificaciones).
 
 ## Estado de las rondas
 
@@ -13,7 +13,8 @@ estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
 | 1 | Bugs (escáner, editar/eliminar productos, × descentrada) + radio de alcance en el mapa | Hecha | [#8](https://github.com/pablorr37/almacenia/pull/8) |
 | 2 | [Inicio del vendedor y menú de inicio, varias tiendas, empleados y permisos](rondas/ronda-2-inicio-vendedor.md) | Hecha | [#9](https://github.com/pablorr37/almacenia/pull/9) |
 | 3 | [Precio = costo + ganancia + impuestos, datos para facturar, balance por plan, plan Plata](rondas/ronda-3-precios-balance.md) | Hecha | [#10](https://github.com/pablorr37/almacenia/pull/10) |
-| 4 | [Publicidad: Google + otros proveedores + motor propio de Almacenia](rondas/ronda-4-publicidad.md) | Pendiente | — |
+| 4 | [Publicidad: Google + otros proveedores + motor propio de Almacenia + pagar publicidad o premium con puntos](rondas/ronda-4-publicidad.md) | Pendiente (tutoriales e investigación listos) | — |
+| 5 | [Notificaciones de la app: en la app y push, para vendedores, compradores y generales](rondas/ronda-5-notificaciones.md) | Pendiente | — |
 | — | Plan Gold ("casi admin") | Para otra ronda | — |
 
 Forma de trabajo acordada:
@@ -37,7 +38,20 @@ Forma de trabajo acordada:
 >
 > 7) El mapa es la pantalla de inicio de las personas logueadas; la lista de negocios cercanos es para los no logueados; pero eso del lado de compradores. Los vendedores deben tener su tienda como página de inicio. De hecho crear la página de inicio: Nueva venta, manejo de stock (donde se agregan o eliminan o modifican productos y stock), control de usuarios (donde se promueve o quita usuarios de la app como empleados, encargados, el user propietario que le da permisos a los users empleados como cambiar precios, cobrar una venta, cambiar o no foto, etc. permisos que el dueño tiene y que el dueño puede dar o revocar a otros users de la app para que vendan en su/s tienda/s), balance, …
 
-Aclaraciones posteriores del usuario:
+## Pedido del usuario (2026-10-17, textual)
+
+> guarda en memoria la siguiente feat:
+> 1) los vendedores pueden pagar publicidad con puntos. Los compradores pueden pagar plan premium con puntos. Cantidad de puntos para pagar ambas cosas calibrable en panel admin.
+> 2) Haz un tutorial para google adsense ad manager y otro proveedores, y haz investigación para crear nuestro propio motor de avisos (cargar img/gif animado; alta, baja, pausa, rotación, publicidad push)
+> 3) Notificaciones de la app: para vendedores, nuevos pedidos/pedidos cancelados, modificación de pedidos, avisos internos de la app; para compradores: notificaciones de ofertas, descuentos, push de publicidad. Notificaciones generales.
+
+Dónde quedó cada punto:
+- **Punto 1, pagar con puntos:** entra en la ronda 4. Ver "Pagar con puntos" en [`rondas/ronda-4-publicidad.md`](rondas/ronda-4-publicidad.md).
+- **Punto 2, tutoriales:** [`tutoriales/publicidad-google-adsense.md`](tutoriales/publicidad-google-adsense.md), [`tutoriales/publicidad-google-ad-manager.md`](tutoriales/publicidad-google-ad-manager.md) y [`tutoriales/publicidad-otros-proveedores.md`](tutoriales/publicidad-otros-proveedores.md).
+- **Punto 2, investigación del motor propio:** [`investigacion/motor-de-avisos.md`](investigacion/motor-de-avisos.md).
+- **Punto 3, notificaciones:** ronda 5, en [`rondas/ronda-5-notificaciones.md`](rondas/ronda-5-notificaciones.md). La "publicidad push" del punto 2 sale por el canal de notificaciones de esa ronda.
+
+Aclaraciones posteriores del usuario (pedido del 2026-10-16):
 - **Punto 7, lo que seguía a "balance":** la pantalla de inicio es un **menú** que enlaza a cada función o grupo de funciones de la app. El mapa es una de ellas.
 - **Punto 4:** la cámara abre bien, pero **no lee** el código de barras ni el QR, **no puede enfocar** y **no tiene botón para salir o volver**.
 
@@ -169,6 +183,14 @@ Spec: `specs/sdd/20-precios-facturacion.md`.
   - precio de cada plan y cobro (hoy el admin cambia el plan a mano);
   - plan Gold.
 - **Publicidad (ronda 4):**
-  - IDs de Google AdSense/Ad Manager y qué otros proveedores (los configura el usuario);
-  - precio y forma de pago de la publicidad en el mapa.
+  - IDs de Google AdSense/Ad Manager y qué otros proveedores. Los configura el usuario siguiendo los tutoriales; hace falta un dominio público con política de privacidad.
+  - Precio en dinero de la publicidad en el mapa, si además de puntos se va a cobrar.
+  - **Pagar con puntos** (valores iniciales propuestos; todos quedan editables en el admin):
+    - ¿la publicidad se paga por días de campaña, por impresiones o por ambas cosas?
+    - ¿cuánto dura el premium pagado con puntos? Propuesta: 30 días.
+    - ¿los puntos gastados bajan el radio de alcance? Hoy el radio se calcula con los puntos totales. Propuesta: el alcance usa los puntos ganados históricos y el saldo para gastar es aparte.
+    - ¿un empleado puede pagar publicidad de la tienda con sus propios puntos, o solo el dueño?
+- **Notificaciones (ronda 5):**
+  - ¿también por email, o solo dentro de la app y push?
+  - Límite de publicidad push por usuario y por semana. Propuesta: 2 por semana, editable en el admin.
 - **Empleados (ronda 2, resuelta con la lista propuesta):** vender, cobrar, anular, precios, stock, productos, fotos, pedidos, balance, usuarios. Si el usuario quiere otros permisos (por ejemplo, separar "ver" de "editar" el stock), se agregan al enum `permiso_tienda` sin cambiar el modelo.
