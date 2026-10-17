@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api-client";
 import { ETIQUETA_PLAN, MAX_TIENDAS, planSiguiente, type PlanNombre } from "@/lib/planes/limites";
 import { useSession } from "next-auth/react";
+import { useTema } from "@/components/tema/TemaProvider";
 import { PuntosChip } from "@/components/ui/PuntosChip";
 import { useMisTiendas } from "@/lib/hooks/useMisTiendas";
 import { ETIQUETA_ROL, puede, type Permiso } from "@/lib/equipo/permisos";
@@ -74,6 +75,7 @@ function Acceso({
 }
 
 export function MenuInicio() {
+  const { marca } = useTema();
   const { data: session } = useSession();
   const { lista, activa, elegir } = useMisTiendas<TiendaMenu>(true);
   // Tope de tiendas del plan del usuario (20-precios-facturacion.md).
@@ -106,7 +108,7 @@ export function MenuInicio() {
     <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 bg-bg px-5 pb-10 pt-6">
       <header className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-col">
-          <span className="font-display text-[24px] font-bold leading-tight text-primary-dark">Almacenia</span>
+          <span className="font-display text-[24px] font-bold leading-tight text-primary-dark">{marca}</span>
           {nombre && <span className="truncate text-[14px] text-text-2">Hola, {nombre}</span>}
         </div>
         <div className="flex items-center gap-2">

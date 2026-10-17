@@ -10,6 +10,7 @@ import { IconoQr } from "@/components/clientes/CompartirQr";
 import { leerCodigoQr } from "@/lib/clientes/leer-codigo";
 import { EscanerCodigo } from "@/components/scanner/EscanerCodigo";
 import { IconoX } from "@/components/ui/IconoX";
+import { useTema } from "@/components/tema/TemaProvider";
 
 // Punto de venta de mostrador (05-ventas.md): el vendedor arma el ticket con lo que
 // le pide el cliente, lo cobra en el acto o lo deja "por cobrar" hasta que llega la
@@ -134,6 +135,7 @@ export function PuntoDeVenta({
   puedeCobrar?: boolean;
   puedeAnular?: boolean;
 }) {
+  const { marca } = useTema();
   const medios = mediosDePago.length > 0 ? mediosDePago : TODOS_LOS_MEDIOS;
   const [productos, setProductos] = useState<ProductoVendible[]>([]);
   const [cargandoProductos, setCargandoProductos] = useState(true);
@@ -164,7 +166,7 @@ export function PuntoDeVenta({
   function qrEscaneado(texto: string) {
     const codigo = leerCodigoQr(texto);
     if (!codigo) {
-      setErrorCliente("Ese código no es un QR de cliente de Almacenia.");
+      setErrorCliente(`Ese código no es un QR de cliente de ${marca}.`);
       return;
     }
     setEmailCliente(codigo);

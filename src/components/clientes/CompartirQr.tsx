@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { PREFIJO_QR } from "@/lib/clientes/leer-codigo";
+import { useTema } from "@/components/tema/TemaProvider";
 
 // "Compartir mis datos" (01-auth.md): genera un código de 6 dígitos que vale 10
 // minutos y lo muestra como QR, para que el vendedor asocie la venta de mostrador.
@@ -39,6 +40,7 @@ export function CompartirQr() {
   const [ahora, setAhora] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
+  const { colores } = useTema();
 
   const generar = useCallback(async () => {
     setGenerando(true);
@@ -46,13 +48,13 @@ export function CompartirQr() {
     try {
       const nuevo = await apiPost<{ codigo: string; expiraEn: string }>("/api/auth/perfil/codigo");
       setCodigo(nuevo);
-      setQr(await QRCode.toDataURL(`${PREFIJO_QR}${nuevo.codigo}`, { width: 480, margin: 1, color: { dark: "#094f44" } }));
+      setQr(await QRCode.toDataURL(`${PREFIJO_QR}${nuevo.codigo}`, { width: 480, margin: 1, color: { dark: colores.primaryDark } }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo generar el código.");
     } finally {
       setGenerando(false);
     }
-  }, []);
+  }, [colores.primaryDark]);
 
   // Cuenta regresiva mientras el diálogo está abierto.
   useEffect(() => {

@@ -177,7 +177,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
     <div className="relative mx-auto flex min-h-screen max-w-md flex-col bg-bg">
       <div className="flex items-center gap-3 px-5 pb-1 pt-5">
         <Link href={status === "authenticated" ? "/mapa" : "/"} aria-label={status === "authenticated" ? "Volver al mapa" : "Volver al inicio"} className="flex h-8 w-8 items-center justify-center">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#201A15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-text" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
         </Link>
@@ -345,7 +345,7 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
           <button
             onClick={confirmarPedido}
             disabled={enviando}
-            className="flex w-full items-center justify-between rounded-control bg-primary px-5 py-4 text-[15px] font-semibold text-white shadow-[0_4px_12px_rgba(14,107,92,0.25)] disabled:opacity-60"
+            className="flex w-full items-center justify-between rounded-control bg-primary px-5 py-4 text-[15px] font-semibold text-white shadow-cta disabled:opacity-60"
           >
             <span>{enviando ? "Enviando..." : `Confirmar pedido (${cantidadItems} ${cantidadItems === 1 ? "producto" : "productos"})`}</span>
             <span>{formatoARS(total)}</span>

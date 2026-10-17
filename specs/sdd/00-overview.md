@@ -1,4 +1,8 @@
-# Almacenia — SDD (Spec-Driven Development), MVP
+# Permia — SDD (Spec-Driven Development), MVP
+
+Permia es un clon de Almacenia configurable por rubro: una instalación por cliente,
+con el tema de su rubro ([`21-temas.md`](21-temas.md)). El resto de las specs se
+heredan de Almacenia tal cual.
 
 Documento raíz del SDD del proyecto. Fija las convenciones comunes a todos los módulos
 para no repetirlas en cada spec. Las specs de módulo (`01-auth.md` en adelante) asumen
@@ -30,6 +34,8 @@ Módulos agregados después del MVP inicial:
     fotos libres en la web, aprobación por admin/testers, misma UI para todos).
 16. [`17-rubros-categorias.md`](17-rubros-categorias.md) — rubros de negocio y
     categorías de producto que mantiene el admin.
+17. [`21-temas.md`](21-temas.md) — tema de la instalación según su rubro (bebidas,
+    vinos, vivero, almacén): paleta, tipografía, ícono y textos.
 
 Todavía fuera de alcance (a especificar después): promociones, balance/reportes,
 entrega a domicilio (delivery), chat in-app, y las fases 2 a 6 del itinerario.

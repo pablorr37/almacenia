@@ -4,9 +4,9 @@ type Variant = "primary" | "accent" | "outline";
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    "bg-primary text-white shadow-[0_4px_12px_rgba(14,107,92,0.25)] hover:bg-primary-dark",
+    "bg-primary text-white shadow-cta hover:bg-primary-dark",
   accent:
-    "bg-accent text-white shadow-[0_4px_12px_rgba(226,114,58,0.25)] hover:bg-accent-dark",
+    "bg-accent text-white shadow-cta-accent hover:bg-accent-dark",
   outline: "bg-surface text-text border border-border hover:bg-bg",
 };
 

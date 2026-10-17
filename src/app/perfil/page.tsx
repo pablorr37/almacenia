@@ -88,7 +88,7 @@ export default function PerfilPage() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-5 px-6 py-8">
       <div className="flex items-center gap-3">
         <Link href="/" aria-label="Volver al inicio" className="press flex h-11 w-11 items-center justify-center rounded-pill">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#201A15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-text" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
         </Link>

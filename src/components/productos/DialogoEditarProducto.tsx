@@ -137,7 +137,7 @@ export function DialogoEditarProducto<T extends ProductoEditable>({
               checked={disponible}
               onChange={(e) => setDisponible(e.target.checked)}
               disabled={!puedeProductos}
-              className="h-5 w-5 accent-[#0e6b5c]"
+              className="h-5 w-5 accent-primary"
             />
             Disponible para vender
           </label>

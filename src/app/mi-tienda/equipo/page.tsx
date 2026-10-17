@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { useMisTiendas } from "@/lib/hooks/useMisTiendas";
+import { useTema } from "@/components/tema/TemaProvider";
 import { EscanerCodigo } from "@/components/scanner/EscanerCodigo";
 import {
   ETIQUETA_PERMISO,
@@ -55,7 +56,7 @@ function SelectorPermisos({
               checked={valor.includes(p)}
               disabled={!habilitado}
               onChange={(e) => onChange(e.target.checked ? [...valor, p] : valor.filter((x) => x !== p))}
-              className="h-4 w-4 accent-[#0e6b5c]"
+              className="h-4 w-4 accent-primary"
             />
             {ETIQUETA_PERMISO[p]}
           </label>
@@ -183,6 +184,7 @@ function FilaMiembro({
 }
 
 function Equipo() {
+  const { marca } = useTema();
   const { status, data: session } = useSession();
   const params = useSearchParams();
   const { lista, activa } = useMisTiendas<TiendaEquipo>(status === "authenticated", params.get("tienda"));
@@ -271,7 +273,7 @@ function Equipo() {
       <div className="flex flex-col gap-0.5">
         <h1 className="font-display text-[22px] font-bold text-primary-dark">Usuarios</h1>
         <p className="text-[13px] text-text-2">
-          Equipo de <strong>{activa.tienda.nombre}</strong>. Quien sumes tiene que tener cuenta en Almacenia.
+          Equipo de <strong>{activa.tienda.nombre}</strong>. Quien sumes tiene que tener cuenta en {marca}.
         </p>
       </div>
 

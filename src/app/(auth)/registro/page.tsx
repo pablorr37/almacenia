@@ -80,7 +80,7 @@ export default function RegistroPage() {
           required
         />
 
-        <div className="rounded-control border border-[#c3e6db] bg-primary-soft p-3.5 text-[13px] leading-relaxed text-text-2">
+        <div className="rounded-control border border-primary/25 bg-primary-soft p-3.5 text-[13px] leading-relaxed text-text-2">
           Toda cuenta nace lista para comprar. Si más adelante cargás tu tienda, se
           activa también el modo vendedor — no hace falta elegir ahora.
         </div>

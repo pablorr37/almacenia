@@ -1,8 +1,11 @@
-# Almacenia
+# Permia
 
-Gestión de almacenes, kioscos y verdulerías. Dos features: **vendedor** (tienda,
-catálogo, pedidos, gestión interna) y **comprador** (mapa, pedidos, itinerario de
-compra). Stack: Next.js (TypeScript, app router), PostgreSQL + PostGIS, Prisma,
+Clon de Almacenia configurable por rubro, que se vende **una instalación (VPS) por
+cliente**: distribuidora de bebidas, vinoteca, vivero, almacén… El rubro
+(`PERMIA_RUBRO`) define el tema de todo el frontend: paleta, tipografía, radios,
+ícono y textos (`specs/sdd/21-temas.md`). Mismas features que Almacenia: **vendedor**
+(tienda, catálogo, pedidos, gestión interna) y **comprador** (mapa, pedidos,
+itinerario de compra). Stack: Next.js (TypeScript, app router), PostgreSQL + PostGIS, Prisma,
 Leaflet/MapLibre. Deploy en Coolify.
 
 ## Pendientes y decisiones: `docs/memoria.md`
@@ -33,6 +36,16 @@ Para cada función o endpoint a implementar:
 4. Correr `npm test` y confirmar verde antes de dar la función por terminada.
 5. Si la función accede a DB, usar Prisma (`prisma/schema.prisma`) — no inventar otro
    patrón de acceso a datos.
+
+## Temas: nada de colores ni marca fijos en los componentes
+
+- Colores: utilidades del tema (`bg-primary`, `text-text`, `accent-primary`,
+  `stroke-text`, `shadow-cta`…). Si una librería necesita el color como string
+  (Leaflet, QR), `useTema().colores`. Nunca un hex de marca en un componente.
+- Marca y textos de portada: `useTema()` (`marca`, `eslogan`, `descripcion`). Nunca
+  "Almacenia" ni "Permia" escrito en la UI.
+- Ícono de marca: `<IconoMarca />`.
+- Un tema nuevo se agrega en `src/lib/tema/tema.ts` (ver `docs/deploy-vps-cliente.md`).
 
 ## Ubicación del código
 

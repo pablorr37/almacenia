@@ -1,6 +1,16 @@
-# Almacenia
+# Permia
 
-Gestión de almacenes, kioscos y verdulerías. Dos features principales:
+Clon de [Almacenia](https://github.com/pablorr37/almacenia) configurable por rubro.
+Se vende **una instalación por cliente**, cada una en su VPS, todas desde la misma
+imagen Docker. El rubro de la instalación (`PERMIA_RUBRO=bebidas|vinos|vivero|almacen`)
+cambia todo el estilo del frontend: paleta, tipografía, radios, ícono y textos
+(`specs/sdd/21-temas.md`).
+
+![Los cuatro temas](docs/temas.png)
+
+Levantar un cliente nuevo: [`docs/deploy-vps-cliente.md`](docs/deploy-vps-cliente.md).
+
+Lo que hereda de Almacenia (gestión de almacenes, kioscos y verdulerías). Dos features principales:
 
 - **Vendedor**: registro de tienda por geolocalización, catálogo de productos/precios/
   promociones, gestión interna (ventas, bajas, pedidos, balance), recepción de pedidos

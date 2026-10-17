@@ -1,12 +1,14 @@
 @import "tailwindcss";
 
 @theme {
-  /* Paleta — ver Artifact "Almacenia — Design" */
+  /* Valores por defecto = tema "almacen". El layout los pisa con el tema del rubro
+     de la instalación (style inline en <html>, specs/sdd/21-temas.md): no editar
+     colores acá para cambiar un tema, sino src/lib/tema/tema.ts. */
   --color-primary: #0e6b5c;
   --color-primary-dark: #094f44;
   --color-primary-soft: #d8f3ea;
-  --color-accent: #e2723a;
-  --color-accent-dark: #b85423;
+  --color-accent: #c2561f;
+  --color-accent-dark: #9a4219;
   --color-text: #201a15;
   --color-text-2: #6b6058;
   --color-bg: #fbf8f3;
@@ -45,6 +47,7 @@
   --shadow-card: 0 1px 3px rgb(32 26 21 / 0.05);
   --shadow-float: 0 6px 20px rgb(32 26 21 / 0.14), 0 1px 3px rgb(32 26 21 / 0.08);
   --shadow-cta: 0 4px 12px rgb(14 107 92 / 0.25);
+  --shadow-cta-accent: 0 4px 12px rgb(194 86 31 / 0.25);
 
   /* Movimiento — ver docs/auditoria-ui-ux.md §4 (M3 Motion + HIG) */
   --dur-instant: 100ms;
@@ -164,6 +167,20 @@
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
+}
+
+/* --- Ajustes por tema que no son variables (data-tema en <html>) --- */
+/* Sin capa, a propósito: le gana a las utilidades tracking-* de los títulos. No
+   tocar font-size acá (pisaría los text-[..px] de cada título). */
+/* Serif de vinos: sin el tracking negativo pensado para la grotesca; Cormorant es
+   de ojo chico, font-size-adjust la lleva al alto de x de las otras fuentes. */
+[data-tema="vinos"] .font-display {
+  letter-spacing: 0.005em;
+  font-size-adjust: 0.5;
+}
+/* Unbounded es muy ancha: se compensa para que los nombres largos no corten. */
+[data-tema="bebidas"] .font-display {
+  letter-spacing: -0.03em;
 }
 
 /* --- Mapa: pines de tienda (auditoría §6.1) --- */

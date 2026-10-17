@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMisTiendas, guardarTiendaActiva } from "@/lib/hooks/useMisTiendas";
 import { ETIQUETA_ROL, puede, type Permiso } from "@/lib/equipo/permisos";
 import { Button } from "@/components/ui/Button";
+import { useTema } from "@/components/tema/TemaProvider";
 import { Input } from "@/components/ui/Input";
 import { EstadoPedidoBadge } from "@/components/ui/EstadoPedidoBadge";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
@@ -167,6 +168,7 @@ export default function MiTiendaPage() {
 }
 
 function MiTienda() {
+  const { marca } = useTema();
   const { status } = useSession();
   const router = useRouter();
   const params = useSearchParams();
@@ -611,7 +613,7 @@ function MiTienda() {
                   role="switch"
                   checked={abierto24hsForm}
                   onChange={(e) => setAbierto24hsForm(e.target.checked)}
-                  className="h-5 w-5 accent-[#0e6b5c]"
+                  className="h-5 w-5 accent-primary"
                 />
               </label>
               <div className={abierto24hsForm ? "hidden" : ""}>
@@ -674,9 +676,9 @@ function MiTienda() {
                   type="checkbox"
                   checked={porcentajeEquipoForm === null}
                   onChange={(e) => setPorcentajeEquipoForm(e.target.checked ? null : 50)}
-                  className="h-4 w-4 accent-[#0e6b5c]"
+                  className="h-4 w-4 accent-primary"
                 />
-                Usar el valor por defecto de Almacenia
+                Usar el valor por defecto de {marca}
               </label>
               {porcentajeEquipoForm !== null && (
                 <>
@@ -688,7 +690,7 @@ function MiTienda() {
                     value={porcentajeEquipoForm}
                     onChange={(e) => setPorcentajeEquipoForm(Number(e.target.value))}
                     aria-label="Porcentaje de los puntos para quien vende"
-                    className="w-full accent-[#0e6b5c]"
+                    className="w-full accent-primary"
                   />
                   <p className="text-[13px] font-semibold text-text" data-testid="reparto-puntos">
                     Quien vende se lleva {porcentajeEquipoForm} %, vos {100 - porcentajeEquipoForm} %
@@ -734,7 +736,7 @@ function MiTienda() {
               </span>
               {tienda.plan === "free" ? (
                 <span className="text-[12px] text-text-2">
-                  Fotos del banco de Almacenia. Premium: fotos propias y prioridad en el mapa.
+                  Fotos del banco de {marca}. Premium: fotos propias y prioridad en el mapa.
                 </span>
               ) : (
                 <span className="text-[12px] text-text-2">
@@ -828,7 +830,7 @@ function MiTienda() {
                   aria-label="Escanear código de barras"
                   className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-control border border-border bg-surface"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#201A15" strokeWidth="1.6" strokeLinecap="round">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-text" strokeWidth="1.6" strokeLinecap="round">
                     <path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M6 8v8M9 8v8M12 8v8M16 8v8M19 8v8" />
                   </svg>
                 </button>

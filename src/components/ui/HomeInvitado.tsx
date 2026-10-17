@@ -7,7 +7,8 @@ import { apiGet, ApiError } from "@/lib/api-client";
 import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
 import { useAhora } from "@/lib/hooks/useAhora";
 import { EstadoAperturaPill } from "./EstadoAperturaPill";
-import { IconoTienda } from "./IconoTienda";
+import { IconoMarca } from "@/components/tema/IconoMarca";
+import { useTema } from "@/components/tema/TemaProvider";
 
 // Centro de San Juan capital — solo para mostrar una vista previa de tiendas
 // sin pedirle permiso de geolocalización a alguien que todavía no inició sesión
@@ -32,6 +33,7 @@ const d = (ms: number) => ({ animationDelay: `${ms}ms` });
 // contenido de lectura sube en el sentido de lectura, las tiendas entran
 // escalonadas y la barra de acción sube desde el borde inferior.
 export function HomeInvitado() {
+  const tema = useTema();
   const [tiendas, setTiendas] = useState<Tienda[] | null>(null);
   const ahora = useAhora();
 
@@ -58,23 +60,23 @@ export function HomeInvitado() {
             style={d(0)}
             aria-hidden="true"
           >
-            <IconoTienda className="h-6 w-6" />
+            <IconoMarca className="h-6 w-6" />
           </span>
           <span
             className="animate-[fade-in-down_520ms_var(--ease-decelerate)_both] font-display text-[34px] font-extrabold leading-none tracking-[-0.02em] text-primary-dark"
             style={d(60)}
           >
-            Almacenia
+            {tema.marca}
           </span>
         </div>
         <h1
           className="animate-fade-up font-display text-[28px] font-bold leading-[1.1] tracking-[-0.01em] text-text"
           style={d(180)}
         >
-          Lo del barrio, a una cuadra.
+          {tema.eslogan}
         </h1>
         <p className="animate-fade-up text-[15px] leading-relaxed text-text-2" style={d(240)}>
-          Encontrá almacenes, kioscos y verdulerías cerca tuyo, compará precios y armá tu recorrido de compras.
+          {tema.descripcion}
         </p>
       </header>
 
@@ -97,7 +99,7 @@ export function HomeInvitado() {
             }`}
           >
             <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-control bg-primary-soft text-primary-dark">
-              <IconoTienda />
+              <IconoMarca />
             </div>
             <div className="flex min-w-0 flex-col gap-1">
               <div className="truncate text-[15px] font-semibold text-text">{t.nombre}</div>

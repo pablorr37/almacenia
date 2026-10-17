@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap } from 
 import { useEffect } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { useTema } from "@/components/tema/TemaProvider";
 
 type Parada = { orden: number; tienda: { id: string; nombre: string; lat: number; lon: number } };
 
@@ -26,6 +27,7 @@ function Encuadre({ puntos }: { puntos: Array<[number, number]> }) {
 
 // Recorrido del plan: origen → paradas numeradas en orden (15-itinerario.md).
 export function MapaPlan({ origen, paradas }: { origen: { lat: number; lon: number }; paradas: Parada[] }) {
+  const { colores } = useTema();
   const puntos: Array<[number, number]> = [[origen.lat, origen.lon], ...paradas.map((p) => [p.tienda.lat, p.tienda.lon] as [number, number])];
   return (
     <MapContainer center={[origen.lat, origen.lon]} zoom={14} scrollWheelZoom={false} style={{ width: "100%", height: "100%" }}>
@@ -34,8 +36,8 @@ export function MapaPlan({ origen, paradas }: { origen: { lat: number; lon: numb
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <Encuadre puntos={puntos} />
-      <Polyline positions={puntos} pathOptions={{ color: "#0E6B5C", weight: 4, dashArray: "8 8", opacity: 0.8 }} />
-      <CircleMarker center={[origen.lat, origen.lon]} radius={8} pathOptions={{ color: "#fff", weight: 3, fillColor: "#E2723A", fillOpacity: 1 }} />
+      <Polyline positions={puntos} pathOptions={{ color: colores.primary, weight: 4, dashArray: "8 8", opacity: 0.8 }} />
+      <CircleMarker center={[origen.lat, origen.lon]} radius={8} pathOptions={{ color: "#fff", weight: 3, fillColor: colores.accent, fillOpacity: 1 }} />
       {paradas.map((p) => (
         <Marker key={p.tienda.id} position={[p.tienda.lat, p.tienda.lon]} icon={numero(p.orden)} title={`${p.orden}. ${p.tienda.nombre}`} />
       ))}

@@ -365,7 +365,7 @@ out center tags;`;
   try {
     respuesta = await hacerFetch(OVERPASS_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Almacenia/1.0 (seed)" },
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Permia/1.0 (seed)" },
       body: `data=${encodeURIComponent(consulta)}`,
       signal: AbortSignal.timeout(60_000),
     });

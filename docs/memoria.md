@@ -1,5 +1,55 @@
 # Memoria del proyecto: pedidos, decisiones y pendientes
 
+## Permia (clon de Almacenia por rubro)
+
+### Pedido del usuario (2026-10-17, dictado, resumido)
+
+> Tomar Almacenia como origen de un clon universal y configurable, "Permia", para
+> negocios como una distribuidora de bebidas. Cambiando la categoría del negocio
+> cambia toda la UI y el diseño: moderno y joven para bebidas, sobrio y elegante
+> para vinos, vibrante y verde para viveros. Es un producto nuevo que se levanta en
+> un VPS por cliente, desde una imagen, configurado como Almacenia, y se le vende.
+
+### Rondas de Permia
+
+| Ronda | Alcance | Estado | PR |
+| --- | --- | --- | --- |
+| P1 | Clon + tema por rubro (`specs/sdd/21-temas.md`): 4 temas, marca y textos por variables, guía de VPS por cliente | Hecha | — |
+| P2 | Pendiente de definir (ver preguntas abiertas de Permia) | — | — |
+
+### Decisiones de Permia
+
+- **Un repo propio** (`pablorr37/permia`), clonado con la historia de Almacenia.
+- **Rubro por variable de entorno** (`PERMIA_RUBRO`, más `PERMIA_NOMBRE`,
+  `PERMIA_ESLOGAN`, `PERMIA_DESCRIPCION`), leída en runtime: una sola imagen Docker
+  para todos los clientes. Rubro mal escrito → tema `almacen` + aviso en el log.
+- **Temas**: `almacen`, `bebidas`, `vinos`, `vivero`. Cada uno con paleta,
+  tipografía, radios, ícono de marca (tienda/botella/copa/planta) y textos. Todos
+  cumplen contraste 4,5:1 (lo verifican los tests).
+- El naranja de `almacen` se oscureció (`#e2723a` → `#c2561f`) porque con texto
+  blanco no llegaba a 4,5:1.
+- Las features y el modelo de datos son los de Almacenia, sin cambios.
+
+### Preguntas abiertas de Permia
+
+- **¿Marketplace o tienda única?** Una distribuidora es un solo negocio; Almacenia
+  es un marketplace de muchas tiendas con mapa. ¿Cada instalación de Permia muestra
+  solo la tienda del cliente (sin mapa de "tiendas cercanas", con sucursales), o
+  queda multi-tienda?
+- **Datos de demo por rubro**: seed de productos y categorías de bebidas, vinos y
+  plantas para mostrarle a cada cliente (hoy el seed es el de almacenes de San Juan).
+- **Región**: el radio de alcance y la vitrina están centrados en San Juan.
+  ¿Configurable por cliente?
+- **Selector de tema en el panel admin**, sin tocar variables.
+- **Logo propio** del cliente (hoy: ícono del rubro + nombre).
+- **Estilo del vivero desde las webs de referencia** (`viverolaslilas-a` y `-b` en
+  domo.firemandeveloper.com): pendiente. El dominio no resolvía en DNS público
+  desde la sesión de Claude, así que no se pudo analizar.
+
+---
+
+# Almacenia (heredado)
+
 Lista viva. **Antes de empezar una tarea, leé este archivo. Al terminarla, actualizalo**:
 estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
 [`docs/rondas/`](rondas/).

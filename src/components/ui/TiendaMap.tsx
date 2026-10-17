@@ -8,7 +8,8 @@ import "leaflet/dist/leaflet.css";
 import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
 import { useAhora } from "@/lib/hooks/useAhora";
 import { EstadoAperturaPill } from "./EstadoAperturaPill";
-import { IconoTienda, PATH_ICONO_TIENDA } from "./IconoTienda";
+import { IconoMarca, pathIconoMarca } from "@/components/tema/IconoMarca";
+import { useTema } from "@/components/tema/TemaProvider";
 
 export type TiendaMapa = {
   id: string;
@@ -23,9 +24,10 @@ export type TiendaMapa = {
   verificada: boolean;
 };
 
-// Pin propio con ícono de tienda (ver docs/auditoria-ui-ux.md §6.1): gota teal si
-// está abierta u horario desconocido, gris si está cerrada. Área de toque 44×52.
-function iconoPin(cerrada: boolean, indice: number): L.DivIcon {
+// Pin propio con el ícono de marca del tema (ver docs/auditoria-ui-ux.md §6.1): gota
+// del color primario si está abierta u horario desconocido, gris si está cerrada.
+// Área de toque 44×52.
+function iconoPin(cerrada: boolean, indice: number, pathIcono: string): L.DivIcon {
   return L.divIcon({
     className: `pin-tienda${cerrada ? " pin-tienda--cerrada" : ""}`,
     iconSize: [44, 52],
@@ -36,7 +38,7 @@ function iconoPin(cerrada: boolean, indice: number): L.DivIcon {
         <svg viewBox="0 0 36 44" width="36" height="44" aria-hidden="true">
           <path class="pin-tienda__gota" d="M18 43c-1-.9-15-13.7-15-25.5C3 8.8 9.7 2 18 2s15 6.8 15 15.5C33 29.3 19 42.1 18 43z" />
           <g transform="translate(8.5 7.5) scale(0.79)" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="${PATH_ICONO_TIENDA}" />
+            <path d="${pathIcono}" />
           </g>
         </svg>
       </span>`,
@@ -98,13 +100,14 @@ export function TiendaMap({
   alcanceKm?: number | null;
 }) {
   const ahora = useAhora();
+  const { colores, icono: iconoMarca } = useTema();
   const estados = useMemo(() => tiendas.map((t) => estadoApertura(t.horarios, ahora, { abierto24hs: t.abierto24hs })), [tiendas, ahora]);
   // Los íconos dependen solo de abierta/cerrada: recrearlos en cada tick del reloj
   // re-dispararía la animación de entrada de los pines.
   const firmaCerradas = estados.map((e) => (e.estado === "cerrada" ? "1" : "0")).join("");
   const iconos = useMemo(
-    () => firmaCerradas.split("").map((c, i) => iconoPin(c === "1", i)),
-    [firmaCerradas],
+    () => firmaCerradas.split("").map((c, i) => iconoPin(c === "1", i, pathIconoMarca(iconoMarca))),
+    [firmaCerradas, iconoMarca],
   );
   const conEstado = tiendas.map((t, i) => ({ t, estado: estados[i], icono: iconos[i] }));
 
@@ -126,13 +129,13 @@ export function TiendaMap({
           center={[origen.lat, origen.lon]}
           radius={alcanceKm * 1000}
           interactive={false}
-          pathOptions={{ color: "#0e6b5c", weight: 2, dashArray: "6 6", fillColor: "#0e6b5c", fillOpacity: 0.08 }}
+          pathOptions={{ color: colores.primary, weight: 2, dashArray: "6 6", fillColor: colores.primary, fillOpacity: 0.08 }}
         />
       )}
       <CircleMarker
         center={[origen.lat, origen.lon]}
         radius={8}
-        pathOptions={{ color: "#fff", weight: 3, fillColor: "#E2723A", fillOpacity: 1 }}
+        pathOptions={{ color: "#fff", weight: 3, fillColor: colores.accent, fillOpacity: 1 }}
       />
       {conEstado.map(({ t, estado, icono }) => (
         <Marker
@@ -156,7 +159,7 @@ export function TiendaMap({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={t.imagenUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <IconoTienda className="h-7 w-7" />
+                  <IconoMarca className="h-7 w-7" />
                 )}
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-1">

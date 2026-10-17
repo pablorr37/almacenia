@@ -1,4 +1,7 @@
-# Deploy de Almacenia en Coolify
+# Deploy de Permia en Coolify
+
+> Para levantar **un cliente nuevo en su propio VPS** seguí primero
+> [`deploy-vps-cliente.md`](deploy-vps-cliente.md); esta guía es el detalle de cada paso.
 
 Tutorial paso a paso para llevar la app a producción en un server con Coolify.
 Cubre: base de datos Postgres+PostGIS, la app Next.js (vía `Dockerfile`), variables
@@ -173,6 +176,9 @@ En la sección de Environment Variables del recurso de la app:
 | `S3_BUCKET` | Nombre del bucket (ej. `almacenia`). |
 | `S3_REGION` | `us-east-1` sirve para MinIO/la mayoría de proveedores S3-compatibles. |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | Credenciales del recurso S3/MinIO. |
+| `PERMIA_RUBRO` | Rubro del cliente: `almacen`, `bebidas`, `vinos` o `vivero` (define el tema, `specs/sdd/21-temas.md`). |
+| `PERMIA_NOMBRE` | Opcional: nombre comercial del cliente (ej. `Distribuidora Don Pepe`). |
+| `PERMIA_ESLOGAN` / `PERMIA_DESCRIPCION` | Opcionales: textos de la portada. |
 
 No hace falta `NEXTAUTH_URL`: `trustHost: true` en `src/auth.ts` ya cubre correr
 detrás del proxy de Coolify. `ALLOWED_ORIGIN`/`MAP_TILES_API_KEY` de `.env.example`

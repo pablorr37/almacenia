@@ -165,7 +165,7 @@ export async function buscarWeb(
   let respuesta: Response;
   try {
     respuesta = await hacerFetch(url.toString(), {
-      headers: { Accept: "application/json", "User-Agent": "Almacenia/1.0 (banco de fotos)" },
+      headers: { Accept: "application/json", "User-Agent": "Permia/1.0 (banco de fotos)" },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch {

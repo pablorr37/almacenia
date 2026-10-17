@@ -1,34 +1,41 @@
-import type { Metadata } from "next";
-import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 import "./globals.css";
 import { Providers } from "./providers";
+import { CLASE_FUENTE } from "./fuentes";
+import { resolverTema, variablesCss } from "@/lib/tema/tema";
 
-// Tipografía elegida en la auditoría UI/UX (docs/auditoria-ui-ux.md §3):
-// Bricolage Grotesque (display, con ejes opsz/wdth para nombres largos) +
-// Plus Jakarta Sans (UI).
-const bricolage = Bricolage_Grotesque({
-  variable: "--font-bricolage",
-  subsets: ["latin", "latin-ext"],
-  axes: ["opsz", "wdth"],
-  display: "swap",
-});
+// Tema por rubro (specs/sdd/21-temas.md): se lee de PERMIA_* en runtime, así la
+// misma imagen Docker sirve a cada cliente con su estilo.
+let advertido = false;
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-  variable: "--font-plus-jakarta",
-  subsets: ["latin", "latin-ext"],
-  display: "swap",
-});
+async function temaDeLaInstalacion() {
+  await connection();
+  const { tema, advertencia } = resolverTema(process.env);
+  if (advertencia && !advertido) {
+    advertido = true;
+    console.warn(`[tema] ${advertencia}`);
+  }
+  return tema;
+}
 
-export const metadata: Metadata = {
-  title: "Almacenia",
-  description: "Comprá y vendé en los almacenes, kioscos y verdulerías de tu barrio.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const tema = await temaDeLaInstalacion();
+  return { title: tema.marca, description: tema.descripcion };
+}
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export async function generateViewport(): Promise<Viewport> {
+  const tema = await temaDeLaInstalacion();
+  return { themeColor: tema.colores.primary };
+}
+
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const tema = await temaDeLaInstalacion();
+  const fuentes = `${CLASE_FUENTE[tema.fuentes.display]} ${CLASE_FUENTE[tema.fuentes.sans]}`;
   return (
-    <html lang="es" className={`${bricolage.variable} ${plusJakartaSans.variable}`}>
+    <html lang="es" data-tema={tema.rubro} className={fuentes} style={variablesCss(tema) as React.CSSProperties}>
       <body>
-        <Providers>{children}</Providers>
+        <Providers tema={tema}>{children}</Providers>
       </body>
     </html>
   );
