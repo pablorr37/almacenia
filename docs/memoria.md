@@ -42,9 +42,11 @@
   ¿Configurable por cliente?
 - **Selector de tema en el panel admin**, sin tocar variables.
 - **Logo propio** del cliente (hoy: ícono del rubro + nombre).
-- **Estilo del vivero desde las webs de referencia** (`viverolaslilas-a` y `-b` en
-  domo.firemandeveloper.com): pendiente. El dominio no resolvía en DNS público
-  desde la sesión de Claude, así que no se pudo analizar.
+- **Estilo del vivero desde las webs de referencia** (`viverolaslilas-a` y `-b` de
+  Domo): guardado en [`design_vivero.md`](design_vivero.md) (tokens, tipografía,
+  componentes y SVG textuales de la A; de la B solo las fuentes, falta su HTML).
+  Falta decidir si reemplaza al tema `vivero` actual o se suma como variante, y si
+  se trae la mecánica "Arme su lista" (ver §7 del documento).
 
 ---
 
