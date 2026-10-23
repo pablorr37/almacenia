@@ -102,8 +102,11 @@ export function CamposEntradaCatalogo({
             <span className="font-semibold" data-testid="categoria-elegida">
               {valor.categoria.nombre}
               {valor.categoria.nueva && (
-                <span className="ml-2 rounded-pill bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary-dark">
-                  nueva: se crea al guardar
+                <span
+                  className="ml-2 whitespace-nowrap rounded-pill bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary-dark"
+                  title="Se crea al guardar el producto"
+                >
+                  nueva
                 </span>
               )}
             </span>
