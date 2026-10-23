@@ -1,3 +1,4 @@
+import { notificarOferta } from "@/lib/notificaciones/disparadores";
 import { prisma } from "@/lib/prisma";
 import { exigirPermiso, PERMISOS, type Permiso } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
@@ -503,6 +504,11 @@ export async function actualizarProducto(
 
   if (input.imagenUrl) {
     await sinRomper(() => otorgarPorFotoCargada(vendedor.id, producto.tiendaId, producto.catalogoId));
+  }
+  // 22-notificaciones.md: oferta nueva o cambiada.
+  const ofertaAntes = actual.precioOferta === null ? null : Number(actual.precioOferta);
+  if (input.precioOferta !== undefined && input.precioOferta !== null && input.precioOferta !== ofertaAntes) {
+    await sinRomper(() => notificarOferta(producto.id));
   }
 
   return aProducto(producto);

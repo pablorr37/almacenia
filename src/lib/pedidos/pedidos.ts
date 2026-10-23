@@ -6,6 +6,8 @@ import { validarCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { crearVentaDesdePedido } from "@/lib/ventas/ventas";
 import type { Usuario } from "@/lib/auth/auth";
 import type { Prisma, Producto as ProductoDb } from "@/generated-prisma/client";
+import { sinRomper } from "@/lib/gamificacion/gamificacion";
+import { notificarCambioPedido, notificarPedidoNuevo } from "@/lib/notificaciones/disparadores";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAXIMO = 100;
@@ -154,6 +156,8 @@ export async function crearPedido(comprador: Usuario, input: CrearPedidoInput): 
     include: INCLUDE_PEDIDO,
   });
 
+  // 22-notificaciones.md: al dueño y a quien atiende pedidos.
+  await sinRomper(() => notificarPedidoNuevo(pedido.id));
   return aPedido(pedido);
 }
 
@@ -217,6 +221,7 @@ export async function transicionarPedido(
     include: INCLUDE_PEDIDO,
   });
 
+  await sinRomper(() => notificarCambioPedido(pedidoId, usuario.id, accion));
   return aPedido(actualizado);
 }
 

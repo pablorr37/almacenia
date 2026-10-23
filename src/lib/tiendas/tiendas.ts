@@ -8,6 +8,8 @@ import type { Plan, EstadoVerificacion } from "@/generated-prisma/client";
 import { SAN_JUAN } from "@/lib/alcance/alcance";
 import { MAX_TIENDAS } from "@/lib/planes/limites";
 import { normalizarCuit } from "./cuit";
+import { actualizarDiasCampanias } from "@/lib/publicidad/dias";
+import { diaLocal } from "@/lib/gamificacion/gamificacion";
 import { CONDICIONES_IVA, type CondicionIva } from "@/lib/precios/precios";
 
 const RADIO_KM_DEFAULT = 5;
@@ -318,8 +320,9 @@ export interface BuscarTiendasCercanasInput {
 }
 
 export async function buscarTiendasCercanas(
-  input: BuscarTiendasCercanasInput
-): Promise<Array<Tienda & { distanciaKm: number }>> {
+  input: BuscarTiendasCercanasInput,
+  ahora = new Date()
+): Promise<Array<Tienda & { distanciaKm: number; destacada: boolean }>> {
   const radioPedido = input.radioKm ?? (typeof input.alcanceKm === "number" ? input.alcanceKm : RADIO_KM_DEFAULT);
   if (typeof radioPedido !== "number" || Number.isNaN(radioPedido) || radioPedido <= 0 || radioPedido > RADIO_KM_MAXIMO) {
     throw new AppError("RADIO_INVALIDO", `El radio debe ser mayor a 0 y hasta ${RADIO_KM_MAXIMO} km.`);
@@ -334,16 +337,24 @@ export async function buscarTiendasCercanas(
       ? Prisma.sql`ubicacion::geometry && ST_MakeEnvelope(${SAN_JUAN.lonMin}, ${SAN_JUAN.latMin}, ${SAN_JUAN.lonMax}, ${SAN_JUAN.latMax}, 4326)`
       : Prisma.sql`ST_DWithin(ubicacion, ${origen}, ${radioKm * 1000})`;
 
-  const filas = await prisma.$queryRaw<Array<FilaTienda & { distancia_km: number }>>`
+  // 21-publicidad.md: tienda destacada = campaña pin_mapa en curso hoy.
+  await actualizarDiasCampanias(ahora);
+  const hoy = diaLocal(ahora);
+  const filas = await prisma.$queryRaw<Array<FilaTienda & { distancia_km: number; destacada: boolean }>>`
     SELECT
       ${COLUMNAS_TIENDA},
-      ST_Distance(ubicacion, ${origen}) / 1000 AS distancia_km
+      ST_Distance(ubicacion, ${origen}) / 1000 AS distancia_km,
+      EXISTS (
+        SELECT 1 FROM campanias_aviso c
+        WHERE c.tienda_id = tiendas.id AND c.espacio = 'pin_mapa' AND c.estado = 'activa'
+          AND c.desde <= ${hoy}::date AND c.ultimo_dia_consumido = ${hoy}::date
+      ) AS destacada
     FROM tiendas
     WHERE activa = true
       -- 01-auth.md: las tiendas de cuentas pausadas/baneadas no se muestran.
       AND vendedor_id IN (SELECT id FROM usuarios WHERE estado_cuenta = 'activa')
       AND ${filtroZona}
-    ORDER BY (plan IN ('premium', 'plata')) DESC, distancia_km ASC
+    ORDER BY destacada DESC, (plan IN ('premium', 'plata')) DESC, distancia_km ASC
   `;
 
   const horariosPorTienda = await obtenerHorariosPorTiendas(filas.map((f) => f.id));
@@ -351,6 +362,7 @@ export async function buscarTiendasCercanas(
   return filas.map((fila) => ({
     ...aTienda(fila, horariosPorTienda.get(fila.id) ?? []),
     distanciaKm: fila.distancia_km,
+    destacada: fila.destacada,
   }));
 }
 
