@@ -28,12 +28,17 @@ describe("POST /api/catalogo", () => {
     expect(await res.json()).toEqual({ data: { id: "c1" }, creado: true });
     expect(sumarAlCatalogo).toHaveBeenCalledWith(u, {
       categoriaId: "cat",
+      categoriaNueva: undefined,
       marca: "Branca",
       variante: undefined,
       contenido: 750,
       unidadContenido: "ml",
       unidad: "unidad",
     });
+
+    // 17-rubros-categorias.md: categoría nueva (premium o mayor).
+    await POST(req({ categoriaNueva: "Hongos", variante: "secos" }));
+    expect(sumarAlCatalogo).toHaveBeenLastCalledWith(u, expect.objectContaining({ categoriaNueva: "Hongos", variante: "secos" }));
 
     vi.mocked(sumarAlCatalogo).mockResolvedValue({ producto: { id: "c1" } as never, creado: false });
     expect((await POST(req({ nombre: "Fernet" }))).status).toBe(200);

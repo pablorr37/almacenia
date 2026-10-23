@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirPermiso, PERMISOS, type Permiso } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
-import { crearProductoNuevoEnCatalogo, type NuevaEntradaCatalogo } from "@/lib/catalogo/catalogo";
+import { crearProductoNuevoEnCatalogo, conCategoriaDeUsuario, type NuevaEntradaCatalogo } from "@/lib/catalogo/catalogo";
 import { tienePermiso, type Plan } from "@/lib/planes/planes";
 import { validarCantidad, type UnidadMedida } from "./unidades";
 import { ALICUOTAS, calcularPrecio, margenDesde, type AlicuotaIva, type CondicionIva } from "@/lib/precios/precios";
@@ -241,6 +241,9 @@ export async function crearProducto(
   if ("catalogoId" in input ? input.imagenUrl : input.nuevo.imagenUrl) exigirFotosPremium(tienda);
   if (!("catalogoId" in input)) validarCantidad(input.nuevo.unidad ?? "unidad", input.stock, { permitirCero: true });
 
+  // Categoría nueva (17-rubros-categorias.md): alcanza con que la tienda (plan del
+  // dueño) o el usuario que carga sea premium o mayor.
+  const planUsuario = (await prisma.usuario.findUniqueOrThrow({ where: { id: vendedor.id }, select: { plan: true } })).plan;
   const catalogo =
     "catalogoId" in input
       ? await (async () => {
@@ -250,8 +253,10 @@ export async function crearProducto(
           }
           return encontrado;
         })()
-      : await crearProductoNuevoEnCatalogo(input.nuevo).then((p) =>
-          prisma.productoCatalogo.findUniqueOrThrow({ where: { id: p.id } })
+      : await conCategoriaDeUsuario(vendedor, input.nuevo, [tienda.plan, planUsuario], (nuevo) =>
+          crearProductoNuevoEnCatalogo({ ...nuevo, imagenUrl: input.nuevo.imagenUrl }).then((p) =>
+            prisma.productoCatalogo.findUniqueOrThrow({ where: { id: p.id } })
+          )
         );
 
   const producto = await prisma.producto.create({

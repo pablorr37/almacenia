@@ -71,3 +71,8 @@ async function cambiarPlan(admin: Usuario, tiendaId: string, plan: Plan): Promis
 | ------------------ | ------------------------------------------------------|
 | `PLAN_INVALIDO`    | `plan` no es `'free'` ni `'premium'`.                |
 | `TIENDA_NO_ENCONTRADA` | `tiendaId` no existe en `cambiarPlan`.            |
+
+## Crear categorías (ronda de categorías de usuarios)
+
+Feature `crear_categorias`, plan mínimo **premium**: crear una categoría de producto
+nueva al cargar un producto (`17-rubros-categorias.md`).

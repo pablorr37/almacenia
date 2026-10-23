@@ -2,11 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { condicionTiendasConFotos } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
-import { tienePermiso } from "@/lib/planes/planes";
+import { tienePermiso, exigirFeature, type Plan } from "@/lib/planes/planes";
 import type { UnidadMedida } from "@/lib/productos/unidades";
 import { sinRomper, otorgarPorFotoCargada } from "@/lib/gamificacion/gamificacion";
 import { exigirTextoPermitido } from "@/lib/moderacion/moderacion";
-import { normalizarNombre } from "@/lib/rubros-categorias/rubros-categorias";
+import { normalizarNombre, obtenerOCrearCategoria, descartarCategoriaNueva } from "@/lib/rubros-categorias/rubros-categorias";
 import type { Prisma } from "@/generated-prisma/client";
 
 import { UNIDADES_CONTENIDO, componerNombreCatalogo, type UnidadContenido } from "./nombre";
@@ -74,7 +74,10 @@ export async function obtenerProductoCatalogo(id: string): Promise<ProductoCatal
 
 // Datos de una entrada nueva del catálogo (06-catalogo.md).
 export interface NuevaEntradaCatalogo {
-  categoriaId: string;
+  categoriaId?: string;
+  // Premium o mayor: nombre de una categoría que se crea en el momento si no existe
+  // (17-rubros-categorias.md). Excluye a categoriaId.
+  categoriaNueva?: string;
   marca?: string;
   variante?: string;
   contenido?: number;
@@ -245,7 +248,37 @@ const LIMITE_ALTAS_POR_DIA = 20;
 
 export type SumarAlCatalogoInput = Omit<NuevaEntradaCatalogo, "codigoBarras">;
 
+// Resuelve `categoriaNueva` (17-rubros-categorias.md): exige plan premium o mayor en
+// alguno de los planes del contexto, crea la categoría si no existe y corre `alta` con
+// su id. Si el alta falla, la categoría recién creada se descarta.
+export async function conCategoriaDeUsuario<T>(
+  usuario: Usuario,
+  entrada: NuevaEntradaCatalogo,
+  planes: Plan[],
+  alta: (entrada: NuevaEntradaCatalogo) => Promise<T>
+): Promise<T> {
+  if (entrada.categoriaNueva === undefined || entrada.categoriaNueva === null || entrada.categoriaId) return alta(entrada);
+  if (!planes.some((plan) => tienePermiso({ plan }, "crear_categorias"))) {
+    exigirFeature({ plan: "free" }, "crear_categorias");
+  }
+  const { categoria, nueva } = await obtenerOCrearCategoria(usuario.id, entrada.categoriaNueva);
+  try {
+    return await alta({ ...entrada, categoriaId: categoria.id, categoriaNueva: undefined });
+  } catch (error) {
+    if (nueva) await descartarCategoriaNueva(categoria.id);
+    throw error;
+  }
+}
+
 export async function sumarAlCatalogo(
+  usuario: Usuario,
+  input: SumarAlCatalogoInput
+): Promise<{ producto: ProductoCatalogo; creado: boolean }> {
+  const { plan } = await prisma.usuario.findUniqueOrThrow({ where: { id: usuario.id }, select: { plan: true } });
+  return conCategoriaDeUsuario(usuario, input, [plan], (entrada) => sumarEntrada(usuario, entrada));
+}
+
+async function sumarEntrada(
   usuario: Usuario,
   input: SumarAlCatalogoInput
 ): Promise<{ producto: ProductoCatalogo; creado: boolean }> {

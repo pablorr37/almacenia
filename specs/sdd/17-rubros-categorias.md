@@ -34,8 +34,10 @@ ALTER TABLE productos ADD COLUMN categoria_id UUID REFERENCES categorias_product
   Queso, Plantas de interior). Lista **única**, sin vínculo con los rubros. Cada
   entrada del catálogo compartido pertenece a exactamente una categoría; el vendedor
   le agrega marca, variante y contenido (`06-catalogo.md`).
-- Los dos listados los mantiene **solo el admin**. Todos los usuarios (incluso sin
-  sesión) pueden leerlos.
+- Los **rubros** los mantiene **solo el admin**. Las **categorías** las mantiene el
+  admin, y además las pueden **crear** los usuarios con plan **premium o mayor** (ver
+  "Categorías creadas por usuarios"). Todos los usuarios (incluso sin sesión) pueden
+  leer los dos listados.
 
 ## Reglas de negocio
 
@@ -55,6 +57,26 @@ ALTER TABLE productos ADD COLUMN categoria_id UUID REFERENCES categorias_product
   existentes conserven el suyo): Almacén, Bebidas, Lácteos, Panadería, Limpieza,
   Kiosco, Verdulería, Fiambrería, Vivero, Otros. Las categorías arrancan vacías: las
   carga el admin.
+
+### Categorías creadas por usuarios (premium o mayor)
+
+- Al dar de alta un producto nuevo del catálogo, en lugar de `categoriaId` se puede
+  mandar `categoriaNueva: string` (el nombre escrito):
+  - en el alta de producto de una tienda (`03-productos.md`, `nuevo.categoriaNueva`);
+  - en "Agregar al catálogo" desde una lista (`06-catalogo.md`, `POST /api/catalogo`).
+- Se exige plan **premium o mayor** (feature `crear_categorias`, `10-planes.md`):
+  - en una tienda, alcanza con que el plan de la **tienda** (el de su dueño) o el
+    del **usuario** que carga sea premium o mayor;
+  - desde una lista, el plan del usuario.
+  - Si no, `403 PLAN_INSUFICIENTE`.
+- Si ya existe una categoría con ese nombre normalizado, **se usa esa** (no hay error
+  de duplicado: el usuario la escribió porque no la encontró, por ejemplo con otra
+  tilde).
+- El nombre pasa por las mismas validaciones (2–40 caracteres, filtro de groserías).
+- La categoría nueva se crea **en la misma operación** que el producto: si el alta del
+  producto falla, no queda una categoría suelta.
+- Se guarda quién la creó (`categorias_producto.creada_por_id`, nullable); el admin
+  puede renombrarla o borrarla como cualquier otra.
 
 ## Endpoints REST
 
@@ -109,4 +131,5 @@ async function eliminarCategoria(admin: Usuario, id: string): Promise<void>;
 | `CATEGORIA_NO_ENCONTRADA` | 404  | La categoría no existe (admin, o `categoriaId` inválido en catálogo). |
 | `RUBRO_EN_USO`            | 409  | Hay tiendas con ese rubro. |
 | `CATEGORIA_EN_USO`        | 409  | Hay entradas de catálogo con esa categoría. |
-| `FORBIDDEN`               | 403  | Escritura sin ser admin. |
+| `FORBIDDEN`               | 403  | Escritura sin ser admin (endpoints `/api/admin/...`). |
+| `PLAN_INSUFICIENTE`       | 403  | Crear una categoría (`categoriaNueva`) sin plan premium o mayor. |

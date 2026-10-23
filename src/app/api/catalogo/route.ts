@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { producto, creado } = await sumarAlCatalogo(usuario, {
       categoriaId: body.categoriaId,
+      categoriaNueva: typeof body.categoriaNueva === "string" ? body.categoriaNueva : undefined,
       marca: body.marca ?? undefined,
       variante: body.variante ?? undefined,
       contenido: body.contenido ?? undefined,

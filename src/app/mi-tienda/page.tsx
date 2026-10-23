@@ -19,6 +19,7 @@ import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { EscanerCodigo } from "@/components/scanner/EscanerCodigo";
 import { DialogoEditarProducto } from "@/components/productos/DialogoEditarProducto";
+import { ETIQUETA_PLAN } from "@/lib/planes/limites";
 import { CamposPrecio, PRECIO_VACIO, aPayloadPrecio, type ValorPrecio } from "@/components/productos/CamposPrecio";
 import { CONDICIONES_IVA, ETIQUETA_CONDICION, type AlicuotaIva, type CondicionIva } from "@/lib/precios/precios";
 import {
@@ -58,7 +59,7 @@ type Tienda = {
   imagenUrl: string | null;
   rubro: Rubro | null;
   verificada: boolean;
-  plan: "free" | "premium";
+  plan: "free" | "premium" | "plata";
   mediosDePago: MedioPago[];
   horarios: HorarioTienda[];
   abierto24hs: boolean;
@@ -730,11 +731,11 @@ function MiTienda() {
           <div className="flex items-center justify-between rounded-card border border-border bg-surface p-3.5">
             <div className="flex flex-col gap-0.5">
               <span className="text-[13px] font-semibold text-text">
-                Plan {tienda.plan === "premium" ? "Premium" : "Free"}
+                Plan {ETIQUETA_PLAN[tienda.plan]}
               </span>
               {tienda.plan === "free" ? (
                 <span className="text-[12px] text-text-2">
-                  Fotos del banco de Almacenia. Premium: fotos propias y prioridad en el mapa.
+                  Fotos del banco de Almacenia. Premium: fotos propias, prioridad en el mapa y crear categorías.
                 </span>
               ) : (
                 <span className="text-[12px] text-text-2">
@@ -742,8 +743,8 @@ function MiTienda() {
                 </span>
               )}
             </div>
-            {tienda.plan === "premium" && (
-              <span className="rounded-pill bg-accent px-2.5 py-1 text-[11px] font-bold text-white">PREMIUM</span>
+            {tienda.plan !== "free" && (
+              <span className="rounded-pill bg-accent px-2.5 py-1 text-[11px] font-bold text-white">{tienda.plan.toUpperCase()}</span>
             )}
           </div>
         )}
@@ -881,7 +882,12 @@ function MiTienda() {
                       ? "No está en el catálogo compartido: cargalo como producto nuevo."
                       : "¿No está en el catálogo? Cargalo como producto nuevo:"}
                   </p>
-                  <CamposEntradaCatalogo valor={entradaNueva} onChange={setEntradaNueva} />
+                  <CamposEntradaCatalogo
+                    valor={entradaNueva}
+                    onChange={setEntradaNueva}
+                    // 17-rubros-categorias.md: el plan de la tienda es el del dueño.
+                    puedeCrearCategoria={tienda.plan !== "free"}
+                  />
                 </div>
               )}
 
@@ -956,7 +962,7 @@ function MiTienda() {
                       </button>
                     )}
                     {/* Foto personalizada, visible solo en esta tienda (10-planes.md). */}
-                    {tienda?.plan === "premium" ? (
+                    {tienda && tienda.plan !== "free" ? (
                       <button
                         type="button"
                         onClick={() => setFotoPara({ producto: p, destino: { productoId: p.id } })}

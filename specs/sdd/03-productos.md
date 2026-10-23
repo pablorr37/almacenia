@@ -137,7 +137,7 @@ o dando de alta un producto nuevo en el catálogo compartido en la misma operaci
 
 ```ts
 {
-  nuevo: NuevaEntradaCatalogo & { imagenUrl?: string }; // 06-catalogo.md: categoriaId obligatorio
+  nuevo: NuevaEntradaCatalogo & { imagenUrl?: string }; // 06-catalogo.md: categoriaId, o categoriaNueva si el plan es premium o mayor
   precio: number;
   stock: number;
   descripcion?: string;
