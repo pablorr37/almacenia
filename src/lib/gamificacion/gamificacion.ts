@@ -62,6 +62,11 @@ const DESCRIPCION_POR_TIPO: Record<string, string> = {
   visita_compra: "Visitaste la tienda y compraste",
   checkin_gps: "Check-in en la tienda",
   visita_pagina: "Visitaste la página de la tienda",
+  canje_premium: "Canjeaste plan premium",
+  canje_publicidad: "Pagaste publicidad con puntos",
+  reintegro_publicidad: "Reintegro de publicidad",
+  transferencia_enviada: "Transferiste puntos",
+  transferencia_recibida: "Recibiste puntos",
 };
 
 // ---------------------------------------------------------------------------
@@ -197,9 +202,26 @@ export async function registrarEvento(
   return aEventoPuntos(evento);
 }
 
-export async function totalPuntos(usuarioId: string): Promise<number> {
+// Positivos que no cuentan como "ganados" (23-puntos-pagos.md): mover puntos o
+// recibir un reintegro no agranda el radio de alcance.
+export const TIPOS_NO_GANADOS: readonly string[] = ["transferencia_recibida", "reintegro_publicidad"];
+
+// Saldo para gastar: todos los eventos, incluidos canjes y transferencias.
+export async function saldoPuntos(usuarioId: string): Promise<number> {
   const resultado = await prisma.eventoPuntos.aggregate({
     where: { usuarioId },
+    _sum: { puntos: true },
+  });
+  return Number(resultado._sum.puntos ?? 0);
+}
+
+// Alias histórico de saldoPuntos (GET /api/gamificacion/puntos devuelve `total`).
+export const totalPuntos = saldoPuntos;
+
+// Puntos ganados históricos (los usa el radio de alcance, 18-alcance.md).
+export async function puntosGanados(usuarioId: string): Promise<number> {
+  const resultado = await prisma.eventoPuntos.aggregate({
+    where: { usuarioId, puntos: { gt: 0 }, tipo: { notIn: [...TIPOS_NO_GANADOS] } },
     _sum: { puntos: true },
   });
   return Number(resultado._sum.puntos ?? 0);

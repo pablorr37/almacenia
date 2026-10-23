@@ -119,6 +119,20 @@ describe("obtenerAlcance", () => {
     expect(plata).toMatchObject({ plan: "plata", radioKm: null, provincia: true, proximoUmbral: null });
   });
 
+  it("usa los puntos ganados: canjear no achica el radio y recibir transferencias no lo agranda (23-puntos-pagos.md)", async () => {
+    await prisma.eventoPuntos.createMany({
+      data: [
+        { usuarioId: usuario.id, tipo: "prueba", puntos: 300 },
+        { usuarioId: usuario.id, tipo: "canje_premium", puntos: -200 },
+        { usuarioId: usuario.id, tipo: "transferencia_recibida", puntos: 400 },
+        { usuarioId: usuario.id, tipo: "reintegro_publicidad", puntos: 50 },
+      ],
+    });
+    const alcance = await obtenerAlcance(usuario.id);
+    expect(alcance.puntos).toBe(300);
+    expect(alcance.radioKm).toBeCloseTo(6);
+  });
+
   it("invitado: alcance de un free con 0 puntos", async () => {
     expect(await obtenerAlcance(null)).toMatchObject({ invitado: true, plan: "free", puntos: 0, radioKm: 3 });
   });
