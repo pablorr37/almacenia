@@ -47,6 +47,9 @@ model Usuario {
   motivoSuspension String?      @map("motivo_suspension")
   suspendidaEn     DateTime?    @map("suspendida_en")
   plan             Plan         @default(free) // 18-alcance.md
+  // 23-puntos-pagos.md: null = sin vencimiento (asignado por el admin).
+  planVenceEn      DateTime?      @map("plan_vence_en")
+  renovacionAuto   RenovacionAuto @default(ninguna) @map("renovacion_auto")
   avatarUrl    String?  @map("avatar_url")
   creadoEn     DateTime @default(now()) @map("creado_en")
 
@@ -68,6 +71,14 @@ model Usuario {
   codigosCliente         CodigoCliente[]
   catalogoCargado        ProductoCatalogo[]    @relation("CatalogoCargado")
   categoriasCreadas      CategoriaProducto[]   @relation("CategoriasCreadas")
+  ordenesPago            OrdenPago[]           @relation("OrdenesDelUsuario")
+  ordenesConfirmadas     OrdenPago[]           @relation("OrdenesConfirmadas")
+  campaniasCreadas       CampaniaAviso[]
+  eventosAviso           EventoAviso[]
+  notificaciones         Notificacion[]
+  suscripcionesPush      SuscripcionPush[]
+  preferenciasNotif      PreferenciaNotificacion[]
+  enviosCreados          EnvioNotificacion[]
 
   @@map("usuarios")
 }
@@ -123,6 +134,8 @@ model Tienda {
   miembros                MiembroTienda[]
   comprobantes            Comprobante[]
   numeraciones            NumeracionComprobante[]
+  campanias               CampaniaAviso[]
+  notificaciones          Notificacion[]
 
   @@index([vendedorId])
   @@index([ubicacion], map: "tiendas_ubicacion_gist_idx", type: Gist)
@@ -454,6 +467,7 @@ enum PermisoTienda {
   pedidos
   balance
   usuarios
+  publicidad
 
   @@map("permiso_tienda")
 }
@@ -734,4 +748,253 @@ model CodigoCliente {
 
   @@index([usuarioId])
   @@map("codigos_cliente")
+}
+
+// ---------------------------------------------------------------------------
+// 23-puntos-pagos.md — renovación del plan y órdenes de pago en pesos
+// ---------------------------------------------------------------------------
+
+enum RenovacionAuto {
+  ninguna
+  puntos
+  pesos
+
+  @@map("renovacion_auto")
+}
+
+enum ConceptoPago {
+  premium
+  publicidad
+
+  @@map("concepto_pago")
+}
+
+enum EstadoOrdenPago {
+  pendiente
+  pagada
+  cancelada
+  vencida
+
+  @@map("estado_orden_pago")
+}
+
+model OrdenPago {
+  id             String          @id @default(uuid())
+  usuarioId      String          @map("usuario_id")
+  concepto       ConceptoPago
+  referenciaId   String?         @map("referencia_id")
+  montoArs       Decimal         @map("monto_ars") @db.Decimal(12, 2)
+  estado         EstadoOrdenPago @default(pendiente)
+  proveedor      String          @default("manual")
+  externalId     String?         @map("external_id")
+  detalle        Json?
+  creadaEn       DateTime        @default(now()) @map("creada_en")
+  pagadaEn       DateTime?       @map("pagada_en")
+  confirmadaPor  String?         @map("confirmada_por")
+
+  usuario     Usuario         @relation("OrdenesDelUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  confirmador Usuario?        @relation("OrdenesConfirmadas", fields: [confirmadaPor], references: [id], onDelete: SetNull)
+  campanias   CampaniaAviso[]
+
+  @@index([estado, creadaEn(sort: Desc)])
+  @@index([usuarioId])
+  @@map("ordenes_pago")
+}
+
+// ---------------------------------------------------------------------------
+// 21-publicidad.md — motor de avisos propio
+// ---------------------------------------------------------------------------
+
+enum EspacioAviso {
+  inicio
+  lista
+  comparar
+  tienda_pie
+  pin_mapa
+  push
+
+  @@map("espacio_aviso")
+}
+
+enum EstadoCampania {
+  pendiente_pago
+  en_moderacion
+  activa
+  pausada
+  rechazada
+  finalizada
+
+  @@map("estado_campania")
+}
+
+enum PagoCampania {
+  puntos
+  pesos
+
+  @@map("pago_campania")
+}
+
+enum TipoPieza {
+  imagen
+  texto
+
+  @@map("tipo_pieza")
+}
+
+enum TipoEventoAviso {
+  impresion
+  clic
+
+  @@map("tipo_evento_aviso")
+}
+
+model CampaniaAviso {
+  id                 String         @id @default(uuid())
+  tiendaId           String         @map("tienda_id")
+  creadaPorId        String?        @map("creada_por_id")
+  espacio            EspacioAviso
+  titulo             String
+  estado             EstadoCampania
+  desde              DateTime       @db.Date
+  dias               Int
+  diasConsumidos     Int            @default(0) @map("dias_consumidos")
+  ultimoDiaConsumido DateTime?      @map("ultimo_dia_consumido") @db.Date
+  pago               PagoCampania
+  puntosPagados      Decimal?       @map("puntos_pagados") @db.Decimal(8, 1)
+  ordenPagoId        String?        @map("orden_pago_id")
+  segmento           Json?
+  peso               Int            @default(1)
+  motivoRechazo      String?        @map("motivo_rechazo")
+  enviadaEn          DateTime?      @map("enviada_en")
+  creadaEn           DateTime       @default(now()) @map("creada_en")
+  aprobadaEn         DateTime?      @map("aprobada_en")
+  finalizadaEn       DateTime?      @map("finalizada_en")
+
+  tienda    Tienda        @relation(fields: [tiendaId], references: [id], onDelete: Cascade)
+  creadaPor Usuario?      @relation(fields: [creadaPorId], references: [id], onDelete: SetNull)
+  ordenPago OrdenPago?    @relation(fields: [ordenPagoId], references: [id], onDelete: SetNull)
+  piezas    PiezaAviso[]
+  eventos   EventoAviso[]
+
+  @@index([espacio, estado])
+  @@index([tiendaId])
+  @@map("campanias_aviso")
+}
+
+model PiezaAviso {
+  id         String    @id @default(uuid())
+  campaniaId String    @map("campania_id")
+  tipo       TipoPieza
+  imagenUrl  String?   @map("imagen_url")
+  ancho      Int?
+  alto       Int?
+  texto      String?
+  destino    String?
+  creadaEn   DateTime  @default(now()) @map("creada_en")
+
+  campania CampaniaAviso @relation(fields: [campaniaId], references: [id], onDelete: Cascade)
+  eventos  EventoAviso[]
+
+  @@map("piezas_aviso")
+}
+
+model EventoAviso {
+  id         String          @id @default(uuid())
+  campaniaId String          @map("campania_id")
+  piezaId    String?         @map("pieza_id")
+  tipo       TipoEventoAviso
+  usuarioId  String?         @map("usuario_id")
+  nonce      String
+  creadoEn   DateTime        @default(now()) @map("creado_en")
+
+  campania CampaniaAviso @relation(fields: [campaniaId], references: [id], onDelete: Cascade)
+  pieza    PiezaAviso?   @relation(fields: [piezaId], references: [id], onDelete: SetNull)
+  usuario  Usuario?      @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@unique([tipo, nonce])
+  @@index([campaniaId, tipo, creadoEn])
+  @@index([usuarioId, creadoEn])
+  @@map("eventos_aviso")
+}
+
+// ---------------------------------------------------------------------------
+// 22-notificaciones.md
+// ---------------------------------------------------------------------------
+
+enum EstadoEnvio {
+  enviando
+  enviado
+  cancelado
+
+  @@map("estado_envio")
+}
+
+model Notificacion {
+  id         String    @id @default(uuid())
+  usuarioId  String    @map("usuario_id")
+  tipo       String
+  titulo     String
+  cuerpo     String
+  url        String?
+  tiendaId   String?   @map("tienda_id")
+  claveUnica String?   @unique @map("clave_unica")
+  enApp      Boolean   @default(true) @map("en_app")
+  leidaEn    DateTime? @map("leida_en")
+  creadaEn   DateTime  @default(now()) @map("creada_en")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tienda  Tienda? @relation(fields: [tiendaId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, creadaEn(sort: Desc)])
+  @@index([usuarioId, tipo, creadaEn])
+  @@map("notificaciones")
+}
+
+model SuscripcionPush {
+  id        String   @id @default(uuid())
+  usuarioId String   @map("usuario_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  creadaEn  DateTime @default(now()) @map("creada_en")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("suscripciones_push")
+}
+
+model PreferenciaNotificacion {
+  usuarioId String  @map("usuario_id")
+  categoria String
+  enApp     Boolean @map("en_app")
+  push      Boolean
+  email     Boolean
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, categoria])
+  @@map("preferencias_notificacion")
+}
+
+model EnvioNotificacion {
+  id              String      @id @default(uuid())
+  categoria       String
+  tipo            String
+  titulo          String
+  cuerpo          String
+  url             String?
+  segmento        Json
+  estado          EstadoEnvio @default(enviando)
+  total           Int
+  enviados        Int         @default(0)
+  ultimoUsuarioId String?     @map("ultimo_usuario_id")
+  creadoPorId     String?     @map("creado_por_id")
+  creadoEn        DateTime    @default(now()) @map("creado_en")
+  terminadoEn     DateTime?   @map("terminado_en")
+
+  creadoPor Usuario? @relation(fields: [creadoPorId], references: [id], onDelete: SetNull)
+
+  @@map("envios_notificacion")
 }
