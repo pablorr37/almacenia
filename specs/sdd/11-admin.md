@@ -261,6 +261,14 @@ Claves actuales:
 | `itinerario.costo_km` | número ≥ 0 (ARS por km) | `300` | `15-itinerario.md` |
 | `balance.umbral_stock_bajo` | entero ≥ 0 | `3` | `20-precios-facturacion.md` (alertas del balance completo) |
 | `gamificacion.porcentaje_puntos_equipo` | entero 0–100 | `50` | `12-gamificacion.md` (reparto de `venta_realizada` con el equipo; cada tienda puede pisarlo) |
+| `canje.*`, `precio.*`, `puntos.transferencia_*`, `pagos.gracia_dias` | ver allá | ver allá | `23-puntos-pagos.md` (precios en puntos y pesos, topes de transferencias) |
+| `publicidad.frecuencia_dia` | entero ≥ 1 | `3` | `21-publicidad.md` (impresiones por campaña, usuario y día) |
+| `notif.publicidad_push_semana` | entero ≥ 0 | `2` | `22-notificaciones.md` / `21-publicidad.md` (tope semanal de publicidad push) |
+| `notif.hora_inicio` / `notif.hora_fin` | entero 0–24 | `8` / `22` | Franja horaria de la publicidad push (hora de San Juan) |
+
+Paneles del admin sumados en la ronda 4 y 5: **Publicidad** (moderación de campañas,
+`21-publicidad.md`), **Pagos** (órdenes en pesos, confirmación manual,
+`23-puntos-pagos.md`) y **Notificaciones** (envíos masivos, `22-notificaciones.md`).
 
 ### `GET /api/admin/config`
 
