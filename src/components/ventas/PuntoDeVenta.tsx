@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet, apiGetPaginado, apiPatch, apiPost, ApiError } from "@/lib/api-client";
-import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
+import { formatearCantidad, pasoDe, redondearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
+import { normalizarCodigo, productoPorCodigo } from "@/lib/ventas/escaneo";
 import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
 import { Toast } from "@/components/ui/Toast";
 import { IconoQr } from "@/components/clientes/CompartirQr";
@@ -30,6 +31,7 @@ export interface ProductoVendible {
   // GET /api/tiendas/:id/productos?paraVenta=1 (03-productos.md)
   vendidos30d: number;
   ultimaVentaEn: string | null;
+  codigoBarras?: string | null; // "Escanear producto" (05-ventas.md)
 }
 
 // Pestañas de la lista de productos (05-ventas.md, "UI del punto de venta").
@@ -148,6 +150,9 @@ export function PuntoDeVenta({
   const [clienteConfirmado, setClienteConfirmado] = useState<{ codigo: string; nombre: string } | null>(null);
   const [errorCliente, setErrorCliente] = useState<string | null>(null);
   const [escaneandoQr, setEscaneandoQr] = useState(false);
+  // "Escanear producto" (05-ventas.md): suma un paso del producto leído al ticket.
+  const [escaneandoProducto, setEscaneandoProducto] = useState(false);
+  const [codigoSinProducto, setCodigoSinProducto] = useState<string | null>(null);
   const codigoCliente = leerCodigoQr(emailCliente);
 
   const confirmarCodigo = useCallback(async (codigo: string) => {
@@ -248,6 +253,29 @@ export function PuntoDeVenta({
     setTicket((prev) => ({ ...prev, [id]: cantidad }));
   }
 
+  function productoEscaneado(texto: string) {
+    setCodigoSinProducto(null);
+    const producto = productoPorCodigo(
+      productos.map((p) => ({ ...p, codigoBarras: p.codigoBarras ?? null })),
+      texto
+    );
+    if (!producto) {
+      setCodigoSinProducto(normalizarCodigo(texto) || texto.trim());
+      return;
+    }
+    if (!producto.disponible || producto.stock <= 0) {
+      setToast(`${producto.nombre}: sin stock o pausado`);
+      return;
+    }
+    const nueva = redondearCantidad(producto.unidad, (ticket[producto.id] ?? 0) + pasoDe(producto.unidad));
+    if (nueva > producto.stock) {
+      setToast(`${producto.nombre}: no hay más stock (${formatearCantidad(producto.unidad, producto.stock)})`);
+      return;
+    }
+    fijar(producto.id, nueva);
+    setToast(`Agregado: ${producto.nombre}`);
+  }
+
   async function cerrar(cobrarAhora: boolean) {
     if (lineas.length === 0) return;
     setEnviando(true);
@@ -333,6 +361,17 @@ export function PuntoDeVenta({
           />
           <button
             type="button"
+            onClick={() => setEscaneandoProducto(true)}
+            aria-label="Escanear producto"
+            title="Escanear producto"
+            className="press flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-control border border-border bg-surface"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+              <path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M6 8v8M9 8v8M12 8v8M16 8v8M19 8v8" />
+            </svg>
+          </button>
+          <button
+            type="button"
             onClick={alternarLista}
             aria-expanded={!listaOculta}
             className="press h-12 flex-shrink-0 rounded-control border border-border bg-surface px-3 text-[12px] font-semibold text-accent-text"
@@ -340,6 +379,20 @@ export function PuntoDeVenta({
             {listaOculta ? "Mostrar lista" : "Ocultar lista"}
           </button>
         </div>
+        <EscanerCodigo
+          abierto={escaneandoProducto}
+          titulo="Apuntá al código del producto"
+          onDetectado={productoEscaneado}
+          onCerrar={() => setEscaneandoProducto(false)}
+        />
+        {codigoSinProducto && (
+          <p role="alert" className="flex flex-wrap items-center gap-x-2 rounded-control bg-estado-pendiente-bg px-3 py-2 text-[13px] text-estado-pendiente-text">
+            No tenés cargado un producto con el código {codigoSinProducto}.
+            <Link href={`/mi-tienda?tienda=${tiendaId}&seccion=productos`} className="font-semibold underline">
+              Darlo de alta
+            </Link>
+          </p>
+        )}
         {listaOculta ? null : cargandoProductos ? (
           <p className="text-[13px] text-text-2">Cargando productos…</p>
         ) : productos.length === 0 ? (

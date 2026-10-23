@@ -385,13 +385,18 @@ export async function listarProductos(
 export interface ProductoParaVenta extends Producto {
   vendidos30d: number;
   ultimaVentaEn: string | null;
+  codigoBarras: string | null; // del catálogo: "Escanear producto" (05-ventas.md)
 }
 
 export async function listarParaVenta(vendedor: Usuario, tiendaId: string): Promise<ProductoParaVenta[]> {
   await verificarPermiso(vendedor, tiendaId, "vender");
   const desde = new Date(Date.now() - 30 * 24 * 3600_000);
   const [productos, ventas] = await Promise.all([
-    prisma.producto.findMany({ where: { tiendaId, eliminadoEn: null }, include: INCLUDE_IMAGEN, orderBy: { nombre: "asc" } }),
+    prisma.producto.findMany({
+      where: { tiendaId, eliminadoEn: null },
+      include: { ...INCLUDE_IMAGEN, catalogo: { select: { imagenUrl: true, unidad: true, codigoBarras: true } } },
+      orderBy: { nombre: "asc" },
+    }),
     prisma.$queryRaw<Array<{ producto_id: string; vendidos_30d: number; ultima_venta_en: Date }>>`
       SELECT iv.producto_id,
              COUNT(DISTINCT v.id) FILTER (WHERE v.creada_en >= ${desde})::int AS vendidos_30d,
@@ -409,6 +414,7 @@ export async function listarParaVenta(vendedor: Usuario, tiendaId: string): Prom
       ...aProducto(p),
       vendidos30d: venta?.vendidos_30d ?? 0,
       ultimaVentaEn: venta ? venta.ultima_venta_en.toISOString() : null,
+      codigoBarras: p.catalogo.codigoBarras,
     };
   });
 }

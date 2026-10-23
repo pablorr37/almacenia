@@ -616,10 +616,17 @@ describe("listarParaVenta (pestañas del punto de venta, 03-productos.md)", () =
     expect(porId.get(yerba.id)!.ultimaVentaEn).not.toBeNull();
   });
 
+  it("incluye el código de barras del catálogo, para escanear en el punto de venta (05-ventas.md)", async () => {
+    const codigo = `77${Date.now()}`.slice(0, 13);
+    const producto = await crearProducto(vendedor, tienda.id, { ...inputNuevo(), nuevo: { ...inputNuevo().nuevo, codigoBarras: codigo } });
+    const [p] = await listarParaVenta(vendedor, tienda.id);
+    expect(p).toMatchObject({ id: producto.id, codigoBarras: codigo });
+  });
+
   it("un producto sin ventas tiene ultimaVentaEn null; otro usuario no puede listar", async () => {
     const producto = await crearProducto(vendedor, tienda.id, inputNuevo());
     const [p] = await listarParaVenta(vendedor, tienda.id);
-    expect(p).toMatchObject({ id: producto.id, vendidos30d: 0, ultimaVentaEn: null });
+    expect(p).toMatchObject({ id: producto.id, vendidos30d: 0, ultimaVentaEn: null, codigoBarras: null });
     const { vendedor: otro } = await crearVendedorConTienda();
     try {
       await expect(listarParaVenta(otro, tienda.id)).rejects.toMatchObject({ code: "NO_ES_DUENO_DE_TIENDA" });
