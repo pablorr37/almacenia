@@ -39,6 +39,7 @@ export function PanelPlan({ saldo, onCambio }: { saldo: number; onCambio: (mensa
       onCambio(mensaje);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Algo salió mal. Probá de nuevo.");
+      cargar();
     } finally {
       setOcupado(false);
     }
@@ -51,7 +52,7 @@ export function PanelPlan({ saldo, onCambio }: { saldo: number; onCambio: (mensa
 
   return (
     <section aria-labelledby="titulo-plan" className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4 shadow-card">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex flex-col gap-0.5">
         <h2 id="titulo-plan" className="font-display text-[17px] font-bold text-text">
           Plan {ETIQUETA_PLAN[estado.plan]}
         </h2>
@@ -131,7 +132,11 @@ export function PanelPlan({ saldo, onCambio }: { saldo: number; onCambio: (mensa
                   name="renovacion"
                   checked={estado.renovacionAuto === modo}
                   disabled={ocupado}
-                  onChange={() => accion(() => apiPut("/api/puntos/renovacion", { modo }), "Guardamos tu preferencia de renovación.")}
+                  onChange={() => {
+                    // Optimista: se marca ya; si falla, cargar() vuelve al valor guardado.
+                    setEstado({ ...estado, renovacionAuto: modo });
+                    accion(() => apiPut("/api/puntos/renovacion", { modo }), "Guardamos tu preferencia de renovación.");
+                  }}
                   className="h-5 w-5 accent-primary"
                 />
                 {texto}

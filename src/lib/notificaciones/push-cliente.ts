@@ -5,7 +5,7 @@ import { apiDelete, apiGet, apiPost } from "@/lib/api-client";
 // Suscripción Web Push desde el navegador (22-notificaciones.md), siguiendo la guía
 // de PWA de Next. El permiso se pide solo después de que la persona toca un botón.
 
-export type EstadoPush = "no_soportado" | "ios_instalar" | "deshabilitado" | "bloqueado" | "inactivo" | "activo";
+export type EstadoPush = "no_soportado" | "ios_instalar" | "deshabilitado" | "bloqueado" | "inactivo" | "activo" | "error";
 
 function base64UrlAUint8(base64: string): Uint8Array<ArrayBuffer> {
   const relleno = "=".repeat((4 - (base64.length % 4)) % 4);

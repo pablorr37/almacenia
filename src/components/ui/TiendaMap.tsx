@@ -149,7 +149,7 @@ export function TiendaMap({
           eventHandlers={{ click: () => onSelect?.(t.id) }}
         >
           {t.destacada && (
-            <Tooltip permanent direction="right" offset={[16, -26]} className="tooltip-destacada">
+            <Tooltip permanent direction="top" offset={[0, -50]} className="tooltip-destacada">
               <span data-testid="pin-destacado">{t.nombre}</span>
               {planUsuario === "free" && <span className="tooltip-destacada__etiqueta">Destacado</span>}
             </Tooltip>

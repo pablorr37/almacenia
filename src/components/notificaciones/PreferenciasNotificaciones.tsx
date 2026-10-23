@@ -19,6 +19,7 @@ const TEXTO_PUSH: Record<EstadoPush, string> = {
   bloqueado: "Bloqueaste las notificaciones: habilitalas en la configuración del navegador.",
   inactivo: "Recibí avisos en este dispositivo aunque la app esté cerrada.",
   activo: "Este dispositivo recibe notificaciones push.",
+  error: "No pudimos activar las notificaciones en este dispositivo. Probá de nuevo en un rato.",
 };
 
 // Preferencias por categoría y canal + activar push en este dispositivo (22-notificaciones.md).
@@ -44,8 +45,9 @@ export function PreferenciasNotificaciones({ plan }: { plan: string | null }) {
     setOcupado(true);
     try {
       setPush(push === "activo" ? await desactivarPush() : await activarPush());
-    } catch {
-      setPush("no_soportado");
+    } catch (error) {
+      console.error("[push]", error);
+      setPush("error");
     } finally {
       setOcupado(false);
     }
@@ -62,7 +64,7 @@ export function PreferenciasNotificaciones({ plan }: { plan: string | null }) {
       {push && (
         <div className="flex flex-col gap-2 rounded-control bg-bg p-3">
           <p className="text-[13px] text-text-2">{TEXTO_PUSH[push]}</p>
-          {(push === "inactivo" || push === "activo") && (
+          {(push === "inactivo" || push === "activo" || push === "error") && (
             <button
               type="button"
               disabled={ocupado}

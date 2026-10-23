@@ -173,6 +173,26 @@ En la sección de Environment Variables del recurso de la app:
 | `S3_BUCKET` | Nombre del bucket (ej. `almacenia`). |
 | `S3_REGION` | `us-east-1` sirve para MinIO/la mayoría de proveedores S3-compatibles. |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | Credenciales del recurso S3/MinIO. |
+| `APP_URL` | URL pública, ej. `https://almacenia.store` (enlaces de los emails). |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Notificaciones push (22-notificaciones.md). Generalas **una sola vez** con `npx web-push generate-vapid-keys` y no las cambies: si cambian, se invalidan todas las suscripciones. Sin ellas, push queda apagado. |
+| `VAPID_SUBJECT` | `mailto:` de contacto para los servicios de push, ej. `mailto:admin@almacenia.store`. |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `EMAIL_FROM` | Email de las notificaciones (cualquier SMTP: el de tu dominio, Brevo, Resend, etc.). Sin `SMTP_HOST`, el email queda apagado. |
+| `CRON_TOKEN` | Token largo al azar (`openssl rand -hex 32`) que protege `POST /api/cron/tareas` (ver 4.5). |
+| `PAGO_MANUAL_DATOS` | Opcional: alias/CBU o dónde pagar, se muestra en las órdenes de pago en pesos. |
+| `ADS_TXT` | Opcional: contenido de `/ads.txt` (una línea por proveedor; se puede escribir `\n` entre líneas). Vacío = `/ads.txt` da 404. |
+
+## 4.5. Tareas programadas (ronda 4 y 5)
+
+`POST /api/cron/tareas` vence o renueva los planes premium, consume los días de las
+campañas, manda la publicidad push dentro de la franja horaria y procesa los envíos
+masivos de notificaciones. Es idempotente: programalo **cada hora** en Coolify
+(Scheduled Tasks del recurso de la app):
+
+```sh
+curl -fsS -X POST -H "Authorization: Bearer $CRON_TOKEN" http://localhost:3000/api/cron/tareas
+```
+
+Sin `CRON_TOKEN` responde 503; con un token incorrecto, 401.
 
 No hace falta `NEXTAUTH_URL`: `trustHost: true` en `src/auth.ts` ya cubre correr
 detrás del proxy de Coolify. `ALLOWED_ORIGIN`/`MAP_TILES_API_KEY` de `.env.example`
