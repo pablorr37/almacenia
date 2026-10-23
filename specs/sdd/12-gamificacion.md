@@ -127,6 +127,12 @@ mes M:
 Ejemplo: ene 5 · feb 4,5 · mar 4 · … · sep 1 · oct 0,5 · nov 0,5 (se estabiliza) ·
 (dic y ene sin entrar) · feb 1,5 · mar 1.
 
+### Gastos y transferencias (ronda 4)
+
+Los canjes (`canje_premium`, `canje_publicidad`), reintegros y transferencias entre
+miembros de una tienda son eventos de este mismo registro, con puntos negativos o
+positivos. Reglas, topes y atomicidad: [`23-puntos-pagos.md`](23-puntos-pagos.md).
+
 ### Robustez
 
 Otorgar puntos nunca hace fallar la operación de negocio que lo dispara: si la
@@ -138,8 +144,11 @@ igual y el error se loguea. Los puntos se otorgan después de confirmar la opera
 
 ### `GET /api/gamificacion/puntos`
 
-Requiere sesión. Response `200`: `{ data: { total: number } }` (del usuario
-autenticado).
+Requiere sesión. Response `200`: `{ data: { total: number; saldo: number; ganados: number } }`
+(del usuario autenticado). Desde la ronda 4 (`23-puntos-pagos.md`) los puntos también se
+gastan: `saldo` = suma de todos los eventos (incluye canjes y transferencias, que son
+eventos negativos o positivos); `ganados` = eventos positivos sin `transferencia_recibida` ni
+`reintegro_publicidad` (lo usa el radio de alcance); `total` = `saldo`, por compatibilidad.
 
 ### `GET /api/gamificacion/historial`
 

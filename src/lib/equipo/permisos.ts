@@ -11,7 +11,8 @@ export type Permiso =
   | "fotos"
   | "pedidos"
   | "balance"
-  | "usuarios";
+  | "usuarios"
+  | "publicidad";
 export type RolMiembro = "encargado" | "empleado";
 export type RolEnTienda = "propietario" | RolMiembro;
 
@@ -26,6 +27,7 @@ export const PERMISOS: readonly Permiso[] = [
   "pedidos",
   "balance",
   "usuarios",
+  "publicidad",
 ];
 
 export const ETIQUETA_PERMISO: Record<Permiso, string> = {
@@ -39,6 +41,7 @@ export const ETIQUETA_PERMISO: Record<Permiso, string> = {
   pedidos: "Atender pedidos",
   balance: "Ver el balance",
   usuarios: "Gestionar el equipo",
+  publicidad: "Publicidad de la tienda",
 };
 
 export const ETIQUETA_ROL: Record<RolEnTienda, string> = {

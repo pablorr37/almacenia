@@ -11,6 +11,7 @@ import { formatoPuntos } from "@/components/ui/PuntosChip";
 import { estadoApertura, horariosPorDia, type HorarioTienda } from "@/lib/tiendas/horarios";
 import { useAhora } from "@/lib/hooks/useAhora";
 import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
+import { EspacioPublicitario } from "@/components/publicidad/EspacioPublicitario";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 
 type Tienda = {
@@ -339,6 +340,9 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
           );
         })}
       </div>
+
+      {/* 21-publicidad.md: pie de tienda, nunca junto al botón de confirmar el pedido. */}
+      {tienda && cantidadItems === 0 && <EspacioPublicitario espacio="tienda_pie" className="px-5 pb-8 pt-4" />}
 
       {cantidadItems > 0 && (
         <div className="sticky bottom-0 animate-slide-up border-t border-border bg-surface px-5 pb-6 pt-3.5">

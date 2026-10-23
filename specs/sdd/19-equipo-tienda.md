@@ -55,6 +55,11 @@ ALTER TABLE ventas ADD COLUMN vendida_por_id UUID REFERENCES usuarios(id) ON DEL
 | `pedidos` | Ver los pedidos de la tienda y confirmarlos, rechazarlos, marcarlos listos y entregarlos. |
 | `balance` | Ver el balance de la tienda. |
 | `usuarios` | Gestionar el equipo (sumar, editar y quitar miembros). |
+| `publicidad` | Crear, pausar y finalizar campañas de publicidad de la tienda, pagando con sus propios puntos o pesos (`21-publicidad.md`). |
+
+**Transferencias de puntos** (ronda 4): cualquier persona del equipo (propietario,
+encargados, empleados) puede transferir puntos a otra de **la misma tienda**, con topes
+configurables (`23-puntos-pagos.md`). No requiere permiso.
 
 - **Propietario:** tiene todos los permisos y no se le pueden quitar. Además, solo él
   puede:

@@ -194,6 +194,33 @@
   transform: scale(1.12);
 }
 
+/* --- Mapa: nombre de la tienda destacada junto al pin (21-publicidad.md) --- */
+.leaflet-tooltip.tooltip-destacada {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 700;
+  font-size: 12px;
+  box-shadow: 0 2px 6px rgb(32 26 21 / 0.18);
+}
+.leaflet-tooltip.tooltip-destacada::before {
+  display: none;
+}
+.tooltip-destacada__etiqueta {
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  padding: 1px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 /* --- Mapa del plan de compra: paradas numeradas --- */
 .pin-parada {
   background: none;

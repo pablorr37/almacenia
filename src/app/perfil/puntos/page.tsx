@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { apiGet, apiGetPaginado, ApiError } from "@/lib/api-client";
 import { formatoPuntos } from "@/components/ui/PuntosChip";
+import { Toast } from "@/components/ui/Toast";
+import { PanelPlan } from "@/components/puntos/PanelPlan";
+import { TransferirPuntos } from "@/components/puntos/TransferirPuntos";
 import { useConteo } from "@/lib/hooks/useConteo";
 
 type Movimiento = {
@@ -33,10 +36,13 @@ const formatoHora = new Intl.DateTimeFormat("es-AR", {
 });
 
 // Historial de puntos (12-gamificacion.md): hora, fecha, y la tienda o el cliente
-// por el que se ganó cada punto.
+// por el que se ganó cada punto. Saldo para canjear, plan premium con puntos o pesos y
+// transferencias en el equipo (23-puntos-pagos.md).
 export default function PuntosPage() {
   const { status } = useSession();
   const [total, setTotal] = useState<number | null>(null);
+  const [ganados, setGanados] = useState<number | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [cantidad, setCantidad] = useState(0);
   const [pagina, setPagina] = useState(0);
@@ -58,14 +64,30 @@ export default function PuntosPage() {
     }
   }, []);
 
+  const cargarSaldo = useCallback(() => {
+    apiGet<{ saldo: number; ganados: number }>("/api/gamificacion/puntos")
+      .then((r) => {
+        setTotal(r.saldo);
+        setGanados(r.ganados);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (status !== "authenticated") return;
-    apiGet<{ total: number }>("/api/gamificacion/puntos")
-      .then((r) => setTotal(r.total))
-      .catch(() => {});
+    cargarSaldo();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos remotos
     cargarPagina(1);
-  }, [status, cargarPagina]);
+  }, [status, cargarPagina, cargarSaldo]);
+
+  const alCambiar = useCallback(
+    (mensaje: string) => {
+      setAviso(mensaje);
+      cargarSaldo();
+      cargarPagina(1);
+    },
+    [cargarSaldo, cargarPagina]
+  );
 
   if (status === "unauthenticated") {
     return (
@@ -90,14 +112,22 @@ export default function PuntosPage() {
       </div>
 
       <div className="flex animate-scale-in flex-col items-center gap-1 rounded-card bg-primary px-5 py-6 text-white shadow-cta">
-        <span className="text-[13px] font-semibold uppercase tracking-wide text-primary-soft">Total acumulado</span>
+        <span className="text-[13px] font-semibold uppercase tracking-wide text-primary-soft">Saldo para canjear</span>
         <span className="font-display text-[44px] font-bold leading-none tabular-nums">
           {formatoPuntos(Math.round(totalAnimado * 10) / 10)}
         </span>
         <span className="text-[13px] text-primary-soft">
           {cantidad} {cantidad === 1 ? "movimiento" : "movimientos"}
         </span>
+        {ganados !== null && (
+          <span className="mt-1 text-center text-[12px] text-primary-soft">
+            Ganados en total: {formatoPuntos(ganados)} · definen tu alcance en el mapa, canjear no lo achica
+          </span>
+        )}
       </div>
+
+      {total !== null && <PanelPlan saldo={total} onCambio={alCambiar} />}
+      <TransferirPuntos onCambio={alCambiar} />
 
       {error && (
         <p role="alert" className="text-[13px] text-estado-rechazado-text">
@@ -144,6 +174,8 @@ export default function PuntosPage() {
           );
         })}
       </ul>
+
+      <Toast mensaje={aviso} onCerrar={() => setAviso(null)} />
 
       {movimientos.length < cantidad && (
         <button

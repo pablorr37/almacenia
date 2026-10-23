@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { totalPuntos } from "@/lib/gamificacion/gamificacion";
+import { puntosGanados } from "@/lib/gamificacion/gamificacion";
 import type { Plan } from "@/generated-prisma/client";
 
 // Radio de alcance del mapa según plan y puntos (18-alcance.md).
@@ -60,12 +60,12 @@ function armarAlcance(invitado: boolean, plan: Plan, puntos: number): Alcance {
   return { invitado, plan, puntos, radioKm, provincia: radioKm === null, proximoUmbral: proximoUmbral(plan, puntos) };
 }
 
-// Alcance del usuario (plan desde la DB, puntos acumulados). null = invitado.
+// Alcance del usuario (plan desde la DB, puntos ganados: canjear no lo achica). null = invitado.
 export async function obtenerAlcance(usuarioId: string | null): Promise<Alcance> {
   if (!usuarioId) return armarAlcance(true, "free", 0);
   const [usuario, puntos] = await Promise.all([
     prisma.usuario.findUnique({ where: { id: usuarioId }, select: { plan: true } }),
-    totalPuntos(usuarioId),
+    puntosGanados(usuarioId),
   ]);
   return armarAlcance(false, usuario?.plan ?? "free", puntos);
 }

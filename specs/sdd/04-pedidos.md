@@ -82,6 +82,12 @@ pendiente ──confirmar──> confirmado ──marcarListo──> listo_para_
   comprador — tanto en la pestaña Pedidos de mi-tienda como en `/pedidos/:id`. El
   email del comprador no se expone.
 
+- **Notificaciones** (ronda 5, [`22-notificaciones.md`](22-notificaciones.md)): crear un
+  pedido notifica `pedido_nuevo` al propietario y a los miembros con permiso `pedidos`;
+  cancelarlo, `pedido_cancelado`; un cambio de estado del equipo notifica `pedido_estado`
+  al comprador y `pedido_modificado` al resto del equipo. Las notificaciones nunca hacen
+  fallar la operación y las firmas no cambian.
+
 ## Endpoints REST
 
 ### `POST /api/pedidos`

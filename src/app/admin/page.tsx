@@ -116,6 +116,15 @@ export default function AdminPage() {
         <Link href="/admin/ventas" className="text-[13px] font-semibold text-accent-text">
           Ventas →
         </Link>
+        <Link href="/admin/publicidad" className="text-[13px] font-semibold text-accent-text">
+          Publicidad →
+        </Link>
+        <Link href="/admin/pagos" className="text-[13px] font-semibold text-accent-text">
+          Pagos →
+        </Link>
+        <Link href="/admin/notificaciones" className="text-[13px] font-semibold text-accent-text">
+          Notificaciones →
+        </Link>
         <Link href="/admin/fotos" className="text-[13px] font-semibold text-accent-text">
           Fotos →
         </Link>

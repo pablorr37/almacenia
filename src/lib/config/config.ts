@@ -27,6 +27,98 @@ export const CLAVES_CONFIG = {
     entero: false,
     descripcion: "Buscar y comparar: pesos (ARS) que 'cuesta' cada km de recorrido al comparar planes de compra.",
   },
+  // 23-puntos-pagos.md: precios en puntos y en pesos, topes de transferencias.
+  "canje.premium_puntos": {
+    porDefecto: 1500,
+    entero: true,
+    descripcion: "Canjes: puntos para un período de plan premium.",
+  },
+  "canje.premium_dias": {
+    porDefecto: 30,
+    entero: true,
+    minimo: 1,
+    descripcion: "Canjes: días que dura un período de premium (pagado con puntos o con pesos).",
+  },
+  "canje.publicidad_dia_puntos": {
+    porDefecto: 100,
+    entero: true,
+    descripcion: "Publicidad: puntos por día de campaña en un espacio de la app (inicio, lista, comparar, pie de tienda).",
+  },
+  "canje.publicidad_pin_dia_puntos": {
+    porDefecto: 50,
+    entero: true,
+    descripcion: "Publicidad: puntos por día de 'tienda destacada' (nombre junto al pin del mapa).",
+  },
+  "canje.publicidad_push_puntos": {
+    porDefecto: 300,
+    entero: true,
+    descripcion: "Publicidad: puntos por un envío de publicidad push.",
+  },
+  "canje.reintegro_pct": {
+    porDefecto: 100,
+    entero: true,
+    maximo: 100,
+    descripcion: "Publicidad: % de los puntos de los días no usados que se devuelven al finalizar una campaña antes de tiempo.",
+  },
+  "precio.premium_ars": {
+    porDefecto: 3000,
+    entero: false,
+    descripcion: "Pagos en pesos: precio (ARS) de un período de premium.",
+  },
+  "precio.publicidad_dia_ars": {
+    porDefecto: 1000,
+    entero: false,
+    descripcion: "Pagos en pesos: precio (ARS) por día de campaña en un espacio de la app.",
+  },
+  "precio.publicidad_pin_dia_ars": {
+    porDefecto: 500,
+    entero: false,
+    descripcion: "Pagos en pesos: precio (ARS) por día de tienda destacada en el mapa.",
+  },
+  "precio.publicidad_push_ars": {
+    porDefecto: 3000,
+    entero: false,
+    descripcion: "Pagos en pesos: precio (ARS) por un envío de publicidad push.",
+  },
+  "puntos.transferencia_max": {
+    porDefecto: 500,
+    entero: true,
+    descripcion: "Transferencias en el equipo: máximo de puntos por transferencia.",
+  },
+  "puntos.transferencia_mes_max": {
+    porDefecto: 2000,
+    entero: true,
+    descripcion: "Transferencias en el equipo: máximo de puntos que una persona puede enviar por mes.",
+  },
+  "pagos.gracia_dias": {
+    porDefecto: 3,
+    entero: true,
+    descripcion: "Renovación en pesos: días que se mantiene el premium vencido mientras se espera el pago.",
+  },
+  // 21-publicidad.md y 22-notificaciones.md
+  "publicidad.frecuencia_dia": {
+    porDefecto: 3,
+    entero: true,
+    minimo: 1,
+    descripcion: "Publicidad: veces por día que un mismo usuario puede ver una misma campaña.",
+  },
+  "notif.publicidad_push_semana": {
+    porDefecto: 2,
+    entero: true,
+    descripcion: "Notificaciones: máximo de publicidades push por usuario en 7 días.",
+  },
+  "notif.hora_inicio": {
+    porDefecto: 8,
+    entero: true,
+    maximo: 24,
+    descripcion: "Notificaciones: hora (San Juan) desde la que se puede enviar publicidad push.",
+  },
+  "notif.hora_fin": {
+    porDefecto: 22,
+    entero: true,
+    maximo: 24,
+    descripcion: "Notificaciones: hora (San Juan) hasta la que se puede enviar publicidad push.",
+  },
 } as const;
 
 export type ClaveConfig = keyof typeof CLAVES_CONFIG;
@@ -67,16 +159,18 @@ export async function actualizarConfig(admin: Usuario, clave: string, valor: num
   if (!esClave(clave)) {
     throw new AppError("CLAVE_CONFIG_INVALIDA", "Esa clave de configuración no existe.");
   }
-  const def: { entero: boolean; maximo?: number; porDefecto: number; descripcion: string } = CLAVES_CONFIG[clave];
+  const def: { entero: boolean; minimo?: number; maximo?: number; porDefecto: number; descripcion: string } =
+    CLAVES_CONFIG[clave];
+  const minimo = def.minimo ?? 0;
   const maximo = def.maximo ?? Infinity;
   if (
     typeof valor !== "number" ||
     !Number.isFinite(valor) ||
-    valor < 0 ||
+    valor < minimo ||
     valor > maximo ||
     (def.entero && !Number.isInteger(valor))
   ) {
-    const rango = Number.isFinite(maximo) ? `entre 0 y ${maximo}` : "mayor o igual a 0";
+    const rango = Number.isFinite(maximo) ? `entre ${minimo} y ${maximo}` : `mayor o igual a ${minimo}`;
     throw new AppError("VALOR_CONFIG_INVALIDO", def.entero ? `El valor debe ser un entero ${rango}.` : `El valor debe ser un número ${rango}.`);
   }
   await prisma.configuracionSistema.upsert({ where: { clave }, create: { clave, valor }, update: { valor } });

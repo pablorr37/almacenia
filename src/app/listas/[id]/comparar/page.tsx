@@ -1,5 +1,6 @@
 "use client";
 
+import { EspacioPublicitario } from "@/components/publicidad/EspacioPublicitario";
 import { use, useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -303,6 +304,8 @@ export default function CompararPage({ params }: { params: Promise<{ id: string 
               ))}
             </div>
           </details>
+
+          <EspacioPublicitario espacio="comparar" lat={origen.lat} lon={origen.lon} />
 
           <p className="text-[11px] leading-relaxed text-text-2">
             Distancias en línea recta desde tu ubicación. Pronto vamos a sumar recorridos por calle, promociones y tus

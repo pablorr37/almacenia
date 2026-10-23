@@ -1,6 +1,6 @@
 # Ronda 5: notificaciones de la app
 
-Estado: **pendiente** (borrador). Ver el pedido del 2026-10-17, punto 3, en [`../memoria.md`](../memoria.md).
+Estado: **hecha** (2026-10-23). Lo implementado y las decisiones finales están en [`../memoria.md`](../memoria.md) ("Rondas 4 y 5") y en las specs `specs/sdd/21-publicidad.md`, `22-notificaciones.md` y `23-puntos-pagos.md`. Este documento queda como borrador histórico. Ver el pedido del 2026-10-17, punto 3, en [`../memoria.md`](../memoria.md).
 
 ## Pedido
 - **Para vendedores:**

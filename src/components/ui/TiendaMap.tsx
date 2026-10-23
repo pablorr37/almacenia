@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { MapContainer, TileLayer, Marker, Popup, Circle, CircleMarker, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
@@ -21,6 +21,8 @@ export type TiendaMapa = {
   abierto24hs?: boolean;
   imagenUrl: string | null;
   verificada: boolean;
+  // 21-publicidad.md: campaña "tienda destacada" en curso.
+  destacada?: boolean;
 };
 
 // Pin propio con ícono de tienda (ver docs/auditoria-ui-ux.md §6.1): gota teal si
@@ -87,6 +89,7 @@ export function TiendaMap({
   onSelect,
   paddingInferior = 0,
   alcanceKm,
+  planUsuario = "free",
 }: {
   origen: { lat: number; lon: number };
   tiendas: TiendaMapa[];
@@ -96,6 +99,8 @@ export function TiendaMap({
   // Radio de alcance en km (18-alcance.md); null = toda la provincia (sin círculo);
   // undefined = todavía no se sabe.
   alcanceKm?: number | null;
+  // Free (e invitados) ven "Destacado" junto al nombre; premium y plata, solo el nombre.
+  planUsuario?: "free" | "premium" | "plata";
 }) {
   const ahora = useAhora();
   const estados = useMemo(() => tiendas.map((t) => estadoApertura(t.horarios, ahora, { abierto24hs: t.abierto24hs })), [tiendas, ahora]);
@@ -143,6 +148,12 @@ export function TiendaMap({
           alt={`${t.nombre}, ${estado.estado === "abierta" ? "abierta" : estado.estado === "cerrada" ? "cerrada" : "horario no informado"}, a ${t.distanciaKm.toFixed(1)} km`}
           eventHandlers={{ click: () => onSelect?.(t.id) }}
         >
+          {t.destacada && (
+            <Tooltip permanent direction="top" offset={[0, -50]} className="tooltip-destacada">
+              <span data-testid="pin-destacado">{t.nombre}</span>
+              {planUsuario === "free" && <span className="tooltip-destacada__etiqueta">Destacado</span>}
+            </Tooltip>
+          )}
           <Popup className="popup-tienda" closeButton={false} minWidth={260} maxWidth={300}>
             <Link
               href={`/tiendas/${t.id}`}

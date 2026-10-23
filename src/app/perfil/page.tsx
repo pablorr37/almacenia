@@ -12,6 +12,7 @@ import { formatoPuntos } from "@/components/ui/PuntosChip";
 import { CompartirQr } from "@/components/clientes/CompartirQr";
 import { Estrellas } from "@/components/ui/Estrellas";
 import { useConteo } from "@/lib/hooks/useConteo";
+import { PreferenciasNotificaciones } from "@/components/notificaciones/PreferenciasNotificaciones";
 
 function FilaNavegacion({ href, titulo, detalle, i }: { href: string; titulo: string; detalle?: string; i: number }) {
   return (
@@ -40,6 +41,7 @@ export default function PerfilPage() {
   const [cargando, setCargando] = useState(false);
   const [puntos, setPuntos] = useState<number | null>(null);
   const [reputacion, setReputacion] = useState<{ promedio: number | null; cantidad: number } | null>(null);
+  const [plan, setPlan] = useState<string | null>(null);
   const puntosAnimados = useConteo(puntos ?? 0);
 
   useEffect(() => {
@@ -50,6 +52,7 @@ export default function PerfilPage() {
     if (status !== "authenticated") return;
     apiGet<{ total: number }>("/api/gamificacion/puntos").then((r) => setPuntos(r.total)).catch(() => {});
     apiGet<{ promedio: number | null; cantidad: number }>("/api/auth/perfil/valoracion").then(setReputacion).catch(() => {});
+    apiGet<{ plan: string }>("/api/alcance").then((a) => setPlan(a.plan)).catch(() => {});
   }, [status]);
 
   async function onSubmit(e: FormEvent) {
@@ -138,8 +141,11 @@ export default function PerfilPage() {
       <nav className="flex flex-col gap-2" aria-label="Secciones de mi cuenta">
         <FilaNavegacion i={0} href="/perfil/pedidos" titulo="Mis pedidos" />
         <FilaNavegacion i={1} href="/listas" titulo="Mis listas de compras" detalle="Armá listas y compará precios entre tiendas" />
-        <FilaNavegacion i={2} href="/perfil/puntos" titulo="Historial de puntos" />
+        <FilaNavegacion i={2} href="/perfil/puntos" titulo="Mis puntos" detalle="Canjear premium, transferir y ver el historial" />
+        <FilaNavegacion i={3} href="/notificaciones" titulo="Notificaciones" />
       </nav>
+
+      {status === "authenticated" && <PreferenciasNotificaciones plan={plan} />}
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <h2 className="text-[15px] font-semibold text-text">Mis datos</h2>

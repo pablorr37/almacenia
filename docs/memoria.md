@@ -13,8 +13,8 @@ estado de la ronda, PR y decisiones nuevas. El detalle de cada ronda está en
 | 1 | Bugs (escáner, editar/eliminar productos, × descentrada) + radio de alcance en el mapa | Hecha | [#8](https://github.com/pablorr37/almacenia/pull/8) |
 | 2 | [Inicio del vendedor y menú de inicio, varias tiendas, empleados y permisos](rondas/ronda-2-inicio-vendedor.md) | Hecha | [#9](https://github.com/pablorr37/almacenia/pull/9) |
 | 3 | [Precio = costo + ganancia + impuestos, datos para facturar, balance por plan, plan Plata](rondas/ronda-3-precios-balance.md) | Hecha | [#10](https://github.com/pablorr37/almacenia/pull/10) |
-| 4 | [Publicidad: Google + otros proveedores + motor propio de Almacenia + pagar publicidad o premium con puntos](rondas/ronda-4-publicidad.md) | Pendiente (tutoriales e investigación listos) | — |
-| 5 | [Notificaciones de la app: en la app y push, para vendedores, compradores y generales](rondas/ronda-5-notificaciones.md) | Pendiente | — |
+| 4 | [Publicidad: motor propio de Almacenia + pagar publicidad o premium con puntos o pesos + transferencias de puntos](rondas/ronda-4-publicidad.md) | Hecha (Google y otros proveedores en espera) | ver "Rondas 4 y 5" |
+| 5 | [Notificaciones de la app: en la app, push y email, para vendedores, compradores y generales](rondas/ronda-5-notificaciones.md) | Hecha | ver "Rondas 4 y 5" |
 | — | Plan Gold ("casi admin") | Para otra ronda | — |
 
 Forma de trabajo acordada:
@@ -192,6 +192,55 @@ Spec: `specs/sdd/20-precios-facturacion.md`.
   - avisa si no hay más stock;
   - si el producto no está cargado, ofrece "Darlo de alta".
 
+## Decisiones de la ronda 4 (2026-10-23, respuestas del usuario)
+
+| # | Tema | Decisión |
+| --- | --- | --- |
+| 1 | Cobro de la publicidad | Por **día de campaña**, en puntos y en pesos (push: por envío). |
+| 2 | Premium con puntos | 30 días, con **renovación automática opcional** con puntos o en pesos. |
+| 3 | ¿Canjear achica el radio? | **No**: el radio usa los puntos **ganados**; el saldo para gastar es aparte. |
+| 4 | Puntos en el equipo | Cualquier persona de una misma tienda (dueño, encargados, empleados) puede **transferir** puntos a otra de esa tienda, con topes del admin. Las transferencias recibidas no agrandan el radio. |
+| 5 | Precios en puntos | Los propuestos (1500 premium, 100/día aviso, 50/día pin, 300 push), editables en el admin. |
+| 6 | Pesos | Precios en pesos editables; cobro manual confirmado por el admin, con la infraestructura lista para sumar Mercado Pago. |
+| 7 | Google y otros proveedores | **En espera**. |
+| 8 | Email | Las notificaciones también salen **por email**. |
+| 9 | Publicidad push | Tope de **2 por semana** por usuario, **sin envíos de noche** (8 a 22 h, editables). |
+
+Además: "que estos cambios sean compatibles con el push de recién" (PR de categorías y escaneo): se verificó que su e2e sigue pasando igual.
+
+## Rondas 4 y 5: qué quedó hecho
+
+Specs nuevas: `21-publicidad.md`, `22-notificaciones.md`, `23-puntos-pagos.md` (y ajustes en 04, 10, 11, 12, 18, 19).
+
+- **Puntos como medio de pago:**
+  - saldo (para gastar) y ganados (para el radio); "Mis puntos" muestra los dos;
+  - canje de premium por puntos, atómico (dos canjes simultáneos no gastan dos veces);
+  - plan con vencimiento (`plan_vence_en`) y renovación automática por puntos o pesos, con 3 días de gracia para pagar (editable); aviso 3 días antes; el plan asignado a mano por el admin no vence;
+  - transferencias entre personas del equipo de una tienda, con topes por vez (500) y por mes (2000).
+- **Pagos en pesos:** órdenes de pago con código; el admin las confirma en **Admin → Pagos** y se activa el premium o la campaña. Interfaz `ProcesadorPagos` con el adaptador `PagoManual`; Mercado Pago entra como otro adaptador.
+- **Motor de avisos propio:**
+  - espacios: inicio, lista de negocios, buscar y comparar, pie de tienda, tienda destacada en el mapa y push;
+  - piezas con imagen (JPEG, PNG, WebP o GIF animado, convertidas a WebP) o texto; destino opcional;
+  - permiso nuevo de equipo `publicidad`; paga con sus puntos o en pesos quien crea la campaña;
+  - moderación en **Admin → Publicidad** (rechazar devuelve los puntos);
+  - pausar (no consume días), reanudar, finalizar (devuelve los días no usados × `canje.reintegro_pct`);
+  - rotador ponderado, solo free e invitados, tope de 3 impresiones por campaña, usuario y día, sin mostrarle al equipo sus propios avisos, segmento por radio;
+  - impresión visible (50 % durante 1 s) y clic con token firmado; los bots no cuentan; métricas en mi-tienda;
+  - **tienda destacada**: free ve el nombre junto al pin con "Destacado"; premium y plata, solo el nombre;
+  - premium y plata no ven avisos (ni se reserva el espacio); sin campañas se ve "¿Tenés un comercio? Publicitalo acá";
+  - nunca en mi-tienda ni junto a botones de acción (en la página de la tienda no aparece mientras hay un pedido armado).
+- **Listo para AdSense (en espera):** `/privacidad`, `/terminos`, `robots.txt`, `/ads.txt` desde `ADS_TXT`, aviso de cookies. Los textos legales son un borrador: conviene que los revise un profesional.
+- **Notificaciones:**
+  - campanita con contador en el inicio y el mapa; `/notificaciones`;
+  - preferencias por categoría (pedidos, mi cuenta, avisos, ofertas, publicidad) y canal (app, push, email) en el perfil; ofertas y publicidad son opt-in;
+  - pedidos: nuevo y cancelado al equipo con permiso `pedidos`; cambios de estado al comprador y al resto del equipo;
+  - ofertas: al cargar un precio de oferta, a compradores que ya compraron, hicieron check-in o visitaron la tienda (una por tienda por día);
+  - avisos internos y generales del admin por segmento (rol, plan, tienda), con conteo previo y envío por lotes (**Admin → Notificaciones**);
+  - PWA instalable (manifest, íconos, service worker) y push con VAPID; instructivo para iPhone; email por SMTP;
+  - sin claves VAPID o SMTP, esos canales quedan apagados sin romper nada.
+- **Tareas programadas:** `POST /api/cron/tareas` cada hora (ver `docs/deploy-coolify.md` 4.5).
+- **Verificación:** 852 tests en verde, build OK, lint sin errores nuevos. E2E con Chromium: canje y renovación, transferencia, campañas con puntos y pesos, moderación, aviso e impresión/clic, pin destacado (free y premium), campanita por pedido nuevo, email por SMTP de prueba, envío push (VAPID + cifrado) a un servicio push de prueba, cron, ads.txt, cookies y páginas legales; y el e2e de categorías y escaneo (PR anterior) sigue pasando.
+
 ## Preguntas abiertas
 
 - **Facturación (resuelto en la ronda 3):**
@@ -202,15 +251,11 @@ Spec: `specs/sdd/20-precios-facturacion.md`.
   - IVA crédito fiscal: necesita un módulo de compras a proveedores;
   - precio de cada plan y cobro (hoy el admin cambia el plan a mano);
   - plan Gold.
-- **Publicidad (ronda 4):**
-  - IDs de Google AdSense/Ad Manager y qué otros proveedores. Los configura el usuario siguiendo los tutoriales; hace falta un dominio público con política de privacidad.
-  - Precio en dinero de la publicidad en el mapa, si además de puntos se va a cobrar.
-  - **Pagar con puntos** (valores iniciales propuestos; todos quedan editables en el admin):
-    - ¿la publicidad se paga por días de campaña, por impresiones o por ambas cosas?
-    - ¿cuánto dura el premium pagado con puntos? Propuesta: 30 días.
-    - ¿los puntos gastados bajan el radio de alcance? Hoy el radio se calcula con los puntos totales. Propuesta: el alcance usa los puntos ganados históricos y el saldo para gastar es aparte.
-    - ¿un empleado puede pagar publicidad de la tienda con sus propios puntos, o solo el dueño?
-- **Notificaciones (ronda 5):**
-  - ¿también por email, o solo dentro de la app y push?
-  - Límite de publicidad push por usuario y por semana. Propuesta: 2 por semana, editable en el admin.
+- **Pendientes de las rondas 4 y 5:**
+  - Google AdSense/Ad Manager y otros proveedores (en espera): IDs según los tutoriales de `docs/tutoriales/`;
+  - adaptador de Mercado Pago (hoy el pago en pesos es manual);
+  - en Coolify: programar `POST /api/cron/tareas` cada hora y cargar `CRON_TOKEN`, las claves VAPID, el SMTP y `APP_URL`;
+  - revisar los textos de `/privacidad` y `/terminos` con un profesional;
+  - segmentar la publicidad push y las ofertas por zona necesitaría guardar la zona del comprador (hoy: publicidad push a todos los free con opt-in; ofertas a quien ya interactuó con la tienda);
+  - "pedido modificado": hoy no se puede editar el contenido de un pedido; se notifica cuando alguien del equipo cambia su estado.
 - **Empleados (ronda 2, resuelta con la lista propuesta):** vender, cobrar, anular, precios, stock, productos, fotos, pedidos, balance, usuarios. Si el usuario quiere otros permisos (por ejemplo, separar "ver" de "editar" el stock), se agregan al enum `permiso_tienda` sin cambiar el modelo.

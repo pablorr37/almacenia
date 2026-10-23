@@ -25,6 +25,10 @@ ALTER TABLE usuarios ADD COLUMN plan plan NOT NULL DEFAULT 'free';
 
 ### Radio según plan y puntos
 
+Desde la ronda 4, `p` son los **puntos ganados** (`puntosGanados`,
+[`23-puntos-pagos.md`](23-puntos-pagos.md)): gastar puntos en canjes **no achica** el radio y
+recibir transferencias no lo agranda. `Alcance.puntos` es ese valor.
+
 | Plan | Puntos (`p`) | Radio |
 | --- | --- | --- |
 | free | `p < 100` | 3 km |

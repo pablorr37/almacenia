@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -10,6 +10,8 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EstadoAperturaPill } from "@/components/ui/EstadoAperturaPill";
 import { IconoTienda } from "@/components/ui/IconoTienda";
 import { PuntosChip } from "@/components/ui/PuntosChip";
+import { Campanita } from "@/components/notificaciones/Campanita";
+import { EspacioPublicitario } from "@/components/publicidad/EspacioPublicitario";
 import type { TiendaMapa } from "@/components/ui/TiendaMap";
 import { estadoApertura } from "@/lib/tiendas/horarios";
 import { useAhora } from "@/lib/hooks/useAhora";
@@ -110,6 +112,7 @@ function MapaAutenticado() {
             tiendas={tiendas}
             onSelect={() => setSnap("colapsado")}
             alcanceKm={alcance ? alcance.radioKm : undefined}
+            planUsuario={alcance?.plan ?? "free"}
             // El sheet arranca en "medio" (45% de la pantalla).
             paddingInferior={typeof window === "undefined" ? 0 : Math.round(window.innerHeight * 0.45)}
           />
@@ -121,11 +124,12 @@ function MapaAutenticado() {
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 mx-auto flex max-w-md items-center justify-between px-5 pt-5">
-        <span className="pointer-events-auto animate-fade-in-down rounded-pill bg-surface/95 px-3.5 py-1.5 font-display text-[18px] font-bold text-primary-dark shadow-card">
+        <span className="pointer-events-auto hidden animate-fade-in-down rounded-pill bg-surface/95 px-3.5 py-1.5 font-display text-[18px] font-bold text-primary-dark shadow-card min-[400px]:inline">
           Almacenia
         </span>
         <div className="pointer-events-auto flex items-center gap-2">
           <PuntosChip />
+          <Campanita />
           <Link
             href="/"
             className="press flex h-11 items-center rounded-pill border border-border bg-surface/95 px-3.5 text-[13px] font-semibold text-text shadow-card"
@@ -199,28 +203,31 @@ function MapaAutenticado() {
             </p>
           )}
           {tiendas.map((t, i) => (
-            <Link
-              key={t.id}
-              href={`/tiendas/${t.id}`}
-              style={{ "--i": i } as React.CSSProperties}
-              className="press-soft stagger flex animate-fade-up items-center gap-3 rounded-card border border-border bg-surface p-3.5 shadow-card"
-            >
-              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-control bg-primary-soft text-primary-dark">
-                {t.imagenUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={t.imagenUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <IconoTienda />
-                )}
-              </div>
-              <div className="flex min-w-0 flex-col gap-1">
-                <div className="truncate text-[15px] font-semibold text-text">{t.nombre}</div>
-                <div className="truncate text-xs text-text-2 tabular-nums">
-                  {t.direccion} · {t.distanciaKm.toFixed(1)} km
+            <Fragment key={t.id}>
+              <Link
+                href={`/tiendas/${t.id}`}
+                style={{ "--i": i } as React.CSSProperties}
+                className="press-soft stagger flex animate-fade-up items-center gap-3 rounded-card border border-border bg-surface p-3.5 shadow-card"
+              >
+                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-control bg-primary-soft text-primary-dark">
+                  {t.imagenUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={t.imagenUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <IconoTienda />
+                  )}
                 </div>
-                <EstadoAperturaPill estado={estadoApertura(t.horarios, ahora, { abierto24hs: t.abierto24hs })} className="self-start" />
-              </div>
-            </Link>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="truncate text-[15px] font-semibold text-text">{t.nombre}</div>
+                  <div className="truncate text-xs text-text-2 tabular-nums">
+                    {t.direccion} · {t.distanciaKm.toFixed(1)} km
+                  </div>
+                  <EstadoAperturaPill estado={estadoApertura(t.horarios, ahora, { abierto24hs: t.abierto24hs })} className="self-start" />
+                </div>
+              </Link>
+              {/* 21-publicidad.md: un espacio en la lista, después de las dos primeras. */}
+              {i === Math.min(1, tiendas.length - 1) && origen && <EspacioPublicitario espacio="lista" lat={origen.lat} lon={origen.lon} />}
+            </Fragment>
           ))}
         </div>
       </BottomSheet>

@@ -1,6 +1,6 @@
 # Ronda 4: publicidad y pagos con puntos
 
-Estado: **pendiente**. La parte de documentación ya está hecha: tutoriales e investigación.
+Estado: **hecha** (2026-10-23). Lo implementado y las decisiones finales están en [`../memoria.md`](../memoria.md) ("Rondas 4 y 5") y en las specs `specs/sdd/21-publicidad.md`, `22-notificaciones.md` y `23-puntos-pagos.md`. Este documento queda como borrador histórico.
 
 Ver en [`../memoria.md`](../memoria.md):
 - el pedido del 2026-10-16, punto 2;

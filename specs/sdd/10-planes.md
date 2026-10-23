@@ -44,6 +44,17 @@ en este MVP no hay UI de admin para editarlas dinámicamente.
   `src/lib/planes/planes.ts`, (2) llamar a `tienePermiso(tienda, 'feature')` donde
   corresponda. No requiere migración de schema.
 
+### Vencimiento del plan (ronda 4)
+
+- `usuarios.plan_vence_en`: NULL = sin vencimiento (plan asignado por el admin). Un premium
+  canjeado con puntos o pagado en pesos vence a los `canje.premium_dias` días.
+- `usuarios.renovacion_auto`: `ninguna | puntos | pesos` (opt-in).
+- Al vencer, `vencerPlanes` renueva o vuelve a free (también en sus tiendas). Detalle en
+  [`23-puntos-pagos.md`](23-puntos-pagos.md).
+- Asignar el plan a mano desde el admin deja `plan_vence_en` en NULL.
+- Premium y plata no ven publicidad ni reciben publicidad push
+  ([`21-publicidad.md`](21-publicidad.md)).
+
 ## Endpoints REST
 
 `PATCH /api/admin/tiendas/:id/plan` se eliminó en la ronda 3 (el plan se cambia en el
