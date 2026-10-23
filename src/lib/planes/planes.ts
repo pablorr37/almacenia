@@ -12,7 +12,8 @@ export type Feature =
   | "destacado_prioritario"
   | "balance_solido"
   | "balance_completo"
-  | "exportar_libro_ventas";
+  | "exportar_libro_ventas"
+  | "crear_categorias";
 
 export const PLAN_MINIMO: Record<Feature, Plan> = {
   fotos_personalizadas: "premium",
@@ -20,6 +21,7 @@ export const PLAN_MINIMO: Record<Feature, Plan> = {
   balance_solido: "premium",
   balance_completo: "plata",
   exportar_libro_ventas: "plata",
+  crear_categorias: "premium", // 17-rubros-categorias.md
 };
 
 export function tienePermiso(tienda: { plan: Plan }, feature: Feature): boolean {

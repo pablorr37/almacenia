@@ -19,6 +19,20 @@ fuera de este MVP). Toda venta tiene un origen:
   lista" (se recuerda por navegador) para que el ticket quede arriba. Cada fila tiene
   una estrella para marcar favorito. En productos por kg se puede cargar por importe
   ("$ Importe", ver `03-productos.md`).
+
+  **Escanear producto**: al lado del buscador, el botón "Escanear producto" abre el
+  escáner (código de barras o QR que contenga el código). El texto leído se busca entre
+  los productos de la tienda (`codigoBarras` del catálogo, que
+  `GET /api/tiendas/:id/productos?paraVenta=1` devuelve en cada producto). Para
+  comparar, se dejan solo los dígitos y un UPC-A de 12 dígitos equivale al EAN-13 con
+  un 0 adelante. También se acepta el `id` del producto (QR propio).
+  - Si lo encuentra, **suma un paso** (1 unidad, o el paso de kg) a esa línea del
+    ticket y avisa "Agregado: <nombre>". Si el producto está pausado, sin stock o ya
+    llegó al stock disponible, avisa y no suma.
+  - Si no lo encuentra: "No tenés cargado un producto con el código <código>", con un
+    link a Stock para darlo de alta (el alta busca ese código en el catálogo,
+    `06-catalogo.md`).
+  - Función pura: `productoPorCodigo(productos, texto)` en `src/lib/ventas/escaneo.ts`.
 - **A distancia**: se genera automáticamente cuando un `Pedido` pasa a `entregado`
   (ver `04-pedidos.md`). No existe una forma de crear manualmente una venta "a
   distancia" — siempre nace de esa transición.

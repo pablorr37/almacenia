@@ -172,6 +172,26 @@ Spec: `specs/sdd/20-precios-facturacion.md`.
 
   Las secciones de un plan mayor se ven bloqueadas.
 
+## Cambios del 2026-10-23 (pedido del usuario)
+
+> Haremos un cambio: usuarios > premium pueden agregar categorías de productos. Si la categoría que escriben no está, al momento de guardar el producto esa categoría nueva también se agrega. Ya no es solo el admin el que agrega categorías. Y en eventa, agrega que se puede usar el escaner de qr/codigo de barras para escanear el producto y agregarlo a la lista del pedido. Hoy no está
+
+- **Categorías creadas por usuarios** (`17-rubros-categorias.md`):
+  - "usuarios > premium" se interpretó como **premium o mayor** (premium y plata);
+  - al cargar un producto, si la categoría no existe, el buscador ofrece "+ Crear categoría «…»" y se crea **al guardar el producto**;
+  - si el alta falla, la categoría no queda creada;
+  - si ya existía con otra tilde o con mayúsculas, se usa la existente;
+  - se guarda quién la creó (`categorias_producto.creada_por_id`); el admin la puede renombrar o borrar;
+  - en una tienda vale el plan de la tienda (el del dueño) o el del usuario: un empleado de una tienda premium puede crearlas;
+  - desde una lista de compras vale el plan del usuario;
+  - los usuarios free ven "Con Premium podés crearla".
+- **Escanear producto en el punto de venta** (`05-ventas.md`):
+  - un botón con el ícono de código de barras, al lado del buscador, abre el escáner;
+  - el código leído (de barras o un QR que lo contenga) se busca en los productos de la tienda y suma una unidad (o el paso de kg) al ticket;
+  - UPC-A y EAN-13 se toman como el mismo código;
+  - avisa si no hay más stock;
+  - si el producto no está cargado, ofrece "Darlo de alta".
+
 ## Preguntas abiertas
 
 - **Facturación (resuelto en la ronda 3):**

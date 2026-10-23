@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirPermiso, PERMISOS, type Permiso } from "@/lib/equipo/equipo";
 import { AppError } from "@/lib/errors";
 import type { Usuario } from "@/lib/auth/auth";
-import { crearProductoNuevoEnCatalogo, type NuevaEntradaCatalogo } from "@/lib/catalogo/catalogo";
+import { crearProductoNuevoEnCatalogo, conCategoriaDeUsuario, type NuevaEntradaCatalogo } from "@/lib/catalogo/catalogo";
 import { tienePermiso, type Plan } from "@/lib/planes/planes";
 import { validarCantidad, type UnidadMedida } from "./unidades";
 import { ALICUOTAS, calcularPrecio, margenDesde, type AlicuotaIva, type CondicionIva } from "@/lib/precios/precios";
@@ -241,6 +241,9 @@ export async function crearProducto(
   if ("catalogoId" in input ? input.imagenUrl : input.nuevo.imagenUrl) exigirFotosPremium(tienda);
   if (!("catalogoId" in input)) validarCantidad(input.nuevo.unidad ?? "unidad", input.stock, { permitirCero: true });
 
+  // Categoría nueva (17-rubros-categorias.md): alcanza con que la tienda (plan del
+  // dueño) o el usuario que carga sea premium o mayor.
+  const planUsuario = (await prisma.usuario.findUniqueOrThrow({ where: { id: vendedor.id }, select: { plan: true } })).plan;
   const catalogo =
     "catalogoId" in input
       ? await (async () => {
@@ -250,8 +253,10 @@ export async function crearProducto(
           }
           return encontrado;
         })()
-      : await crearProductoNuevoEnCatalogo(input.nuevo).then((p) =>
-          prisma.productoCatalogo.findUniqueOrThrow({ where: { id: p.id } })
+      : await conCategoriaDeUsuario(vendedor, input.nuevo, [tienda.plan, planUsuario], (nuevo) =>
+          crearProductoNuevoEnCatalogo({ ...nuevo, imagenUrl: input.nuevo.imagenUrl }).then((p) =>
+            prisma.productoCatalogo.findUniqueOrThrow({ where: { id: p.id } })
+          )
         );
 
   const producto = await prisma.producto.create({
@@ -380,13 +385,18 @@ export async function listarProductos(
 export interface ProductoParaVenta extends Producto {
   vendidos30d: number;
   ultimaVentaEn: string | null;
+  codigoBarras: string | null; // del catálogo: "Escanear producto" (05-ventas.md)
 }
 
 export async function listarParaVenta(vendedor: Usuario, tiendaId: string): Promise<ProductoParaVenta[]> {
   await verificarPermiso(vendedor, tiendaId, "vender");
   const desde = new Date(Date.now() - 30 * 24 * 3600_000);
   const [productos, ventas] = await Promise.all([
-    prisma.producto.findMany({ where: { tiendaId, eliminadoEn: null }, include: INCLUDE_IMAGEN, orderBy: { nombre: "asc" } }),
+    prisma.producto.findMany({
+      where: { tiendaId, eliminadoEn: null },
+      include: { ...INCLUDE_IMAGEN, catalogo: { select: { imagenUrl: true, unidad: true, codigoBarras: true } } },
+      orderBy: { nombre: "asc" },
+    }),
     prisma.$queryRaw<Array<{ producto_id: string; vendidos_30d: number; ultima_venta_en: Date }>>`
       SELECT iv.producto_id,
              COUNT(DISTINCT v.id) FILTER (WHERE v.creada_en >= ${desde})::int AS vendidos_30d,
@@ -404,6 +414,7 @@ export async function listarParaVenta(vendedor: Usuario, tiendaId: string): Prom
       ...aProducto(p),
       vendidos30d: venta?.vendidos_30d ?? 0,
       ultimaVentaEn: venta ? venta.ultima_venta_en.toISOString() : null,
+      codigoBarras: p.catalogo.codigoBarras,
     };
   });
 }

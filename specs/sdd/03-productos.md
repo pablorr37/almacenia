@@ -137,7 +137,7 @@ o dando de alta un producto nuevo en el catálogo compartido en la misma operaci
 
 ```ts
 {
-  nuevo: NuevaEntradaCatalogo & { imagenUrl?: string }; // 06-catalogo.md: categoriaId obligatorio
+  nuevo: NuevaEntradaCatalogo & { imagenUrl?: string }; // 06-catalogo.md: categoriaId, o categoriaNueva si el plan es premium o mayor
   precio: number;
   stock: number;
   descripcion?: string;
@@ -168,7 +168,7 @@ Response `200`: `{ data: Producto[]; page; pageSize; total }`.
 
 ### `GET /api/tiendas/:tiendaId/productos?paraVenta=1`
 
-Solo el dueño de la tienda (`403 FORBIDDEN` si no). Alimenta las pestañas del punto de
+Propietario o miembro con permiso `vender` (`19-equipo-tienda.md`). Alimenta las pestañas del punto de
 venta (`05-ventas.md`): devuelve **todos** los productos de la tienda (sin paginar),
 cada uno con dos datos de venta calculados sobre `items_venta` de ventas **no
 anuladas** de esa tienda:
@@ -177,6 +177,8 @@ anuladas** de esa tienda:
   aparece el producto → pestaña **Frecuentes** (mayor primero; solo los > 0).
 - `ultimaVentaEn`: fecha de la última venta que lo incluye, o `null` → pestaña
   **Recientes** (más nueva primero; solo los vendidos alguna vez).
+- `codigoBarras`: el código de barras de su entrada de catálogo, o `null` → para
+  "Escanear producto" en el punto de venta (`05-ventas.md`).
 
 La pestaña **Favoritos** muestra los `favorito = true` (estrella que el vendedor
 alterna con `PATCH /api/productos/:id { favorito }`). **Todos** muestra todo.

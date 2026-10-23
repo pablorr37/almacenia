@@ -67,6 +67,7 @@ model Usuario {
   fotosRevisadas         FotoBanco[]           @relation("FotosRevisadas")
   codigosCliente         CodigoCliente[]
   catalogoCargado        ProductoCatalogo[]    @relation("CatalogoCargado")
+  categoriasCreadas      CategoriaProducto[]   @relation("CategoriasCreadas")
 
   @@map("usuarios")
 }
@@ -159,7 +160,11 @@ model CategoriaProducto {
   nombre            String
   nombreNormalizado String   @unique @map("nombre_normalizado")
   creadaEn          DateTime @default(now()) @map("creada_en")
+  // Quién la creó: null = admin o migración; si no, un usuario premium o mayor
+  // (17-rubros-categorias.md).
+  creadaPorId       String?  @map("creada_por_id")
 
+  creadaPor        Usuario?           @relation("CategoriasCreadas", fields: [creadaPorId], references: [id], onDelete: SetNull)
   entradasCatalogo ProductoCatalogo[]
   productos        Producto[]
 

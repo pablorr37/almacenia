@@ -45,6 +45,34 @@ const aRubro = (r: { id: string; nombre: string; orden: number }): Rubro => ({ i
 const aCategoria = (c: { id: string; nombre: string }): CategoriaProducto => ({ id: c.id, nombre: c.nombre });
 
 // ---------------------------------------------------------------------------
+// Categorías creadas por usuarios premium o mayor (17-rubros-categorias.md)
+// ---------------------------------------------------------------------------
+
+// Busca la categoría por nombre normalizado o la crea a nombre del usuario. El plan
+// lo valida quien llama (depende del contexto: tienda o lista).
+export async function obtenerOCrearCategoria(
+  usuarioId: string,
+  texto: unknown
+): Promise<{ categoria: CategoriaProducto; nueva: boolean }> {
+  const datos = validarNombre(texto);
+  const existente = await prisma.categoriaProducto.findUnique({ where: { nombreNormalizado: datos.nombreNormalizado } });
+  if (existente) return { categoria: aCategoria(existente), nueva: false };
+  try {
+    return { categoria: aCategoria(await prisma.categoriaProducto.create({ data: { ...datos, creadaPorId: usuarioId } })), nueva: true };
+  } catch (error) {
+    // Otra persona la creó en paralelo: se usa esa.
+    if (!esDuplicado(error)) throw error;
+    const ganadora = await prisma.categoriaProducto.findUniqueOrThrow({ where: { nombreNormalizado: datos.nombreNormalizado } });
+    return { categoria: aCategoria(ganadora), nueva: false };
+  }
+}
+
+// Deshace una categoría recién creada si el alta que la necesitaba falló (y nadie la usa).
+export async function descartarCategoriaNueva(id: string): Promise<void> {
+  await prisma.categoriaProducto.deleteMany({ where: { id, entradasCatalogo: { none: {} }, productos: { none: {} } } });
+}
+
+// ---------------------------------------------------------------------------
 // Rubros
 // ---------------------------------------------------------------------------
 

@@ -53,7 +53,8 @@ precio ni stock**: eso es siempre propio de cada `Producto` por tienda (ver
   dos entradas con el mismo código. Es opcional (hay productos sin código de barras
   legible, ej. productos sueltos de verdulería).
 - **Datos de una entrada nueva** (`NuevaEntradaCatalogo`): `categoriaId` obligatorio
-  (`404 CATEGORIA_NO_ENCONTRADA`), `marca?` y `variante?` (≤ 40 caracteres cada una,
+  (`404 CATEGORIA_NO_ENCONTRADA`) — o, para usuarios premium o mayor, `categoriaNueva`
+  con el nombre de una categoría que se crea en el momento (`17-rubros-categorias.md`) —, `marca?` y `variante?` (≤ 40 caracteres cada una,
   filtro de groserías), `contenido?` > 0 con `unidadContenido` obligatoria si hay
   contenido (`400 CONTENIDO_INVALIDO`), `unidad` de venta (`'unidad'` | `'kg'`) y
   `codigoBarras?`. Un producto por kg (suelto) no lleva contenido
@@ -142,7 +143,8 @@ interface ProductoCatalogo {
 }
 
 interface NuevaEntradaCatalogo {
-  categoriaId: string;
+  categoriaId: string;     // o categoriaNueva (premium o mayor, 17-rubros-categorias.md)
+  categoriaNueva?: string;
   marca?: string;
   variante?: string;
   contenido?: number;

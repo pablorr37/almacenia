@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { ApiError } from "@/lib/api-client";
+import { useEffect, useState, type FormEvent } from "react";
+import { apiGet, ApiError } from "@/lib/api-client";
 import type { UnidadMedida } from "@/lib/productos/unidades";
 import {
   CamposEntradaCatalogo,
@@ -33,6 +33,13 @@ export function DialogoNuevoProducto({
   const [entrada, setEntrada] = useState<EntradaCatalogoForm>(ENTRADA_VACIA);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Premium o mayor puede crear categorías (17-rubros-categorias.md).
+  const [puedeCrearCategoria, setPuedeCrearCategoria] = useState(false);
+  useEffect(() => {
+    apiGet<{ plan: string }>("/api/alcance")
+      .then((a) => setPuedeCrearCategoria(a.plan === "premium" || a.plan === "plata"))
+      .catch(() => {});
+  }, []);
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
@@ -70,7 +77,7 @@ export function DialogoNuevoProducto({
         <p className="text-[13px] text-text-2">
           Queda disponible para todos: las tiendas lo pueden cargar y vas a poder comparar precios cuando alguna lo venda.
         </p>
-        <CamposEntradaCatalogo valor={entrada} onChange={setEntrada} sugerencia={nombreInicial} />
+        <CamposEntradaCatalogo valor={entrada} onChange={setEntrada} sugerencia={nombreInicial} puedeCrearCategoria={puedeCrearCategoria} />
         {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}
         <div className="flex gap-2">
           <button type="button" onClick={onCerrar} className="press h-12 flex-1 rounded-control border border-border bg-surface text-[15px] font-semibold">
