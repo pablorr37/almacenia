@@ -54,7 +54,7 @@ CREATE TABLE envios_notificacion (
   titulo             TEXT NOT NULL,
   cuerpo             TEXT NOT NULL,
   url                TEXT NULL,
-  segmento           JSONB NOT NULL,     -- { roles?: ('comprador'|'vendedor')[], planes?: Plan[], tiendaId?: string }
+  segmento           JSONB NOT NULL,     -- { roles?: ('comprador'|'vendedor')[], planes?: Plan[], tiendaId?: string, usuarioIds?: string[] }
   estado             estado_envio NOT NULL DEFAULT 'enviando',
   total              INTEGER NOT NULL,   -- destinatarios al crearlo
   enviados           INTEGER NOT NULL DEFAULT 0,
@@ -111,7 +111,7 @@ Las firmas de `crearPedido`, `transicionarPedido` y `actualizarProducto` no camb
 ### Envíos masivos del admin
 - `crearEnvio(admin, { tipo, titulo, cuerpo, url?, segmento })`:
   - `tipo ∈ aviso_interno | general`; `titulo` hasta 80, `cuerpo` hasta 300;
-  - `segmento.roles` (comprador/vendedor), `segmento.planes`, `segmento.tiendaId` (equipo y dueño de esa tienda); vacío = todos los usuarios activos;
+  - `segmento.roles` (comprador/vendedor), `segmento.planes`, `segmento.tiendaId` (equipo y dueño de esa tienda), `segmento.usuarioIds` (envío dirigido); vacío = todos los usuarios activos;
   - calcula `total`, procesa el **primer lote** en el request y deja el resto para la tarea programada.
 - `contarSegmento(admin, segmento)` para la vista previa del conteo.
 - `procesarEnvios(lote = 500)`: avanza cada envío `enviando` por `ultimo_usuario_id` (orden por id); al terminar, `enviado`.

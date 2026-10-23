@@ -198,7 +198,7 @@ export class PagoManual implements ProcesadorPagos {}
 export function procesadorActivo(): ProcesadorPagos;
 
 // src/lib/pagos/ordenes.ts
-export function crearOrdenPago(usuario: Usuario, input: { concepto: ConceptoPago; referenciaId?: string; montoArs: number; detalle?: Record<string, unknown> }, tx?): Promise<OrdenPago>;
+export function crearOrdenPago(usuarioId: string, input: { concepto: ConceptoPago; referenciaId?: string; montoArs: number; detalle?: Record<string, unknown> }, tx?): Promise<OrdenPago>;
 export function crearOrdenPremium(usuario: Usuario): Promise<{ orden: OrdenPago; instrucciones: string; urlPago: string | null }>;
 export function listarMisOrdenes(usuario: Usuario): Promise<OrdenPago[]>;
 export function cancelarOrden(usuario: Usuario, ordenId: string): Promise<OrdenPago>;
