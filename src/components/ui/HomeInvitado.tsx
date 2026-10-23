@@ -8,6 +8,7 @@ import { estadoApertura, type HorarioTienda } from "@/lib/tiendas/horarios";
 import { useAhora } from "@/lib/hooks/useAhora";
 import { EstadoAperturaPill } from "./EstadoAperturaPill";
 import { IconoTienda } from "./IconoTienda";
+import { EspacioPublicitario } from "@/components/publicidad/EspacioPublicitario";
 
 // Centro de San Juan capital — solo para mostrar una vista previa de tiendas
 // sin pedirle permiso de geolocalización a alguien que todavía no inició sesión
@@ -108,6 +109,9 @@ export function HomeInvitado() {
           </Link>
         ))}
 
+        {/* 21-publicidad.md: lista de negocios (invitados = free). */}
+        {tiendas !== null && <EspacioPublicitario espacio="lista" lat={LAT_SAN_JUAN} lon={LON_SAN_JUAN} className="mb-16 mt-1" />}
+
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-bg to-transparent" />
       </div>
 
@@ -122,6 +126,14 @@ export function HomeInvitado() {
           ¿No tenés cuenta?{" "}
           <Link href="/registro" className="font-semibold text-accent-text underline-offset-2 hover:underline">
             Creá una gratis
+          </Link>
+        </p>
+        <p className="flex justify-center gap-3 text-[12px] text-text-2">
+          <Link href="/privacidad" className="underline-offset-2 hover:underline">
+            Privacidad
+          </Link>
+          <Link href="/terminos" className="underline-offset-2 hover:underline">
+            Términos
           </Link>
         </p>
       </div>

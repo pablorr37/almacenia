@@ -157,7 +157,7 @@ Reglas de ubicación (compatibilidad con el punto de venta y buenas prácticas d
 - `POST /api/campanias/:id/pausar`, `/reanudar`, `/finalizar` — permiso `publicidad` en su tienda.
 
 ### Público
-- `GET /api/avisos?espacio=&lat=&lon=` — `{ data: AvisoEntregado | null }`. Sin sesión = invitado.
+- `GET /api/avisos?espacio=&lat=&lon=` — `{ data: { aviso: AvisoEntregado | null, conPublicidad: boolean } }`. Sin sesión = invitado. `conPublicidad = false` para premium y plata: la UI no reserva el espacio. Con `conPublicidad` y sin aviso, la UI muestra el aviso de la casa.
 - `POST /api/avisos/impresion` — body `{ token }` (también acepta texto plano de `sendBeacon`). `204`.
 - `GET /api/avisos/clic?token=` — `302`.
 

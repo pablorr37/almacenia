@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { AvisoCookies } from "@/components/ui/AvisoCookies";
 
 // Tipografía elegida en la auditoría UI/UX (docs/auditoria-ui-ux.md §3):
 // Bricolage Grotesque (display, con ejes opsz/wdth para nombres largos) +
@@ -22,13 +23,19 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Almacenia",
   description: "Comprá y vendé en los almacenes, kioscos y verdulerías de tu barrio.",
+  // 22-notificaciones.md: instalable (push en iPhone requiere la app en inicio).
+  appleWebApp: { capable: true, title: "Almacenia", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es" className={`${bricolage.variable} ${plusJakartaSans.variable}`}>
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <AvisoCookies />
+        </Providers>
       </body>
     </html>
   );

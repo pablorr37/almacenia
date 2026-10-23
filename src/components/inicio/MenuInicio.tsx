@@ -6,6 +6,8 @@ import { apiGet } from "@/lib/api-client";
 import { ETIQUETA_PLAN, MAX_TIENDAS, planSiguiente, type PlanNombre } from "@/lib/planes/limites";
 import { useSession } from "next-auth/react";
 import { PuntosChip } from "@/components/ui/PuntosChip";
+import { Campanita } from "@/components/notificaciones/Campanita";
+import { EspacioPublicitario } from "@/components/publicidad/EspacioPublicitario";
 import { useMisTiendas } from "@/lib/hooks/useMisTiendas";
 import { ETIQUETA_ROL, puede, type Permiso } from "@/lib/equipo/permisos";
 
@@ -29,6 +31,7 @@ const ICONOS = {
   misPedidos: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0",
   puntos: "m12 2 3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z",
   perfil: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6",
+  publicidad: "M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13",
 } as const;
 
 function Icono({ d }: { d: string }) {
@@ -98,6 +101,7 @@ export function MenuInicio() {
         conPermiso("pedidos") && { href: `/mi-tienda?tienda=${t}&seccion=pedidos`, icono: ICONOS.pedidos, titulo: "Pedidos", detalle: "Para retirar" },
         conPermiso("usuarios") && { href: `/mi-tienda/equipo?tienda=${t}`, icono: ICONOS.usuarios, titulo: "Usuarios", detalle: "Equipo y permisos" },
         conPermiso("balance") && { href: `/mi-tienda/balance?tienda=${t}`, icono: ICONOS.balance, titulo: "Balance", detalle: "Ventas y cobros" },
+        conPermiso("publicidad") && { href: `/mi-tienda/publicidad?tienda=${t}`, icono: ICONOS.publicidad, titulo: "Publicidad", detalle: "Con puntos o pesos" },
         conPermiso("propietario") && { href: `/mi-tienda?tienda=${t}&seccion=tienda`, icono: ICONOS.datos, titulo: "Datos de la tienda", detalle: "Horarios, rubro y más" },
       ].filter((a): a is Exclude<typeof a, false> => !!a)
     : [];
@@ -111,6 +115,7 @@ export function MenuInicio() {
         </div>
         <div className="flex items-center gap-2">
           <PuntosChip />
+          <Campanita />
           <Link
             href="/perfil"
             className="press flex h-11 w-11 items-center justify-center rounded-pill border border-border bg-surface text-text shadow-card"
@@ -204,9 +209,12 @@ export function MenuInicio() {
           <Acceso href="/mapa" icono={ICONOS.mapa} titulo="Mapa" detalle="Tiendas en tu alcance" destacado={!activa} i={0} />
           <Acceso href="/listas" icono={ICONOS.lista} titulo="Listas de compras" detalle="Compará precios" i={1} />
           <Acceso href="/perfil/pedidos" icono={ICONOS.misPedidos} titulo="Mis pedidos" i={2} />
-          <Acceso href="/perfil/puntos" icono={ICONOS.puntos} titulo="Mis puntos" detalle="Suman alcance" i={3} />
+          <Acceso href="/perfil/puntos" icono={ICONOS.puntos} titulo="Mis puntos" detalle="Alcance y canjes" i={3} />
         </div>
       </section>
+
+      {/* 21-publicidad.md: debajo de "Comprar", lejos de los accesos del negocio. */}
+      <EspacioPublicitario espacio="inicio" />
     </div>
   );
 }

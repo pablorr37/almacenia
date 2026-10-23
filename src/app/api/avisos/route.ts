@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { obtenerUsuarioActual } from "@/lib/auth/session";
 import { respuestaExitosa, respuestaError } from "@/lib/api-response";
+import { prisma } from "@/lib/prisma";
 import { elegirAviso } from "@/lib/publicidad/rotador";
 import type { EspacioAviso } from "@/lib/publicidad/reglas";
 
@@ -19,7 +20,9 @@ export async function GET(request: NextRequest) {
       lat: Number.isFinite(lat) ? lat : undefined,
       lon: Number.isFinite(lon) ? lon : undefined,
     });
-    return respuestaExitosa(aviso);
+    // Premium y plata no ven publicidad: la UI ni siquiera reserva el espacio.
+    const plan = usuario ? (await prisma.usuario.findUnique({ where: { id: usuario.id }, select: { plan: true } }))?.plan : "free";
+    return respuestaExitosa({ aviso, conPublicidad: (plan ?? "free") === "free" });
   } catch (error) {
     return respuestaError(error);
   }

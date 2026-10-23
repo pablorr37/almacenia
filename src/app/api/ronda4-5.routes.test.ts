@@ -157,7 +157,8 @@ describe("publicidad", () => {
     expect((await POST_MODERAR(req("/x", "POST", { aprobar: true }), p({ id: campania.id }))).status).toBe(200);
 
     sesion.mockResolvedValue(comprador);
-    const aviso = (await (await GET_AVISO(req("/api/avisos?espacio=inicio"))).json()).data;
+    const { aviso, conPublicidad } = (await (await GET_AVISO(req("/api/avisos?espacio=inicio"))).json()).data;
+    expect(conPublicidad).toBe(true);
     expect(aviso).toMatchObject({ campaniaId: campania.id, texto: "Pan caliente todo el día" });
     expect((await GET_AVISO(req("/api/avisos?espacio=techo"))).status).toBe(400);
     expect((await POST_IMPRESION(new NextRequest(url("/api/avisos/impresion"), { method: "POST", body: aviso.token, headers: UA }))).status).toBe(204);
@@ -174,7 +175,9 @@ describe("publicidad", () => {
 
   it("aviso para invitado; ads.txt desde ADS_TXT", async () => {
     sesion.mockResolvedValue(null);
-    expect((await (await GET_AVISO(req("/api/avisos?espacio=lista"))).json()).data).toBeNull();
+    expect((await (await GET_AVISO(req("/api/avisos?espacio=lista"))).json()).data).toEqual({ aviso: null, conPublicidad: true });
+    sesion.mockResolvedValue(await usuario("prem", { plan: "premium" }));
+    expect((await (await GET_AVISO(req("/api/avisos?espacio=lista"))).json()).data).toEqual({ aviso: null, conPublicidad: false });
     expect((await GET_ADS_TXT()).status).toBe(404);
     process.env.ADS_TXT = "google.com, pub-1, DIRECT, f08c47fec0942fa0\\nexample.com, 2, RESELLER";
     const ads = await GET_ADS_TXT();
