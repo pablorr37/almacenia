@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { registrarUsuario, type Usuario } from "@/lib/auth/auth";
 import { notificar } from "./notificar";
-import { reemplazarCanalesParaTests, type CanalEmail, type CanalPush } from "./canales";
+import { reemplazarCanalesParaTests, type CanalEmail, type CanalPush, type OpcionesPush } from "./canales";
 import {
   listarNotificaciones,
   contarNoLeidas,
@@ -17,13 +17,13 @@ import { dentroDeFranja } from "./horario";
 
 // 22-notificaciones.md
 class PushFalso implements CanalPush {
-  enviados: Array<{ endpoint: string; payload: string }> = [];
+  enviados: Array<{ endpoint: string; payload: string; opciones?: OpcionesPush }> = [];
   expirados = new Set<string>();
   habilitado() {
     return true;
   }
-  async enviar(sub: { endpoint: string }, payload: string) {
-    this.enviados.push({ endpoint: sub.endpoint, payload });
+  async enviar(sub: { endpoint: string }, payload: string, opciones?: OpcionesPush) {
+    this.enviados.push({ endpoint: sub.endpoint, payload, opciones });
     return this.expirados.has(sub.endpoint) ? ("expirada" as const) : ("ok" as const);
   }
 }
@@ -90,6 +90,21 @@ describe("notificar y centro de notificaciones", () => {
     expect(JSON.parse(push.enviados[0].payload)).toMatchObject({ title: "Nuevo pedido", body: "Juan pidió 3 productos", url: "/pedidos/1" });
     expect(email.enviados.map((e) => e.para).sort()).toEqual([a.email, b.email].sort());
     expect(await contarNoLeidas(a)).toBe(1);
+  });
+
+  it("urgencia del push por categoría: pedidos alta y corta, ofertas baja (no despiertan el teléfono)", async () => {
+    await guardarSuscripcion(a, { endpoint: "https://push.test/urg", keys: { p256dh: "k", auth: "x" } });
+    await guardarPreferencia(a, { categoria: "ofertas", enApp: true, push: true, email: false });
+    await notificar([a.id], { tipo: "pedido_nuevo", titulo: "t", cuerpo: "c" });
+    await notificar([a.id], { tipo: "transferencia_recibida", titulo: "t", cuerpo: "c" });
+    await notificar([a.id], { tipo: "general", titulo: "t", cuerpo: "c" });
+    await notificar([a.id], { tipo: "oferta", titulo: "t", cuerpo: "c" });
+    expect(push.enviados.map((e) => e.opciones)).toEqual([
+      { urgencia: "high", ttl: 3600 },
+      { urgencia: "high", ttl: 86400 },
+      { urgencia: "normal", ttl: 86400 },
+      { urgencia: "low", ttl: 86400 },
+    ]);
   });
 
   it("avisos generales no van por email por defecto; con email deshabilitado no se intenta", async () => {

@@ -237,6 +237,7 @@ Specs nuevas: `21-publicidad.md`, `22-notificaciones.md`, `23-puntos-pagos.md` (
   - ofertas: al cargar un precio de oferta, a compradores que ya compraron, hicieron check-in o visitaron la tienda (una por tienda por día);
   - avisos internos y generales del admin por segmento (rol, plan, tienda), con conteo previo y envío por lotes (**Admin → Notificaciones**);
   - PWA instalable (manifest, íconos, service worker) y push con VAPID; instructivo para iPhone; email por SMTP;
+  - urgencia del push por categoría: pedidos y "mi cuenta" salen con `Urgency: high` (si no, Android en reposo los entregaba recién al abrir Chrome), avisos `normal`, ofertas y publicidad `low`;
   - sin claves VAPID o SMTP, esos canales quedan apagados sin romper nada.
 - **Tareas programadas:** `POST /api/cron/tareas` cada hora (ver `docs/deploy-coolify.md` 4.5).
 - **Verificación:** 852 tests en verde, build OK, lint sin errores nuevos. E2E con Chromium: canje y renovación, transferencia, campañas con puntos y pesos, moderación, aviso e impresión/clic, pin destacado (free y premium), campanita por pedido nuevo, email por SMTP de prueba, envío push (VAPID + cifrado) a un servicio push de prueba, cron, ads.txt, cookies y páginas legales; y el e2e de categorías y escaneo (PR anterior) sigue pasando.

@@ -10,9 +10,16 @@ export interface SuscripcionDestino {
   auth: string;
 }
 
+// Urgency de Web Push: con "normal", Android en reposo no despierta el teléfono y el
+// aviso llega recién al abrir Chrome (22-notificaciones.md).
+export interface OpcionesPush {
+  urgencia: "very-low" | "low" | "normal" | "high";
+  ttl: number; // segundos
+}
+
 export interface CanalPush {
   habilitado(): boolean;
-  enviar(sub: SuscripcionDestino, payload: string): Promise<"ok" | "expirada" | "error">;
+  enviar(sub: SuscripcionDestino, payload: string, opciones?: OpcionesPush): Promise<"ok" | "expirada" | "error">;
 }
 
 export interface CanalEmail {
@@ -44,9 +51,12 @@ class WebPush implements CanalPush {
     return true;
   }
 
-  async enviar(sub: SuscripcionDestino, payload: string): Promise<"ok" | "expirada" | "error"> {
+  async enviar(sub: SuscripcionDestino, payload: string, opciones?: OpcionesPush): Promise<"ok" | "expirada" | "error"> {
     try {
-      await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: 60 * 60 * 24 });
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, {
+        TTL: opciones?.ttl ?? 60 * 60 * 24,
+        urgency: opciones?.urgencia ?? "normal",
+      });
       return "ok";
     } catch (error) {
       const status = (error as { statusCode?: number }).statusCode;
