@@ -186,11 +186,15 @@ En la sección de Environment Variables del recurso de la app:
 `POST /api/cron/tareas` vence o renueva los planes premium, consume los días de las
 campañas, manda la publicidad push dentro de la franja horaria y procesa los envíos
 masivos de notificaciones. Es idempotente: programalo **cada hora** en Coolify
-(Scheduled Tasks del recurso de la app):
+(Scheduled Tasks del recurso de la app). La imagen (`node:22-alpine`) no trae `curl`,
+así que el comando usa Node y toma `CRON_TOKEN` del entorno del contenedor:
 
 ```sh
-curl -fsS -X POST -H "Authorization: Bearer $CRON_TOKEN" http://localhost:3000/api/cron/tareas
+node -e "fetch('http://localhost:3000/api/cron/tareas',{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_TOKEN}}).then(async r=>{console.log(r.status, await r.text());process.exit(r.ok?0:1)})"
 ```
+
+Paso a paso de todas las variables de las rondas 4 y 5 y de esta tarea:
+[`tutoriales/variables-entorno-ronda-4-5.md`](tutoriales/variables-entorno-ronda-4-5.md).
 
 Sin `CRON_TOKEN` responde 503; con un token incorrecto, 401.
 
