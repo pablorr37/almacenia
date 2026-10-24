@@ -37,6 +37,15 @@ export const PREFERENCIA_POR_DEFECTO: Record<Categoria, CanalesPreferencia> = {
   publicidad: { enApp: false, push: false, email: false },
 };
 
+// Urgencia y vigencia del push por categoría (22-notificaciones.md).
+export const PUSH_POR_CATEGORIA: Record<Categoria, { urgencia: "low" | "normal" | "high"; ttl: number }> = {
+  pedidos: { urgencia: "high", ttl: 60 * 60 },
+  cuenta: { urgencia: "high", ttl: 60 * 60 * 24 },
+  avisos: { urgencia: "normal", ttl: 60 * 60 * 24 },
+  ofertas: { urgencia: "low", ttl: 60 * 60 * 24 },
+  publicidad: { urgencia: "low", ttl: 60 * 60 * 24 },
+};
+
 export const ETIQUETA_CATEGORIA: Record<Categoria, string> = {
   pedidos: "Pedidos",
   cuenta: "Mi cuenta (plan, pagos, puntos, publicidad)",

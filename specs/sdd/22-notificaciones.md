@@ -87,6 +87,14 @@ Las preferencias van **por categoría y por canal** (app, push, email).
 - Si los tres canales están apagados, no hace nada.
 - Si `en_app` está activo o hay otro canal activo, **guarda** la fila en `notificaciones` (con `en_app` según la preferencia: así el tope de publicidad y la deduplicación cuentan también lo enviado solo por push o email). Con `clave_unica` ya usada no hace nada.
 - **Push**: a cada suscripción del usuario con `web-push`. Si responde `404` o `410`, la suscripción se borra.
+  - **Urgencia** (header `Urgency` de Web Push), por categoría. Con `normal`, Android en reposo (Doze) no despierta el teléfono y el aviso llega recién al abrir Chrome:
+
+    | Categoría | Urgencia | TTL |
+    | --- | --- | --- |
+    | `pedidos` | `high` | 1 hora (un aviso de pedido viejo no sirve) |
+    | `cuenta` | `high` | 24 horas |
+    | `avisos` | `normal` | 24 horas |
+    | `ofertas`, `publicidad` | `low` | 24 horas (no despiertan el teléfono; Chrome penaliza abusar de `high`) |
 - **Email**: con `nodemailer` por SMTP a `usuarios.email`, con el título como asunto y un enlace a la URL.
 - Canales **deshabilitados por configuración**: sin `NEXT_PUBLIC_VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` no hay push; sin `SMTP_HOST` no hay email. Solo se loguea una vez; no rompe nada.
 - Los errores de envío **nunca** rompen la operación que notifica: los disparadores llaman a `notificar` dentro de `sinRomper`. El envío de push/email se hace después de guardar y sus errores solo se loguean.

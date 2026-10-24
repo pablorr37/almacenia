@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated-prisma/client";
 import { canales } from "./canales";
-import { categoriaDe, PREFERENCIA_POR_DEFECTO } from "./catalogo";
+import { categoriaDe, PREFERENCIA_POR_DEFECTO, PUSH_POR_CATEGORIA } from "./catalogo";
 
 // Núcleo de 22-notificaciones.md: guarda, respeta preferencias y despacha a los canales.
 
@@ -36,7 +36,7 @@ async function despachar(
     const payload = JSON.stringify({ title: n.titulo, body: n.cuerpo, url: n.url ?? "/" });
     for (const sub of subs) {
       try {
-        if ((await push.enviar(sub, payload)) === "expirada") {
+        if ((await push.enviar(sub, payload, PUSH_POR_CATEGORIA[categoriaDe(n.tipo)])) === "expirada") {
           await prisma.suscripcionPush.deleteMany({ where: { id: sub.id } });
         }
       } catch (error) {
