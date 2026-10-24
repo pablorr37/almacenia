@@ -187,10 +187,12 @@ En la sección de Environment Variables del recurso de la app:
 campañas, manda la publicidad push dentro de la franja horaria y procesa los envíos
 masivos de notificaciones. Es idempotente: programalo **cada hora** en Coolify
 (Scheduled Tasks del recurso de la app). La imagen (`node:22-alpine`) no trae `curl`,
-así que el comando usa Node y toma `CRON_TOKEN` del entorno del contenedor:
+así que el comando usa Node y toma `CRON_TOKEN` del entorno del contenedor. Llama al
+servidor por `$HOSTNAME` (el nombre del contenedor), que funciona con imágenes viejas y
+nuevas; desde el `Dockerfile` con `ENV HOSTNAME=0.0.0.0` también responde `localhost`:
 
 ```sh
-node -e "fetch('http://localhost:3000/api/cron/tareas',{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_TOKEN}}).then(async r=>{console.log(r.status, await r.text());process.exit(r.ok?0:1)})"
+node -e "fetch('http://'+process.env.HOSTNAME+':3000/api/cron/tareas',{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_TOKEN}}).then(async r=>{console.log(r.status, await r.text());process.exit(r.ok?0:1)})"
 ```
 
 Paso a paso de todas las variables de las rondas 4 y 5 y de esta tarea:

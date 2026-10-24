@@ -15,6 +15,11 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# server.js (standalone) escucha en $HOSTNAME, y Docker define HOSTNAME con el nombre
+# del contenedor: sin esto Next no atiende en localhost y falla todo lo que lo llama
+# desde adentro del contenedor (p. ej. la tarea programada, docs/deploy-coolify.md §4.5).
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

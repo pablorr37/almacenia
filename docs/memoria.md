@@ -254,7 +254,7 @@ Specs nuevas: `21-publicidad.md`, `22-notificaciones.md`, `23-puntos-pagos.md` (
 - **Pendientes de las rondas 4 y 5:**
   - Google AdSense/Ad Manager y otros proveedores (en espera): IDs según los tutoriales de `docs/tutoriales/`;
   - adaptador de Mercado Pago (hoy el pago en pesos es manual);
-  - en Coolify: programar `POST /api/cron/tareas` cada hora y cargar `CRON_TOKEN`, las claves VAPID, el SMTP y `APP_URL` (paso a paso en [`tutoriales/variables-entorno-ronda-4-5.md`](tutoriales/variables-entorno-ronda-4-5.md));
+  - en Coolify: programar `POST /api/cron/tareas` cada hora y cargar `CRON_TOKEN`, las claves VAPID, el SMTP y `APP_URL` (paso a paso en [`tutoriales/variables-entorno-ronda-4-5.md`](tutoriales/variables-entorno-ronda-4-5.md)). La tarea fallaba con `ECONNREFUSED` en `localhost:3000` porque Next standalone escucha en `$HOSTNAME` (Docker lo define con el nombre del contenedor): el comando ahora usa `$HOSTNAME` y el `Dockerfile` fija `ENV HOSTNAME=0.0.0.0`;
   - revisar los textos de `/privacidad` y `/terminos` con un profesional;
   - segmentar la publicidad push y las ofertas por zona necesitaría guardar la zona del comprador (hoy: publicidad push a todos los free con opt-in; ofertas a quien ya interactuó con la tienda);
   - "pedido modificado": hoy no se puede editar el contenido de un pedido; se notifica cuando alguien del equipo cambia su estado.

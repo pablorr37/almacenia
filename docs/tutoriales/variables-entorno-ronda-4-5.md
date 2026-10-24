@@ -76,16 +76,17 @@ Sin esta tarea no vencen los planes premium, no se descuentan los días de las c
 1. En la app de Coolify, abrí **Scheduled Tasks** y tocá **Add**.
 2. Completá:
    - **Name:** `tareas-cada-hora`
-   - **Command** (la imagen no trae `curl`; se usa Node):
+   - **Command** (la imagen no trae `curl`, así que se usa Node; llama al servidor por el nombre del contenedor, porque en imágenes anteriores a `ENV HOSTNAME=0.0.0.0` la app no escucha en `localhost`):
 
      ```sh
-     node -e "fetch('http://localhost:3000/api/cron/tareas',{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_TOKEN}}).then(async r=>{console.log(r.status, await r.text());process.exit(r.ok?0:1)})"
+     node -e "fetch('http://'+process.env.HOSTNAME+':3000/api/cron/tareas',{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_TOKEN}}).then(async r=>{console.log(r.status, await r.text());process.exit(r.ok?0:1)})"
      ```
 
    - **Frequency:** `0 * * * *`
 3. Guardá la tarea y ejecutala una vez a mano. En el log tiene que aparecer `200`:
    - `503`: falta `CRON_TOKEN`;
-   - `401`: el token no coincide.
+   - `401`: el token no coincide;
+   - `ECONNREFUSED`: el comando todavía apunta a `localhost`; usá el de arriba.
 
 ## Paso 4: verificar
 
