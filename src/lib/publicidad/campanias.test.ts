@@ -292,7 +292,7 @@ describe("tienda destacada (pin_mapa)", () => {
 });
 
 describe("publicidad push", () => {
-  it("solo free con opt-in, fuera del equipo, en la franja y con tope semanal", async () => {
+  it("solo free que no la desactivaron, fuera del equipo, en la franja y con tope semanal", async () => {
     const { campania } = await crearCampania(dueno, tienda.id, texto({ espacio: "push", dias: 5 }), ahora);
     expect(campania.dias).toBe(1);
     expect(await saldoPuntos(dueno.id)).toBe(700);
@@ -302,7 +302,7 @@ describe("publicidad push", () => {
     const sinOptIn = await usuario("no");
     const premium = await usuario("prem", { plan: "premium" });
     const lleno = await usuario("lleno");
-    for (const u of [si, premium, lleno, dueno]) await guardarPreferencia(u, { categoria: "publicidad", enApp: true, push: true, email: false });
+    await guardarPreferencia(sinOptIn, { categoria: "publicidad", enApp: false, push: false, email: false });
     for (const i of [1, 2]) {
       await prisma.notificacion.create({ data: { usuarioId: lleno.id, tipo: "publicidad", titulo: "t", cuerpo: `c${i}` } });
     }
@@ -311,11 +311,14 @@ describe("publicidad push", () => {
     expect(await procesarPublicidadPush(new Date(`${HOY}T06:00:00Z`))).toEqual({ campanias: 0, enviados: 0 });
     const r = await procesarPublicidadPush(ahora);
     expect(r.campanias).toBeGreaterThanOrEqual(1);
-    const recibieron = await prisma.notificacion.findMany({ where: { tipo: "publicidad", titulo: "Almacén Publi" }, select: { usuarioId: true } });
+    const nuestros = [si, sinOptIn, premium, lleno, dueno].map((u) => u.id);
+    const recibieron = await prisma.notificacion.findMany({
+      where: { tipo: "publicidad", titulo: "Almacén Publi", usuarioId: { in: nuestros } },
+      select: { usuarioId: true },
+    });
     expect(recibieron.map((x) => x.usuarioId)).toEqual([si.id]);
-    expect(sinOptIn.id).not.toBe(si.id);
     expect(await prisma.campaniaAviso.findUniqueOrThrow({ where: { id: campania.id } })).toMatchObject({ estado: "finalizada", diasConsumidos: 1 });
     await procesarPublicidadPush(ahora);
-    expect(await prisma.notificacion.count({ where: { tipo: "publicidad", titulo: "Almacén Publi" } })).toBe(1);
+    expect(await prisma.notificacion.count({ where: { tipo: "publicidad", titulo: "Almacén Publi", usuarioId: { in: nuestros } } })).toBe(1);
   });
 });

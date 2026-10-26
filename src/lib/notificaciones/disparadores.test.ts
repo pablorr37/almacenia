@@ -88,17 +88,15 @@ describe("pedidos", () => {
 });
 
 describe("ofertas", () => {
-  it("a compradores opt-in que visitaron la tienda; una por tienda por día; no al equipo", async () => {
+  it("a compradores que visitaron la tienda (salvo que las desactiven); una por tienda por día; no al equipo", async () => {
     const visitante = await usuario("visit");
-    const sinOptIn = await usuario("nooptin");
+    const sinOptIn = await usuario("optout");
     const desconocido = await usuario("desc");
     for (const u of [visitante, sinOptIn, desconocido]) {
       await prisma.visitaPaginaTienda.create({ data: { compradorId: u.id, tiendaId: tienda.id, ultimoMes: "2026-10", ultimoValor: 5 } });
     }
     await prisma.visitaPaginaTienda.deleteMany({ where: { compradorId: desconocido.id } });
-    await guardarPreferencia(visitante, { categoria: "ofertas", enApp: true, push: true, email: false });
-    await guardarPreferencia(desconocido, { categoria: "ofertas", enApp: true, push: true, email: false });
-    await guardarPreferencia(encargado, { categoria: "ofertas", enApp: true, push: true, email: false });
+    await guardarPreferencia(sinOptIn, { categoria: "ofertas", enApp: false, push: false, email: false });
     await prisma.visitaPaginaTienda.create({ data: { compradorId: encargado.id, tiendaId: tienda.id, ultimoMes: "2026-10", ultimoValor: 5 } });
 
     await actualizarProducto(dueno, producto.id, { precioOferta: 80 });

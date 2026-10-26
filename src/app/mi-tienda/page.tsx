@@ -64,6 +64,7 @@ type Tienda = {
   horarios: HorarioTienda[];
   abierto24hs: boolean;
   porcentajePuntosEquipo: number | null;
+  chatNotifFueraHorario: boolean; // 24-chat.md
   // Datos fiscales (20-precios-facturacion.md).
   condicionIva: CondicionIva;
   razonSocial: string | null;
@@ -126,7 +127,8 @@ type Pedido = {
   total: number;
   creadoEn: string;
   comprador: { nombre: string };
-  items: ItemPedidoVista[];
+  items: Array<ItemPedidoVista & { unidad: string; ajusteEstado?: string }>;
+  distanciaKm: number | null; // 04-pedidos.md, ronda 6
 };
 
 type AccionPedido = "confirmar" | "rechazar" | "marcarListo" | "entregar";
@@ -211,6 +213,7 @@ function MiTienda() {
   // 12-gamificacion.md: % de los puntos de una venta para quien del equipo la hizo.
   // null = el valor por defecto de Almacenia.
   const [porcentajeEquipoForm, setPorcentajeEquipoForm] = useState<number | null>(null);
+  const [chatFueraHorarioForm, setChatFueraHorarioForm] = useState(false);
   // Datos fiscales (20-precios-facturacion.md); los edita solo el propietario.
   const [fiscalForm, setFiscalForm] = useState({
     condicionIva: "monotributo" as CondicionIva,
@@ -284,6 +287,7 @@ function MiTienda() {
     setHorariosForm(tienda.horarios.length > 0 ? tienda.horarios : horarioPorDefecto());
     setAbierto24hsForm(tienda.abierto24hs);
     setPorcentajeEquipoForm(tienda.porcentajePuntosEquipo);
+    setChatFueraHorarioForm(tienda.chatNotifFueraHorario);
     setFiscalForm({
       condicionIva: tienda.condicionIva,
       razonSocial: tienda.razonSocial ?? "",
@@ -323,6 +327,7 @@ function MiTienda() {
         horarios: horariosForm,
         abierto24hs: abierto24hsForm,
         porcentajePuntosEquipo: porcentajeEquipoForm,
+        chatNotifFueraHorario: chatFueraHorarioForm,
         condicionIva: fiscalForm.condicionIva,
         razonSocial: fiscalForm.razonSocial || null,
         cuit: fiscalForm.cuit || null,
@@ -698,6 +703,22 @@ function MiTienda() {
               )}
             </fieldset>
 
+            <fieldset className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5">
+              <legend className="px-1 text-[14px] font-semibold text-text">Chat con clientes</legend>
+              <p className="text-[12px] text-text-2">
+                En tu horario de apertura siempre te avisamos de los mensajes nuevos. Fuera de horario, solo si lo activás.
+              </p>
+              <label className="flex min-h-11 items-center gap-2 text-[13px] text-text">
+                <input
+                  type="checkbox"
+                  checked={chatFueraHorarioForm}
+                  onChange={(e) => setChatFueraHorarioForm(e.target.checked)}
+                  className="h-4 w-4 accent-[#0e6b5c]"
+                />
+                Recibir avisos de chats fuera de horario
+              </label>
+            </fieldset>
+
             {error && <p className="text-[13px] text-estado-rechazado-text">{error}</p>}
             {tiendaGuardada && (
               <p className="text-[13px] font-semibold text-estado-entregado-text">
@@ -1035,11 +1056,22 @@ function MiTienda() {
                   </div>
                   <div className="text-[13px] text-text">
                     de <span className="font-semibold">{p.comprador.nombre}</span>
+                    {p.distanciaKm !== null && (
+                      <span className="text-text-2"> · a {p.distanciaKm.toLocaleString("es-AR", { maximumFractionDigits: 1 })} km</span>
+                    )}
                     <span className="text-text-2"> · {haceCuanto(p.creadoEn)}</span>
                   </div>
                   <div className="text-[13px] text-text-2">
                     {cantidadProductos} producto{cantidadProductos !== 1 ? "s" : ""} · {formatoARS(p.total)}
                   </div>
+                  {p.estado === "confirmado" && p.items.some((i) => ["propuesto", "rechazado", "ratificado"].includes(i.ajusteEstado ?? "")) && (
+                    <p className="text-[12px] font-semibold text-estado-pendiente-text">Ajuste de peso esperando respuesta</p>
+                  )}
+                  {p.estado === "confirmado" && p.items.some((i) => i.unidad === "kg") && (
+                    <Link href={`/pedidos/${p.id}`} className="text-[12px] font-semibold text-accent-text">
+                      Ajustar peso o ver ubicación →
+                    </Link>
+                  )}
                   <details className="group">
                     <summary className="cursor-pointer text-[13px] font-semibold text-accent-text">Ver detalle</summary>
                     <div className="mt-2 flex flex-col gap-2">

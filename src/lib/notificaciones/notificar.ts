@@ -62,8 +62,9 @@ export async function notificar(usuarioIds: string[], n: NuevaNotificacion): Pro
   const categoria = categoriaDe(n.tipo);
   const usuarios = await prisma.usuario.findMany({
     where: { id: { in: ids }, estadoCuenta: "activa" },
-    select: { id: true, email: true, plan: true, preferenciasNotif: { where: { categoria } } },
+    select: { id: true, email: true, plan: true, notificacionesPausadasHasta: true, preferenciasNotif: { where: { categoria } } },
   });
+  const ahora = new Date();
 
   let guardadas = 0;
   for (const u of usuarios) {
@@ -89,7 +90,9 @@ export async function notificar(usuarioIds: string[], n: NuevaNotificacion): Pro
       throw error;
     }
     guardadas += 1;
-    await despachar(u, n, { push: pref.push, email: pref.email });
+    // Pausa (22-notificaciones.md): queda en la app, pero no sale por push ni email.
+    const pausada = !!u.notificacionesPausadasHasta && u.notificacionesPausadasHasta > ahora;
+    if (!pausada) await despachar(u, n, { push: pref.push, email: pref.email });
   }
   return { guardadas };
 }

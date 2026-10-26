@@ -205,7 +205,7 @@ describe("notificaciones", () => {
     expect((await POST_LEER_TODAS()).status).toBe(204);
     expect((await (await GET_NO_LEIDAS()).json()).data).toEqual({ cantidad: 0 });
 
-    expect((await (await GET_PREFS()).json()).data).toHaveLength(5);
+    expect((await (await GET_PREFS()).json()).data).toHaveLength(6);
     expect((await PUT_PREFS(req("/x", "PUT", { categoria: "ofertas", enApp: true, push: true, email: false }))).status).toBe(200);
     expect((await PUT_PREFS(req("/x", "PUT", { categoria: "nada", enApp: true, push: true, email: false }))).status).toBe(400);
 

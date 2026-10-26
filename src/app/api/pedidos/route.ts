@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
       tiendaId: body.tiendaId,
       items: body.items,
       nota: body.nota,
+      ubicacion: body.ubicacion ?? null,
     });
     return respuestaExitosa(pedido, 201);
   } catch (error) {

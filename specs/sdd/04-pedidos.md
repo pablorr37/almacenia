@@ -88,6 +88,47 @@ pendiente ──confirmar──> confirmado ──marcarListo──> listo_para_
   al comprador y `pedido_modificado` al resto del equipo. Las notificaciones nunca hacen
   fallar la operación y las firmas no cambian.
 
+## Ubicación del comprador (ronda 6)
+- Al confirmar el pedido, la app pide la ubicación del navegador. Es **opcional**: si la persona no la da, el pedido se crea igual.
+- Se guarda en `pedidos.comprador_lat` y `pedidos.comprador_lon` (nullables), validadas con las reglas de `validarUbicacion` (`400 UBICACION_INVALIDA`).
+- **Solo el equipo de la tienda** la ve, con la distancia a la tienda en km (`distanciaKm`). En el detalle del pedido aparece un mapa con la tienda y el punto del comprador.
+
+## Ajuste de peso (ronda 6)
+Para productos por kg: lo pesado puede no coincidir con lo pedido (se pidieron 250 g y salieron 257 g).
+
+```sql
+CREATE TYPE estado_ajuste AS ENUM ('ninguno', 'propuesto', 'rechazado', 'ratificado', 'aceptado', 'quitado');
+ALTER TABLE items_pedido
+  ADD COLUMN ajuste_estado      estado_ajuste NOT NULL DEFAULT 'ninguno',
+  ADD COLUMN cantidad_propuesta NUMERIC(10, 3) NULL,
+  ADD COLUMN cantidad_original  NUMERIC(10, 3) NULL;
+```
+
+- **Solo con el pedido `confirmado`** y solo en ítems por kg (`409 AJUSTE_NO_PERMITIDO`).
+- **Lo hace el equipo con permiso `pedidos`.**
+- **El vendedor propone el peso o el importe.** Si propone el importe, el peso es `pesoPorImporte(importe, precioUnitario)`, redondeado a 1 g. El precio por kg no cambia.
+
+| Estado actual | Acción | Quién | Nuevo estado |
+| --- | --- | --- | --- |
+| `ninguno`, `rechazado`, `aceptado` | `proponer` | Vendedor | `propuesto` |
+| `propuesto` | `aceptar` | Comprador | `aceptado`; la cantidad del ítem pasa a la propuesta |
+| `propuesto` | `rechazar` | Comprador | `rechazado` |
+| `rechazado` | `ratificar` | Vendedor | `ratificado` (mantiene la última propuesta) |
+| `ratificado` | `aceptar` | Comprador | `aceptado` |
+| `ratificado` | `quitar` | Comprador | `quitado`: el ítem sale del total y de la venta |
+
+- Con algún ítem en `propuesto`, `rechazado` o `ratificado`, el pedido **no puede pasar a `listo_para_retirar`** (`409 AJUSTES_PENDIENTES`).
+- Si al quitar no queda ningún ítem activo, el pedido pasa a `cancelado`.
+- El ajuste **no ofrece cancelar el pedido**: cancelar sigue siendo la acción de siempre (el comprador, solo desde `pendiente`).
+- **La venta** (`entregar`) usa las cantidades acordadas y deja afuera los ítems quitados.
+- **Cada paso:** notifica a la otra parte (`pedido_ajuste`, categoría `pedidos`) y deja un mensaje de sistema en el chat de ese comprador con la tienda (24-chat.md). Así el comprador puede ponerse de acuerdo con el vendedor.
+- **Endpoint:** `POST /api/pedidos/:id/items/:itemId/ajuste`, con body `{ accion: 'proponer', cantidad? | importe? } | { accion: 'aceptar' | 'rechazar' | 'ratificar' | 'quitar' }`. Responde el pedido actualizado.
+- **Errores:**
+  - `AJUSTE_NO_PERMITIDO` (409): pedido no confirmado o ítem que no es por kg;
+  - `TRANSICION_INVALIDA` (409): acción no válida desde el estado actual del ajuste;
+  - `CANTIDAD_INVALIDA` (400);
+  - `NO_AUTORIZADO_PEDIDO` (403).
+
 ## Endpoints REST
 
 ### `POST /api/pedidos`

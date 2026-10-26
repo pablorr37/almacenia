@@ -17,21 +17,50 @@ const TEXTO_PUSH: Record<EstadoPush, string> = {
   ios_instalar: "En iPhone, primero instalá Almacenia: tocá Compartir → «Agregar a inicio» y abrila desde el ícono.",
   deshabilitado: "Las notificaciones push todavía no están disponibles.",
   bloqueado: "Bloqueaste las notificaciones: habilitalas en la configuración del navegador.",
-  inactivo: "Recibí avisos en este dispositivo aunque la app esté cerrada.",
+  inactivo: "Para que suenen en este teléfono aunque la app esté cerrada, dale permiso una vez.",
   activo: "Este dispositivo recibe notificaciones push.",
   error: "No pudimos activar las notificaciones en este dispositivo. Probá de nuevo en un rato.",
 };
 
-// Preferencias por categoría y canal + activar push en este dispositivo (22-notificaciones.md).
+type Pausa = { pausada: boolean; pausadasHasta: string | null };
+const INDEFINIDA = "2100-01-01T00:00:00.000Z";
+
+// Mañana a las 8 (hora de San Juan, UTC-3).
+function mananaALas8(): string {
+  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/San_Juan" }).format(new Date());
+  return new Date(new Date(`${hoy}T08:00:00-03:00`).getTime() + 24 * 60 * 60 * 1000).toISOString();
+}
+
+function textoPausa(hasta: string): string {
+  if (hasta >= "2099") return "Pausadas hasta que las reactives.";
+  const f = new Date(hasta).toLocaleString("es-AR", { timeZone: "America/Argentina/San_Juan", weekday: "long", hour: "2-digit", minute: "2-digit" });
+  return `Pausadas hasta el ${f} h. Igual quedan en la campanita.`;
+}
+
+// Notificaciones activas por defecto (ronda 6): acá se pausan o se apagan por
+// categoría y canal; y se da permiso de push en este dispositivo (22-notificaciones.md).
 export function PreferenciasNotificaciones({ plan }: { plan: string | null }) {
   const [prefs, setPrefs] = useState<Preferencia[] | null>(null);
   const [push, setPush] = useState<EstadoPush | null>(null);
+  const [pausa, setPausa] = useState<Pausa | null>(null);
+  const [eligiendo, setEligiendo] = useState(false);
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
     apiGet<Preferencia[]>("/api/notificaciones/preferencias").then(setPrefs).catch(() => setPrefs([]));
+    apiGet<Pausa>("/api/notificaciones/pausa").then(setPausa).catch(() => {});
     estadoPush().then(setPush).catch(() => setPush("no_soportado"));
   }, []);
+
+  async function pausar(hasta: string | null) {
+    setOcupado(true);
+    try {
+      setPausa(await apiPut<Pausa>("/api/notificaciones/pausa", { hasta }));
+      setEligiendo(false);
+    } finally {
+      setOcupado(false);
+    }
+  }
 
   async function cambiar(p: Preferencia, canal: (typeof CANALES)[number][0], valor: boolean) {
     const nueva = { ...p, [canal]: valor };
@@ -61,17 +90,57 @@ export function PreferenciasNotificaciones({ plan }: { plan: string | null }) {
       <h2 id="titulo-notif" className="text-[15px] font-semibold text-text">
         Notificaciones
       </h2>
-      {push && (
+      {pausa && (
+        <div className="flex flex-col gap-2 rounded-control bg-bg p-3" data-testid="pausa-notificaciones">
+          {pausa.pausada ? (
+            <>
+              <p className="text-[13px] font-semibold text-text">{textoPausa(pausa.pausadasHasta!)}</p>
+              <button type="button" disabled={ocupado} onClick={() => pausar(null)} className="press h-11 self-start rounded-control bg-primary px-4 text-[14px] font-semibold text-white disabled:opacity-50">
+                Reanudar notificaciones
+              </button>
+            </>
+          ) : eligiendo ? (
+            <div className="flex flex-wrap gap-2">
+              {[
+                ["1 hora", () => new Date(Date.now() + 60 * 60 * 1000).toISOString()],
+                ["Hasta mañana a las 8", mananaALas8],
+                ["Hasta que las reactive", () => INDEFINIDA],
+              ].map(([texto, hasta]) => (
+                <button
+                  key={texto as string}
+                  type="button"
+                  disabled={ocupado}
+                  onClick={() => pausar((hasta as () => string)())}
+                  className="press h-10 rounded-pill border border-border bg-surface px-3 text-[13px] font-semibold"
+                >
+                  {texto as string}
+                </button>
+              ))}
+              <button type="button" onClick={() => setEligiendo(false)} className="press h-10 px-2 text-[13px] text-text-2">
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-[13px] text-text-2">Recibís las notificaciones activadas abajo. Podés pausarlas un rato.</p>
+              <button type="button" onClick={() => setEligiendo(true)} className="press h-11 self-start rounded-control border border-border bg-surface px-4 text-[14px] font-semibold text-text">
+                Pausar notificaciones
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {push && push !== "activo" && (
         <div className="flex flex-col gap-2 rounded-control bg-bg p-3">
           <p className="text-[13px] text-text-2">{TEXTO_PUSH[push]}</p>
-          {(push === "inactivo" || push === "activo" || push === "error") && (
+          {(push === "inactivo" || push === "error") && (
             <button
               type="button"
               disabled={ocupado}
               onClick={alternarPush}
               className="press h-11 self-start rounded-control border border-border bg-surface px-4 text-[14px] font-semibold text-text disabled:opacity-50"
             >
-              {push === "activo" ? "Desactivar en este dispositivo" : "Activar notificaciones push"}
+              Permitir en este teléfono
             </button>
           )}
         </div>

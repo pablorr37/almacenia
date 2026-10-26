@@ -71,13 +71,17 @@ Las preferencias van **por categoría y por canal** (app, push, email).
 
 | Categoría | Tipos | Destinatarios | Por defecto (app / push / email) |
 | --- | --- | --- | --- |
-| `pedidos` | `pedido_nuevo`, `pedido_cancelado`, `pedido_modificado`, `pedido_estado` | Ver "Disparadores" | ✓ / ✓ / ✓ |
-| `cuenta` | `plan_por_vencer`, `plan_vencido`, `plan_renovado`, `pago_confirmado`, `transferencia_recibida`, `campania_aprobada`, `campania_rechazada` | El usuario | ✓ / ✓ / ✓ |
+| `pedidos` | `pedido_nuevo`, `pedido_cancelado`, `pedido_modificado`, `pedido_estado`, `pedido_ajuste` | Ver "Disparadores" | ✓ / ✓ / ✗ |
+| `cuenta` | `plan_por_vencer`, `plan_vencido`, `plan_renovado`, `pago_confirmado`, `transferencia_recibida`, `campania_aprobada`, `campania_rechazada` | El usuario | ✓ / ✓ / ✗ |
 | `avisos` | `aviso_interno`, `general` | Segmento del admin | ✓ / ✓ / ✗ |
-| `ofertas` | `oferta` | Compradores que ya interactuaron con la tienda | ✗ / ✗ / ✗ (opt-in) |
-| `publicidad` | `publicidad` | Compradores free | ✗ / ✗ / ✗ (opt-in) |
+| `ofertas` | `oferta` | Compradores que ya interactuaron con la tienda | ✓ / ✓ / ✗ |
+| `publicidad` | `publicidad` | Compradores free | ✓ / ✓ / ✗ |
+| `chat` | `mensaje_chat` | Ver 24-chat.md | ✓ / ✓ / ✗ |
 
-- Premium y plata **no** reciben `publicidad` aunque la activen.
+- **Desde la ronda 6 (pedido del 2026-10-26), todo viene activado en la app y en push; el email viene apagado.** Quien no quiera una categoría la desactiva.
+  - La migración borra las preferencias guardadas que eran iguales a los defaults viejos (ofertas y publicidad todo apagado), para que tomen los nuevos.
+- **Pausa global:** `usuarios.notificaciones_pausadas_hasta` (NULL = sin pausa). Mientras dura, las notificaciones se guardan en la app, pero no salen por push ni por email. Opciones de la UI: 1 hora, hasta mañana a las 8 (hora de San Juan) o indefinida (año 2100). Endpoints: `PUT /api/notificaciones/pausa` con `{ hasta: ISO | null }` y `GET /api/notificaciones/pausa`.
+- Premium y plata **no** reciben `publicidad` aunque la tengan activa. La publicidad push mantiene su tope semanal y su franja horaria.
 - La UI del perfil muestra "Publicidad" solo a usuarios free.
 
 ## Reglas de negocio
@@ -93,6 +97,7 @@ Las preferencias van **por categoría y por canal** (app, push, email).
     | --- | --- | --- |
     | `pedidos` | `high` | 1 hora (un aviso de pedido viejo no sirve) |
     | `cuenta` | `high` | 24 horas |
+    | `chat` | `high` | 1 hora |
     | `avisos` | `normal` | 24 horas |
     | `ofertas`, `publicidad` | `low` | 24 horas (no despiertan el teléfono; Chrome penaliza abusar de `high`) |
 - **Email**: con `nodemailer` por SMTP a `usuarios.email`, con el título como asunto y un enlace a la URL.
@@ -111,7 +116,7 @@ Las preferencias van **por categoría y por canal** (app, push, email).
 | `transferencia_recibida` | 23-puntos-pagos.md | Quien recibe |
 | `campania_aprobada`/`_rechazada` | 21-publicidad.md | Quien creó la campaña |
 | `oferta` | `actualizarProducto` pone o cambia `precioOferta` (no null, menor que el precio) | Compradores (no del equipo) con una venta, check-in o visita a la página de esa tienda; **una por tienda por día** por comprador (`clave_unica = oferta:<tienda>:<usuario>:<día>`) |
-| `publicidad` | 21-publicidad.md (`procesarPublicidadPush`) | Ver allá: free, opt-in, tope semanal, franja horaria |
+| `publicidad` | 21-publicidad.md (`procesarPublicidadPush`) | Ver allá: free que no la desactivaron, tope semanal, franja horaria |
 | `aviso_interno`, `general` | Envío del admin | Segmento |
 
 Las firmas de `crearPedido`, `transicionarPedido` y `actualizarProducto` no cambian.

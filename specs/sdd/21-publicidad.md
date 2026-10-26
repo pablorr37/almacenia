@@ -141,7 +141,7 @@ Reglas de ubicación (compatibilidad con el punto de venta y buenas prácticas d
 
 ### Publicidad push
 - Campaña `push` aprobada → se envía en la próxima corrida de `procesarPublicidadPush(ahora)` **dentro de la franja horaria** (`notif.hora_inicio` a `notif.hora_fin`, hora de San Juan).
-- Destinatarios: usuarios activos, plan free, que **activaron** la categoría `publicidad` (opt-in, 22-notificaciones.md), fuera del equipo de la tienda, y que recibieron menos de `notif.publicidad_push_semana` (2) notificaciones de publicidad en los últimos 7 días.
+- Destinatarios: usuarios activos, plan free, que **no desactivaron** la categoría `publicidad` (activa por defecto desde la ronda 6, 22-notificaciones.md), fuera del equipo de la tienda, y que recibieron menos de `notif.publicidad_push_semana` (2) notificaciones de publicidad en los últimos 7 días.
 - Al enviarse: `enviada_en`, `dias_consumidos = 1`, `estado = 'finalizada'`.
 
 ### Proveedores externos (preparado, en espera)

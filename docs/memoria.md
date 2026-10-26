@@ -242,6 +242,23 @@ Specs nuevas: `21-publicidad.md`, `22-notificaciones.md`, `23-puntos-pagos.md` (
 - **Tareas programadas:** `POST /api/cron/tareas` cada hora (ver `docs/deploy-coolify.md` 4.5).
 - **Verificación:** 852 tests en verde, build OK, lint sin errores nuevos. E2E con Chromium: canje y renovación, transferencia, campañas con puntos y pesos, moderación, aviso e impresión/clic, pin destacado (free y premium), campanita por pedido nuevo, email por SMTP de prueba, envío push (VAPID + cifrado) a un servicio push de prueba, cron, ads.txt, cookies y páginas legales; y el e2e de categorías y escaneo (PR anterior) sigue pasando.
 
+## Ronda 6 (pedido del 2026-10-26): notificaciones por defecto, comprador en pedidos, ajuste de peso y chat
+
+> 1) dejar activas por defecto las notificaciones (el user las desactiva si no las quiere); mail desactivado por defecto; el botón del perfil pasa a ofrecer pausarlas. 2) en pedidos, qué user pide y desde dónde (mapa). 3) productos por peso: el vendedor propone peso o importe real; el comprador acepta o no; el vendedor vuelve a proponer o ratifica; chat abierto para ponerse de acuerdo. 4) chat free: botones "¿la tienda está abierta?" siempre; texto libre si compró en los últimos 2 meses o hay un pedido en curso; premium sin límites. Notificaciones de chat al vendedor en horario; fuera de horario solo si las habilita.
+
+- **Decisiones** (respuestas del usuario):
+  - todas las categorías activas por defecto, publicidad incluida (sigue solo para free, con tope y franja);
+  - la ubicación se toma del navegador al confirmar el pedido (opcional);
+  - el ajuste se hace con el pedido confirmado y bloquea "listo";
+  - ante una ratificación, el comprador acepta o quita el producto (el ajuste no ofrece cancelar el pedido);
+  - chat libre por 2 meses desde la última compra (no 3).
+- **Hecho** (specs `04-pedidos.md`, `22-notificaciones.md` y la nueva `24-chat.md`):
+  - **Notificaciones:** app y push activos por defecto en todas las categorías y email apagado; categoría nueva `chat`; pausa global (1 hora, hasta mañana a las 8 o indefinida) en el perfil. La migración borra las preferencias guardadas iguales a los defaults viejos de ofertas y publicidad.
+  - **Pedidos:** ubicación del comprador al pedir; el equipo ve la distancia en la lista y un mapa con la tienda y el comprador en el detalle.
+  - **Ajuste de peso** (por peso o por importe): proponer, aceptar, rechazar, ratificar, aceptar o quitar. Si se quita el único producto, el pedido se cancela. La venta usa lo acordado. Cada paso notifica y deja constancia en el chat.
+  - **Chat:** `/chat` (mis compras y cada tienda que atiendo), conversación con botones y texto con emojis según el acceso, "Chat con la tienda" en la tienda y en el pedido, "Chats" en el menú, y "Recibir avisos de chats fuera de horario" en los datos de la tienda.
+- **Verificación:** 872 tests, build y e2e (pedido con ubicación, mapa, propuesta, rechazo, ratificación y aceptación, listo, chat con texto y emojis, chat solo botones, respuesta de la tienda, pausa).
+
 ## Preguntas abiertas
 
 - **Facturación (resuelto en la ronda 3):**

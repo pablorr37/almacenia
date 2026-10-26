@@ -32,6 +32,7 @@ const ICONOS = {
   puntos: "m12 2 3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z",
   perfil: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6",
   publicidad: "M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13",
+  chat: "M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z",
 } as const;
 
 function Icono({ d }: { d: string }) {
@@ -99,6 +100,7 @@ export function MenuInicio() {
         conPermiso("vender") && { href: `/mi-tienda?tienda=${t}&seccion=vender`, icono: ICONOS.venta, titulo: "Nueva venta", detalle: "Punto de venta", destacado: true },
         conPermiso(["productos", "stock", "precios"]) && { href: `/mi-tienda?tienda=${t}&seccion=productos`, icono: ICONOS.stock, titulo: "Stock", detalle: "Productos, precios y stock" },
         conPermiso("pedidos") && { href: `/mi-tienda?tienda=${t}&seccion=pedidos`, icono: ICONOS.pedidos, titulo: "Pedidos", detalle: "Para retirar" },
+        conPermiso("pedidos") && { href: `/chat?tienda=${t}`, icono: ICONOS.chat, titulo: "Chats", detalle: "Mensajes de clientes" },
         conPermiso("usuarios") && { href: `/mi-tienda/equipo?tienda=${t}`, icono: ICONOS.usuarios, titulo: "Usuarios", detalle: "Equipo y permisos" },
         conPermiso("balance") && { href: `/mi-tienda/balance?tienda=${t}`, icono: ICONOS.balance, titulo: "Balance", detalle: "Ventas y cobros" },
         conPermiso("publicidad") && { href: `/mi-tienda/publicidad?tienda=${t}`, icono: ICONOS.publicidad, titulo: "Publicidad", detalle: "Con puntos o pesos" },
@@ -210,6 +212,7 @@ export function MenuInicio() {
           <Acceso href="/listas" icono={ICONOS.lista} titulo="Listas de compras" detalle="Compará precios" i={1} />
           <Acceso href="/perfil/pedidos" icono={ICONOS.misPedidos} titulo="Mis pedidos" i={2} />
           <Acceso href="/perfil/puntos" icono={ICONOS.puntos} titulo="Mis puntos" detalle="Alcance y canjes" i={3} />
+          <Acceso href="/chat" icono={ICONOS.chat} titulo="Chats" detalle="Con las tiendas" i={4} />
         </div>
       </section>
 

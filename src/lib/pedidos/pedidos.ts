@@ -8,6 +8,7 @@ import type { Usuario } from "@/lib/auth/auth";
 import type { Prisma, Producto as ProductoDb } from "@/generated-prisma/client";
 import { sinRomper } from "@/lib/gamificacion/gamificacion";
 import { notificarCambioPedido, notificarPedidoNuevo } from "@/lib/notificaciones/disparadores";
+import { obtenerTienda, validarUbicacion } from "@/lib/tiendas/tiendas";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAXIMO = 100;
@@ -22,6 +23,8 @@ export type EstadoPedido =
 
 export type AccionPedido = "confirmar" | "rechazar" | "marcarListo" | "entregar" | "cancelar";
 
+export type EstadoAjuste = "ninguno" | "propuesto" | "rechazado" | "ratificado" | "aceptado" | "quitado";
+
 export interface ItemPedido {
   id: string;
   productoId: string;
@@ -29,6 +32,15 @@ export interface ItemPedido {
   unidad: UnidadMedida;
   cantidad: number;
   precioUnitario: number;
+  // Ajuste de peso (04-pedidos.md, ronda 6).
+  ajusteEstado: EstadoAjuste;
+  cantidadPropuesta: number | null;
+  cantidadOriginal: number | null;
+}
+
+export interface Ubicacion {
+  lat: number;
+  lon: number;
 }
 
 export interface Pedido {
@@ -41,6 +53,22 @@ export interface Pedido {
   total: number;
   comprador: { nombre: string };
   creadoEn: string;
+  // Solo para el equipo de la tienda (04-pedidos.md, ronda 6); null para el comprador.
+  ubicacionComprador: Ubicacion | null;
+  tiendaUbicacion: Ubicacion | null;
+  distanciaKm: number | null;
+}
+
+// Ajustes que todavía esperan una respuesta: bloquean "listo para retirar".
+export const AJUSTES_PENDIENTES: readonly EstadoAjuste[] = ["propuesto", "rechazado", "ratificado"];
+
+// Distancia en km entre dos puntos (haversine).
+export function distanciaKm(a: Ubicacion, b: Ubicacion): number {
+  const rad = (g: number) => (g * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return Math.round(2 * 6371 * Math.asin(Math.sqrt(h)) * 100) / 100;
 }
 
 // Lo necesario para mostrar el detalle (04-pedidos.md): nombre/unidad de cada
@@ -60,7 +88,11 @@ function aPedido(pedido: PedidoConItems): Pedido {
     unidad: item.producto.catalogo.unidad,
     cantidad: Number(item.cantidad),
     precioUnitario: Number(item.precioUnitario),
+    ajusteEstado: item.ajusteEstado,
+    cantidadPropuesta: item.cantidadPropuesta === null ? null : Number(item.cantidadPropuesta),
+    cantidadOriginal: item.cantidadOriginal === null ? null : Number(item.cantidadOriginal),
   }));
+  const activos = items.filter((i) => i.ajusteEstado !== "quitado");
 
   return {
     id: pedido.id,
@@ -69,10 +101,36 @@ function aPedido(pedido: PedidoConItems): Pedido {
     estado: pedido.estado,
     nota: pedido.nota,
     items,
-    total: Math.round(items.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0) * 100) / 100,
+    total: Math.round(activos.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0) * 100) / 100,
     comprador: { nombre: pedido.comprador.nombre },
     creadoEn: pedido.creadoEn.toISOString(),
+    ubicacionComprador: null,
+    tiendaUbicacion: null,
+    distanciaKm: null,
   };
+}
+
+export function aPedidoPublico(pedido: PedidoConItems): Pedido {
+  return aPedido(pedido);
+}
+
+// Vista del equipo de la tienda: suma dónde estaba el comprador y a qué distancia.
+export async function vistaEquipo(pedido: PedidoConItems): Promise<Pedido> {
+  const base = aPedido(pedido);
+  const tienda = await obtenerTienda(pedido.tiendaId);
+  const tiendaUbicacion = tienda ? { lat: tienda.lat, lon: tienda.lon } : null;
+  if (pedido.compradorLat === null || pedido.compradorLon === null) return { ...base, tiendaUbicacion };
+  const ubicacionComprador = { lat: pedido.compradorLat, lon: pedido.compradorLon };
+  return {
+    ...base,
+    ubicacionComprador,
+    tiendaUbicacion,
+    distanciaKm: tiendaUbicacion ? distanciaKm(tiendaUbicacion, ubicacionComprador) : null,
+  };
+}
+
+export async function cargarPedido(pedidoId: string): Promise<PedidoConItems | null> {
+  return prisma.pedido.findUnique({ where: { id: pedidoId }, include: INCLUDE_PEDIDO });
 }
 
 // Tabla de transiciones válidas de la máquina de estados (04-pedidos.md). El
@@ -97,12 +155,14 @@ export interface CrearPedidoInput {
   tiendaId: string;
   items: Array<{ productoId: string; cantidad: number }>;
   nota?: string;
+  ubicacion?: Ubicacion | null; // opcional (04-pedidos.md, ronda 6)
 }
 
 export async function crearPedido(comprador: Usuario, input: CrearPedidoInput): Promise<Pedido> {
   if (input.items.length === 0) {
     throw new AppError("ITEMS_VACIOS", "El pedido debe tener al menos un producto.");
   }
+  if (input.ubicacion) validarUbicacion(input.ubicacion.lat, input.ubicacion.lon);
 
   const tienda = await prisma.tienda.findUnique({
     where: { id: input.tiendaId },
@@ -145,6 +205,8 @@ export async function crearPedido(comprador: Usuario, input: CrearPedidoInput): 
       tiendaId: input.tiendaId,
       compradorId: comprador.id,
       nota: input.nota ?? null,
+      compradorLat: input.ubicacion?.lat ?? null,
+      compradorLon: input.ubicacion?.lon ?? null,
       items: {
         create: input.items.map((item) => ({
           productoId: item.productoId,
@@ -178,7 +240,7 @@ export async function obtenerPedido(usuario: Usuario, pedidoId: string): Promise
     throw new AppError("NO_AUTORIZADO_PEDIDO", "No tenés acceso a este pedido.");
   }
 
-  return aPedido(pedido);
+  return esVendedor ? vistaEquipo(pedido) : aPedido(pedido);
 }
 
 export async function transicionarPedido(
@@ -207,6 +269,11 @@ export async function transicionarPedido(
 
   const nuevoEstado = TRANSICIONES[pedido.estado][accion]!;
 
+  // 04-pedidos.md, "Ajuste de peso": con ajustes sin resolver no se marca listo.
+  if (accion === "marcarListo" && pedido.items.some((i) => AJUSTES_PENDIENTES.includes(i.ajusteEstado))) {
+    throw new AppError("AJUSTES_PENDIENTES", "Hay ajustes de peso esperando respuesta del comprador.");
+  }
+
   // 'entregar' dispara la creación de la Venta asociada (05-ventas.md). Si falla por
   // stock insuficiente, el pedido debe quedar tal cual (listo_para_retirar) para que
   // el vendedor lo resuelva a mano — por eso la venta se crea ANTES de persistir el
@@ -222,7 +289,7 @@ export async function transicionarPedido(
   });
 
   await sinRomper(() => notificarCambioPedido(pedidoId, usuario.id, accion));
-  return aPedido(actualizado);
+  return esVendedor ? vistaEquipo(actualizado) : aPedido(actualizado);
 }
 
 // No está en las firmas de 04-pedidos.md, pero hace falta para el endpoint
@@ -274,5 +341,7 @@ export async function listarPedidos(
     prisma.pedido.count({ where }),
   ]);
 
-  return { data: pedidos.map(aPedido), page, pageSize, total };
+  // Desde la tienda: con la ubicación del comprador y la distancia.
+  const data = input.tiendaId ? await Promise.all(pedidos.map(vistaEquipo)) : pedidos.map(aPedido);
+  return { data, page, pageSize, total };
 }

@@ -81,6 +81,13 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   // 22-notificaciones.md
   NOTIFICACION_NO_ENCONTRADA: 404,
   ENVIO_NO_ENCONTRADO: 404,
+  // Ronda 6: ajustes de peso (04-pedidos.md) y chat (24-chat.md)
+  AJUSTE_NO_PERMITIDO: 409,
+  AJUSTES_PENDIENTES: 409,
+  ITEM_NO_ENCONTRADO: 404,
+  CONVERSACION_NO_ENCONTRADA: 404,
+  CHAT_TIENDA_PROPIA: 409,
+  CHAT_SOLO_BOTONES: 403,
 };
 
 // 00-overview.md, "Sin caché": datos vivos, nadie (navegador, Cloudflare, proxy)

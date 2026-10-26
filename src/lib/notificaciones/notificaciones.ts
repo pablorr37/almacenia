@@ -114,3 +114,18 @@ export async function guardarSuscripcion(usuario: Usuario, sub: SuscripcionInput
 export async function borrarSuscripcion(usuario: Usuario, endpoint: string): Promise<void> {
   await prisma.suscripcionPush.deleteMany({ where: { usuarioId: usuario.id, endpoint } });
 }
+
+// Pausa global (22-notificaciones.md): null la levanta.
+export async function pausarNotificaciones(usuario: Usuario, hasta: Date | null): Promise<{ pausada: boolean; pausadasHasta: string | null }> {
+  if (hasta !== null && (!(hasta instanceof Date) || Number.isNaN(hasta.getTime()) || hasta <= new Date())) {
+    throw new AppError("PAUSA_INVALIDA", "La pausa tiene que terminar en el futuro.");
+  }
+  await prisma.usuario.update({ where: { id: usuario.id }, data: { notificacionesPausadasHasta: hasta } });
+  return { pausada: hasta !== null, pausadasHasta: hasta?.toISOString() ?? null };
+}
+
+export async function estadoPausa(usuario: Usuario): Promise<{ pausada: boolean; pausadasHasta: string | null }> {
+  const u = await prisma.usuario.findUnique({ where: { id: usuario.id }, select: { notificacionesPausadasHasta: true } });
+  const hasta = u?.notificacionesPausadasHasta ?? null;
+  return hasta && hasta > new Date() ? { pausada: true, pausadasHasta: hasta.toISOString() } : { pausada: false, pausadasHasta: null };
+}

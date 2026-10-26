@@ -50,6 +50,8 @@ model Usuario {
   // 23-puntos-pagos.md: null = sin vencimiento (asignado por el admin).
   planVenceEn      DateTime?      @map("plan_vence_en")
   renovacionAuto   RenovacionAuto @default(ninguna) @map("renovacion_auto")
+  // 22-notificaciones.md: mientras dura, no sale push ni email (NULL = sin pausa).
+  notificacionesPausadasHasta DateTime? @map("notificaciones_pausadas_hasta")
   avatarUrl    String?  @map("avatar_url")
   creadoEn     DateTime @default(now()) @map("creado_en")
 
@@ -79,6 +81,8 @@ model Usuario {
   suscripcionesPush      SuscripcionPush[]
   preferenciasNotif      PreferenciaNotificacion[]
   enviosCreados          EnvioNotificacion[]
+  conversaciones         Conversacion[]
+  mensajes               Mensaje[]
 
   @@map("usuarios")
 }
@@ -116,6 +120,8 @@ model Tienda {
   domicilioFiscal   String?      @map("domicilio_fiscal")
   puntoVenta        Int?         @map("punto_venta")
   inicioActividades DateTime?    @map("inicio_actividades") @db.Date
+  // 24-chat.md: notificar chats fuera del horario de apertura.
+  chatNotifFueraHorario Boolean  @default(false) @map("chat_notif_fuera_horario")
   creadaEn       DateTime  @default(now()) @map("creada_en")
   actualizadaEn  DateTime  @default(now()) @updatedAt @map("actualizada_en")
 
@@ -136,6 +142,7 @@ model Tienda {
   numeraciones            NumeracionComprobante[]
   campanias               CampaniaAviso[]
   notificaciones          Notificacion[]
+  conversaciones          Conversacion[]
 
   @@index([vendedorId])
   @@index([ubicacion], map: "tiendas_ubicacion_gist_idx", type: Gist)
@@ -386,6 +393,9 @@ model Pedido {
   compradorId   String       @map("comprador_id")
   estado        EstadoPedido @default(pendiente)
   nota          String?
+  // 04-pedidos.md (ronda 6): dónde estaba el comprador al pedir (opcional).
+  compradorLat  Float?       @map("comprador_lat")
+  compradorLon  Float?       @map("comprador_lon")
   creadoEn      DateTime     @default(now()) @map("creado_en")
   actualizadoEn DateTime     @default(now()) @updatedAt @map("actualizado_en")
 
@@ -393,6 +403,7 @@ model Pedido {
   comprador Usuario      @relation(fields: [compradorId], references: [id])
   items     ItemPedido[]
   venta     Venta?
+  mensajes  Mensaje[]
 
   @@index([tiendaId])
   @@index([compradorId])
@@ -405,6 +416,10 @@ model ItemPedido {
   productoId     String  @map("producto_id")
   cantidad       Decimal @db.Decimal(10, 3)
   precioUnitario Decimal @map("precio_unitario") @db.Decimal(12, 2)
+  // 04-pedidos.md, "Ajuste de peso" (ronda 6).
+  ajusteEstado      EstadoAjuste @default(ninguno) @map("ajuste_estado")
+  cantidadPropuesta Decimal?     @map("cantidad_propuesta") @db.Decimal(10, 3)
+  cantidadOriginal  Decimal?     @map("cantidad_original") @db.Decimal(10, 3)
 
   pedido   Pedido   @relation(fields: [pedidoId], references: [id])
   producto Producto @relation(fields: [productoId], references: [id])
@@ -997,4 +1012,54 @@ model EnvioNotificacion {
   creadoPor Usuario? @relation(fields: [creadoPorId], references: [id], onDelete: SetNull)
 
   @@map("envios_notificacion")
+}
+
+// ---------------------------------------------------------------------------
+// 04-pedidos.md (ajuste de peso) y 24-chat.md — ronda 6
+// ---------------------------------------------------------------------------
+
+enum EstadoAjuste {
+  ninguno
+  propuesto
+  rechazado
+  ratificado
+  aceptado
+  quitado
+
+  @@map("estado_ajuste")
+}
+
+model Conversacion {
+  id              String   @id @default(uuid())
+  tiendaId        String   @map("tienda_id")
+  compradorId     String   @map("comprador_id")
+  ultimoMensajeEn DateTime @default(now()) @map("ultimo_mensaje_en")
+  creadaEn        DateTime @default(now()) @map("creada_en")
+
+  tienda    Tienda    @relation(fields: [tiendaId], references: [id], onDelete: Cascade)
+  comprador Usuario   @relation(fields: [compradorId], references: [id], onDelete: Cascade)
+  mensajes  Mensaje[]
+
+  @@unique([tiendaId, compradorId])
+  @@index([compradorId])
+  @@map("conversaciones")
+}
+
+model Mensaje {
+  id             String    @id @default(uuid())
+  conversacionId String    @map("conversacion_id")
+  autorId        String?   @map("autor_id")
+  deTienda       Boolean   @map("de_tienda")
+  texto          String
+  plantilla      String?
+  pedidoId       String?   @map("pedido_id")
+  leidoEn        DateTime? @map("leido_en")
+  creadoEn       DateTime  @default(now()) @map("creado_en")
+
+  conversacion Conversacion @relation(fields: [conversacionId], references: [id], onDelete: Cascade)
+  autor        Usuario?     @relation(fields: [autorId], references: [id], onDelete: SetNull)
+  pedido       Pedido?      @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
+
+  @@index([conversacionId, creadoEn])
+  @@map("mensajes")
 }
