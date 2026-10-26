@@ -12,6 +12,7 @@ import { estadoApertura, horariosPorDia, type HorarioTienda } from "@/lib/tienda
 import { useAhora } from "@/lib/hooks/useAhora";
 import { SelectorCantidad } from "@/components/ui/SelectorCantidad";
 import { EspacioPublicitario } from "@/components/publicidad/EspacioPublicitario";
+import { BotonChat } from "@/components/chat/BotonChat";
 import { formatearCantidad, type UnidadMedida } from "@/lib/productos/unidades";
 
 type Tienda = {
@@ -165,7 +166,16 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
       const items = Object.entries(cart)
         .filter(([, cantidad]) => cantidad > 0)
         .map(([productoId, cantidad]) => ({ productoId, cantidad }));
-      const pedido = await apiPost<{ id: string }>("/api/pedidos", { tiendaId: id, items });
+      // 04-pedidos.md (ronda 6): la ubicación es opcional; si no la da, se pide igual.
+      const ubicacion = await new Promise<{ lat: number; lon: number } | null>((resolver) => {
+        if (!navigator.geolocation) return resolver(null);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolver({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+          () => resolver(null),
+          { timeout: 5000, maximumAge: 5 * 60 * 1000 }
+        );
+      });
+      const pedido = await apiPost<{ id: string }>("/api/pedidos", { tiendaId: id, items, ubicacion });
       router.push(`/pedidos/${pedido.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo confirmar el pedido.");
@@ -223,6 +233,11 @@ export default function TiendaPage({ params }: { params: Promise<{ id: string }>
         )}
       </div>
       <Toast mensaje={aviso} onCerrar={cerrarAviso} />
+      {tienda && status === "authenticated" && (
+        <div className="px-5 pt-2">
+          <BotonChat tiendaId={tienda.id} />
+        </div>
+      )}
 
       <div className="flex flex-col gap-2.5 px-5 pt-2">
         <input

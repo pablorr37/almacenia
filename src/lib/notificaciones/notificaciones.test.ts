@@ -9,6 +9,8 @@ import {
   marcarTodasLeidas,
   obtenerPreferencias,
   guardarPreferencia,
+  pausarNotificaciones,
+  estadoPausa,
   guardarSuscripcion,
   borrarSuscripcion,
 } from "./notificaciones";
@@ -39,16 +41,17 @@ class EmailFalso implements CanalEmail {
 }
 
 describe("catálogo y franja horaria (puros)", () => {
-  it("cada tipo tiene categoría; pedidos y cuenta activos por defecto, ofertas y publicidad opt-in", () => {
+  it("cada tipo tiene categoría; todo activo por defecto en app y push, email apagado (ronda 6)", () => {
     expect(CATEGORIA_POR_TIPO.pedido_nuevo).toBe("pedidos");
     expect(CATEGORIA_POR_TIPO.transferencia_recibida).toBe("cuenta");
     expect(CATEGORIA_POR_TIPO.general).toBe("avisos");
     expect(CATEGORIA_POR_TIPO.oferta).toBe("ofertas");
     expect(CATEGORIA_POR_TIPO.publicidad).toBe("publicidad");
-    expect(PREFERENCIA_POR_DEFECTO.pedidos).toEqual({ enApp: true, push: true, email: true });
-    expect(PREFERENCIA_POR_DEFECTO.avisos).toEqual({ enApp: true, push: true, email: false });
-    expect(PREFERENCIA_POR_DEFECTO.ofertas).toEqual({ enApp: false, push: false, email: false });
-    expect(PREFERENCIA_POR_DEFECTO.publicidad).toEqual({ enApp: false, push: false, email: false });
+    expect(CATEGORIA_POR_TIPO.mensaje_chat).toBe("chat");
+    expect(CATEGORIA_POR_TIPO.pedido_ajuste).toBe("pedidos");
+    for (const categoria of ["pedidos", "cuenta", "avisos", "ofertas", "publicidad", "chat"] as const) {
+      expect(PREFERENCIA_POR_DEFECTO[categoria]).toEqual({ enApp: true, push: true, email: false });
+    }
   });
 
   it("dentroDeFranja usa la hora de San Juan (UTC-3), [inicio, fin)", () => {
@@ -82,19 +85,21 @@ describe("notificar y centro de notificaciones", () => {
     await prisma.usuario.deleteMany({ where: { id: { in: [a.id, b.id] } } });
   });
 
-  it("guarda en la app, manda push a cada suscripción y email según las preferencias por defecto", async () => {
+  it("guarda en la app y manda push a cada suscripción; el email solo si la persona lo activa", async () => {
     await guardarSuscripcion(a, { endpoint: "https://push.test/a1", keys: { p256dh: "k", auth: "x" } });
     const r = await notificar([a.id, b.id], { tipo: "pedido_nuevo", titulo: "Nuevo pedido", cuerpo: "Juan pidió 3 productos", url: "/pedidos/1" });
     expect(r.guardadas).toBe(2);
     expect(push.enviados).toHaveLength(1);
     expect(JSON.parse(push.enviados[0].payload)).toMatchObject({ title: "Nuevo pedido", body: "Juan pidió 3 productos", url: "/pedidos/1" });
-    expect(email.enviados.map((e) => e.para).sort()).toEqual([a.email, b.email].sort());
+    expect(email.enviados).toHaveLength(0);
     expect(await contarNoLeidas(a)).toBe(1);
+    await guardarPreferencia(b, { categoria: "pedidos", enApp: true, push: true, email: true });
+    await notificar([a.id, b.id], { tipo: "pedido_nuevo", titulo: "Otro", cuerpo: "c" });
+    expect(email.enviados.map((e) => e.para)).toEqual([b.email]);
   });
 
   it("urgencia del push por categoría: pedidos alta y corta, ofertas baja (no despiertan el teléfono)", async () => {
     await guardarSuscripcion(a, { endpoint: "https://push.test/urg", keys: { p256dh: "k", auth: "x" } });
-    await guardarPreferencia(a, { categoria: "ofertas", enApp: true, push: true, email: false });
     await notificar([a.id], { tipo: "pedido_nuevo", titulo: "t", cuerpo: "c" });
     await notificar([a.id], { tipo: "transferencia_recibida", titulo: "t", cuerpo: "c" });
     await notificar([a.id], { tipo: "general", titulo: "t", cuerpo: "c" });
@@ -105,6 +110,8 @@ describe("notificar y centro de notificaciones", () => {
       { urgencia: "normal", ttl: 86400 },
       { urgencia: "low", ttl: 86400 },
     ]);
+    await notificar([a.id], { tipo: "mensaje_chat", titulo: "t", cuerpo: "c" });
+    expect(push.enviados.at(-1)?.opciones).toEqual({ urgencia: "high", ttl: 3600 });
   });
 
   it("avisos generales no van por email por defecto; con email deshabilitado no se intenta", async () => {
@@ -115,10 +122,10 @@ describe("notificar y centro de notificaciones", () => {
     expect(await contarNoLeidas(a)).toBe(2);
   });
 
-  it("ofertas y publicidad son opt-in; publicidad nunca a premium ni plata", async () => {
+  it("ofertas y publicidad activas por defecto (se desactivan); publicidad nunca a premium ni plata", async () => {
+    expect((await notificar([a.id], { tipo: "oferta", titulo: "Oferta", cuerpo: "Yerba" })).guardadas).toBe(1);
+    await guardarPreferencia(a, { categoria: "ofertas", enApp: false, push: false, email: false });
     expect((await notificar([a.id], { tipo: "oferta", titulo: "Oferta", cuerpo: "Yerba" })).guardadas).toBe(0);
-    await guardarPreferencia(a, { categoria: "publicidad", enApp: true, push: true, email: false });
-    await guardarPreferencia(b, { categoria: "publicidad", enApp: true, push: true, email: false });
     await prisma.usuario.update({ where: { id: b.id }, data: { plan: "premium" } });
     expect((await notificar([a.id, b.id], { tipo: "publicidad", titulo: "Promo", cuerpo: "Visitanos" })).guardadas).toBe(1);
   });
@@ -130,6 +137,23 @@ describe("notificar y centro de notificaciones", () => {
     expect(push.enviados).toHaveLength(1);
     expect(await contarNoLeidas(a)).toBe(0);
     expect((await listarNotificaciones(a, {})).total).toBe(0);
+  });
+
+  it("pausa: se guarda en la app pero no sale push ni email; vencida, vuelve a salir", async () => {
+    await guardarSuscripcion(a, { endpoint: "https://push.test/pausa", keys: { p256dh: "k", auth: "x" } });
+    await guardarPreferencia(a, { categoria: "pedidos", enApp: true, push: true, email: true });
+    const ahora = new Date();
+    expect(await pausarNotificaciones(a, new Date(ahora.getTime() + 60 * 60 * 1000))).toMatchObject({ pausadasHasta: expect.any(String) });
+    expect((await notificar([a.id], { tipo: "pedido_nuevo", titulo: "t", cuerpo: "c" })).guardadas).toBe(1);
+    expect(push.enviados).toHaveLength(0);
+    expect(email.enviados).toHaveLength(0);
+    expect(await contarNoLeidas(a)).toBe(1);
+    expect(await estadoPausa(a)).toMatchObject({ pausada: true });
+    await pausarNotificaciones(a, null);
+    expect(await estadoPausa(a)).toEqual({ pausada: false, pausadasHasta: null });
+    await notificar([a.id], { tipo: "pedido_nuevo", titulo: "t", cuerpo: "c" });
+    expect(push.enviados).toHaveLength(1);
+    await expect(pausarNotificaciones(a, new Date(ahora.getTime() - 1000))).rejects.toMatchObject({ code: "PAUSA_INVALIDA" });
   });
 
   it("todo apagado: no guarda nada", async () => {
@@ -181,7 +205,8 @@ describe("notificar y centro de notificaciones", () => {
     await guardarPreferencia(a, { categoria: "ofertas", enApp: true, push: false, email: false });
     const prefs = await obtenerPreferencias(a);
     expect(prefs.find((p) => p.categoria === "ofertas")).toEqual({ categoria: "ofertas", enApp: true, push: false, email: false });
-    expect(prefs.find((p) => p.categoria === "pedidos")).toEqual({ categoria: "pedidos", enApp: true, push: true, email: true });
+    expect(prefs.find((p) => p.categoria === "pedidos")).toEqual({ categoria: "pedidos", enApp: true, push: true, email: false });
+    expect(prefs.map((p) => p.categoria)).toContain("chat");
     await expect(guardarPreferencia(a, { categoria: "nada" as never, enApp: true, push: true, email: true })).rejects.toMatchObject({
       code: "CATEGORIA_INVALIDA",
     });

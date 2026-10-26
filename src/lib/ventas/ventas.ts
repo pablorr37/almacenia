@@ -321,7 +321,8 @@ export async function transicionarVenta(
 // pedido ya traen precioUnitario congelado desde su creación (04-pedidos.md) — no se
 // vuelve a consultar el precio actual del producto.
 export async function crearVentaDesdePedido(pedido: Pedido): Promise<Venta> {
-  const items: ItemAProcesar[] = pedido.items.map((item) => ({
+  // Ajuste de peso: los ítems quitados no se venden (04-pedidos.md).
+  const items: ItemAProcesar[] = pedido.items.filter((item) => item.ajusteEstado !== "quitado").map((item) => ({
     productoId: item.productoId,
     cantidad: item.cantidad,
     precioUnitario: item.precioUnitario,

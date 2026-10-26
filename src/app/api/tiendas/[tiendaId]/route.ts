@@ -42,6 +42,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       abierto24hs: body.abierto24hs,
       horarios: body.horarios,
       porcentajePuntosEquipo: body.porcentajePuntosEquipo,
+      chatNotifFueraHorario: body.chatNotifFueraHorario,
       // Datos fiscales (20-precios-facturacion.md).
       condicionIva: body.condicionIva,
       razonSocial: body.razonSocial,

@@ -5,7 +5,7 @@ import { notificar } from "@/lib/notificaciones/notificar";
 import { dentroDeFranja } from "@/lib/notificaciones/horario";
 import { fechaDb } from "./campanias";
 
-// Publicidad push (21-publicidad.md / 22-notificaciones.md): solo free con opt-in,
+// Publicidad push (21-publicidad.md / 22-notificaciones.md): solo free que no la desactivaron,
 // fuera del equipo de la tienda, dentro de la franja horaria y con tope semanal.
 
 const SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
@@ -43,7 +43,8 @@ export async function procesarPublicidadPush(ahora = new Date()): Promise<{ camp
         id: { notIn: equipo },
         estadoCuenta: "activa",
         plan: "free",
-        preferenciasNotif: { some: { categoria: "publicidad", OR: [{ enApp: true }, { push: true }, { email: true }] } },
+        // Activa por defecto (ronda 6): quedan afuera solo quienes la apagaron del todo.
+        NOT: { preferenciasNotif: { some: { categoria: "publicidad", enApp: false, push: false, email: false } } },
       },
       select: { id: true },
     });

@@ -10,6 +10,7 @@ export interface ItemPedidoVista {
   unidad: UnidadMedida;
   cantidad: number;
   precioUnitario: number;
+  ajusteEstado?: string; // "quitado" = sale del total (04-pedidos.md, ajuste de peso)
 }
 
 const formatoARS = (n: number) =>
@@ -20,7 +21,7 @@ export function DetallePedido({ items, nota, total }: { items: ItemPedidoVista[]
     <div className="flex flex-col gap-2">
       <ul className="flex flex-col divide-y divide-border rounded-control border border-border">
         {items.map((item) => (
-          <li key={item.id} className="flex items-start justify-between gap-3 px-3 py-2 text-[13px]">
+          <li key={item.id} className={`flex items-start justify-between gap-3 px-3 py-2 text-[13px] ${item.ajusteEstado === "quitado" ? "opacity-50 line-through" : ""}`}>
             <span className="flex min-w-0 flex-col">
               <span className="font-semibold text-text">{item.nombre}</span>
               <span className="text-[12px] text-text-2">

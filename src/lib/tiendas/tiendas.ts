@@ -39,6 +39,7 @@ export interface Tienda {
   horarios: HorarioTienda[];
   abierto24hs: boolean;
   porcentajePuntosEquipo: number | null; // 12-gamificacion.md; null = default del sistema
+  chatNotifFueraHorario: boolean; // 24-chat.md
   // Datos fiscales (20-precios-facturacion.md).
   condicionIva: CondicionIva;
   razonSocial: string | null;
@@ -78,6 +79,7 @@ interface FilaTienda {
   medios_de_pago: string;
   abierto_24hs: boolean;
   porcentaje_puntos_equipo: number | null;
+  chat_notif_fuera_horario: boolean;
   condicion_iva: CondicionIva;
   razon_social: string | null;
   cuit: string | null;
@@ -114,6 +116,7 @@ function aTienda(fila: FilaTienda, horarios: HorarioTienda[] = []): Tienda {
     horarios,
     abierto24hs: fila.abierto_24hs,
     porcentajePuntosEquipo: fila.porcentaje_puntos_equipo,
+    chatNotifFueraHorario: fila.chat_notif_fuera_horario,
     condicionIva: fila.condicion_iva,
     razonSocial: fila.razon_social,
     cuit: fila.cuit,
@@ -133,7 +136,7 @@ const COLUMNA_RUBRO = Prisma.sql`(SELECT json_build_object('id', r.id, 'nombre',
 const COLUMNAS_TIENDA = Prisma.sql`
   id, vendedor_id, nombre, descripcion, direccion, activa, desactivada_en,
   imagen_url, ${COLUMNA_RUBRO}, verificada, plan, medios_de_pago, abierto_24hs,
-  porcentaje_puntos_equipo,
+  porcentaje_puntos_equipo, chat_notif_fuera_horario,
   condicion_iva, razon_social, cuit, ingresos_brutos, domicilio_fiscal, punto_venta,
   to_char(inicio_actividades, 'YYYY-MM-DD') AS inicio_actividades,
   ST_Y(ubicacion::geometry) AS lat,
@@ -399,6 +402,7 @@ export interface ActualizarTiendaInput {
   horarios?: HorarioTienda[];
   abierto24hs?: boolean;
   porcentajePuntosEquipo?: number | null;
+  chatNotifFueraHorario?: boolean; // 24-chat.md
   condicionIva?: CondicionIva;
   razonSocial?: string | null;
   cuit?: string | null;
@@ -481,6 +485,9 @@ export async function actualizarTienda(
   }
   if (typeof input.nombre === "string") exigirTextoPermitido(input.nombre, "El nombre de la tienda");
   validarPorcentajePuntosEquipo(input.porcentajePuntosEquipo);
+  if (input.chatNotifFueraHorario !== undefined && typeof input.chatNotifFueraHorario !== "boolean") {
+    throw new AppError("VALOR_INVALIDO", "chatNotifFueraHorario tiene que ser true o false.");
+  }
   const fiscal = datosFiscales(input, actual);
 
   const lat = input.lat ?? actual.lat;
@@ -526,6 +533,7 @@ export async function actualizarTienda(
         porcentaje_puntos_equipo = ${
           input.porcentajePuntosEquipo !== undefined ? input.porcentajePuntosEquipo : actual.porcentajePuntosEquipo
         }::smallint,
+        chat_notif_fuera_horario = ${input.chatNotifFueraHorario ?? actual.chatNotifFueraHorario},
         condicion_iva = ${fiscal.condicionIva}::condicion_iva,
         razon_social = ${fiscal.razonSocial},
         cuit = ${fiscal.cuit},
